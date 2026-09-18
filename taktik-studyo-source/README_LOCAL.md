@@ -65,17 +65,17 @@ statik katalog kullanılır. Kadro düzenlemeleri localStorage'dadır; her harek
 veritabanına yazılmaz. Localhost'un localStorage'ı canlı sitenin kaydından ayrıdır;
 farklı portlar da ayrı tarayıcı kayıt alanı oluşturur.
 
-**Canlı paylaşım yerelde çalışmaya hazır değildir:** mevcut Edge Function sadece
-`https://taktik-studyo.unql9enes.chatgpt.site` origin'ine izin veriyor. Localhost
-hem CORS hem Turnstile hostname açısından mevcut izinler dışında. Yerel sunucu
-bu kısıtları aşan bir proxy içermez. Paylaşım ekranı bu koşulda kullanılamıyor
-mesajı verebilir; ana kadro düzenleyicisi çalışır.
+**Paylaşım origin yapılandırması:** yerel Edge kaynaklarında `ALLOWED_ORIGINS`
+tanımlanmamışsa varsayılan `https://taktikstudyo.com` kullanılır. Tanımlanmışsa
+virgülle ayrılmış HTTPS origin listesi varsayılanın yerini alır. Boş/geçersiz
+girdiler, wildcard, kullanıcı bilgisi, path, query ve fragment reddedilir;
+sondaki tek `/` normalize edilir. Alt domainler kendiliğinden izin kazanmaz.
 
-Site'nin güncel adresi `https://taktikstudyo.com`, fakat doğrulanan Edge v4
-kodu eski origin'i sabit filtre olarak kullanıyor. Yalnızca `ALLOWED_ORIGINS`
-değerini değiştirmek bu kodda yeni domaini izinli hale getirmez. Bu dışa aktarma
-işinde mevcut domain/Edge/Turnstile ayarları değiştirilmedi ve canlı paylaşım
-başarısı test edilmedi.
+`http://localhost:4173` bu yapılandırmada izinli değildir. Yerel sunucu CORS veya
+Turnstile kısıtlarını aşan bir proxy içermez; ana kadro düzenleyicisi çalışır.
+Bu kaynak değişikliği production'a deploy edilmedi. İleride onaylı geçişte mevcut
+`ALLOWED_ORIGINS` override'ı ve Cloudflare widget'ının `taktikstudyo.com` hostname
+izni ayrıca kontrol edilmelidir. Canlı paylaşım başarısı bu değişiklikle test edilmedi.
 
 ## Canlı sistemi koruyan çalışma biçimi
 

@@ -12,7 +12,7 @@ class Element {
 function setup(){
  const body=new Element('body');globalThis.document={body,createElement:tag=>new Element(tag)};
  let options=null,resets=0,removed=0;
- globalThis.window={location:{origin:'https://taktik-studyo.unql9enes.chatgpt.site'},turnstile:{render(_el,o){options=o;return 'widget';},reset(){resets++;},remove(){removed++;}}};
+ globalThis.window={location:{origin:'https://taktikstudyo.com'},turnstile:{render(_el,o){options=o;return 'widget';},reset(){resets++;},remove(){removed++;}}};
  return {body,options:()=>options,resets:()=>resets,removed:()=>removed};
 }
 test('share UI uses a captured board snapshot, verified token and backend ID',async()=>{
@@ -23,7 +23,7 @@ test('share UI uses a captured board snapshot, verified token and backend ID',as
  assert.equal(save.disabled,true);assert.equal(env.options().action,'share_lineup');assert.equal(env.options().sitekey,'public-site-key');
  state.team.name='Edited after dialog opened';env.options().callback('verified-token');assert.equal(save.disabled,false);
  await save.onclick();assert.equal(saved.s.team.name,'Original');assert.equal(saved.t,'verified-token');
- const result=dialog.children.find(e=>e.className==='share-result');assert.equal(result.hidden,false);assert.equal(result.children[0].value,'https://taktik-studyo.unql9enes.chatgpt.site/lineup/01234567-89ab-4cde-8fab-0123456789ab');assert.equal(env.resets(),1);
+ const result=dialog.children.find(e=>e.className==='share-result');assert.equal(result.hidden,false);assert.equal(result.children[0].value,'https://taktikstudyo.com/lineup/01234567-89ab-4cde-8fab-0123456789ab');assert.equal(env.resets(),1);
  dialog.close();assert.equal(env.removed(),1);
 });
 test('missing site key and expired tokens cannot submit',async()=>{

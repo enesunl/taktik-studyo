@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createBotVerifier} from '../supabase/functions/lineups/turnstile.js';
 import {createHandler} from '../supabase/functions/lineups/handler.js';
-const origin='https://taktik-studyo.unql9enes.chatgpt.site';
+const origin='https://taktikstudyo.com';
 test('Turnstile fails closed on absent key/token, bad action/hostname, denial and outage',async()=>{
  const req=token=>new Request(origin,{headers:token?{'x-bot-token':token}:{}});
  let calls=0;

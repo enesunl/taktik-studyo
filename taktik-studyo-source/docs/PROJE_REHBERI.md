@@ -4,6 +4,10 @@
 Site'nin ayrı yerel kaynak kopyasıdır. Canlı Site, domain, Supabase tabloları,
 RLS/grant kuralları, Edge Function ve secrets değiştirilmedi; yayın yapılmadı.
 
+Sonraki yerel güncelleme: Edge origin yapılandırması `taktikstudyo.com` için
+güncellendi; production deploy yapılmadı. Aşağıdaki orijinal kaynak/canlı Edge
+eşleşmesi ve teslim doğrulaması kayıtları ilk teslimin tarihsel sonuçlarıdır.
+
 ## 1. Kaynağın doğrulanması
 
 | Kontrol | Sonuç |
@@ -101,6 +105,7 @@ Supabase CLI `2.117.0` olarak korunmuştur. Yeni bağımlılık eklenmedi.
 | `supabase/config.toml` | Yerel CLI ve lineups entrypoint/JWT doğrulama ayarları |
 | `supabase/project.json` | Mevcut backend kimliği |
 | `supabase/functions/lineups/index.ts` | Runtime env, server client, origin ve handler bağlantısı |
+| `supabase/functions/lineups/origins.js` | HTTPS origin listesi doğrulama ve varsayılan production origin |
 | `supabase/functions/lineups/handler.js` | CORS, public anahtar kontrolü, boyut/şema kontrolü, rate limit RPC ve GET/POST |
 | `supabase/functions/lineups/turnstile.js` | Siteverify başarı/action/hostname kontrolü |
 | `src/lib/validation.js` | Edge tarafından da import edilen ortak doğrulama |
@@ -122,7 +127,7 @@ olduğu için ilerideki migration yayını öncesi geçmiş uzlaştırması ayr�
 | `SUPABASE_SECRET_KEYS` | Yalnızca Edge | Platform anahtar sözlüğü; `.default` server fallback; secret |
 | `LINEUPS_PUBLISHABLE_KEY` | Edge | Beklenen public apikey override |
 | `SUPABASE_PUBLISHABLE_KEYS` | Edge | Platform public anahtar sözlüğünün `.default` fallback'i |
-| `ALLOWED_ORIGINS` | Edge | CORS origin listesi; mevcut kod ayrıca sabit eski origin ile filtreler |
+| `ALLOWED_ORIGINS` | Edge | Virgülle ayrılmış HTTPS origin listesi; tanımlanmamışsa `https://taktikstudyo.com`; boş/geçersiz değer hata verir |
 | `TURNSTILE_SECRET_KEY` | Yalnızca Edge | Cloudflare sunucu doğrulama secret'ı |
 | `LINEUPS_RATE_SALT` | Yalnızca Edge | Günlük rate bucket hash salt'ı; yoksa server key kullanılır |
 | `LIVE_CATALOGUE_FILE` | Opsiyonel regresyon testi | Testte kullanılacak katalog JSON dosya yolu; normal çalışmada gerekli değil |
@@ -150,12 +155,16 @@ Detaylı çalışma biçimi `README_LOCAL.md` dosyasındadır.
 
 ### Mevcut bağlantının sınırları
 
-Canlı Edge v4 kaynak kodunda izinli origin sabit olarak
-`https://taktik-studyo.unql9enes.chatgpt.site` ile filtrelenir. Localhost izinli
-değildir. Sadece ALLOWED_ORIGINS'e yeni domain eklemek bu sabit filtreyi aşmaz.
-Site'nin güncel custom domain'i `https://taktikstudyo.com` olmasına rağmen bu
-çalışmada CORS veya Turnstile değiştirilmedi. Bu gözlem bir kaynak incelemesidir;
-canlı custom-domain paylaşım akışına başarılı uçtan uca test iddiası yoktur.
+Yerel Edge kaynakları, `ALLOWED_ORIGINS` tanımlanmamışsa `https://taktikstudyo.com`
+kullanır. Tanımlanan liste varsayılanın yerini alır; yalnızca açıkça listelenmiş
+HTTPS origin'lerine izin verilir. Wildcard, kullanıcı bilgisi, path, query,
+fragment ve boş/geçersiz girdiler reddedilir. Sondaki tek `/` normalize edilir;
+tekrarlar kaldırılır. CORS yanıtında yalnızca tam eşleşen origin döndürülür.
+Turnstile mevcut action/token/hostname kontrollerini aynı origin listesiyle sürdürür.
+
+Bu yerel değişiklik production'a uygulanmadı. Onaylı bir geçişte Edge deployment,
+mevcut `ALLOWED_ORIGINS` override'ı ve Cloudflare widget hostname izni ayrı ayrı
+değerlendirilmelidir; burada canlı paylaşım için başarılı uçtan uca test iddiası yoktur.
 
 Yerel katalog okuması public Supabase bağlantısını kullanabilir; paylaşım
 backend'i ve Turnstile ise ek yerel geliştirme yapılandırması olmadan kullanılamaz.

@@ -1,5 +1,11 @@
 # Supabase integration
 
+Local domain update: the checked-in Edge source now defaults to
+`https://taktikstudyo.com` and validates an explicit `ALLOWED_ORIGINS` override.
+This update has not been deployed; production environment and Cloudflare widget
+settings were not changed. Deployment and live validation results below describe
+the earlier integration, not verification of the new domain in production.
+
 ## Current status
 
 A separate project, `Taktik Stüdyo` (`zwhoailuklwtxaaawfaq`), was created in
@@ -109,10 +115,16 @@ The schema/seed was not modified or reapplied during this sharing integration.
 3. Build-time `SUPABASE_URL`, modern `SUPABASE_PUBLISHABLE_KEY` and public `TURNSTILE_SITE_KEY` are configured in ignored
    `.env`; only these allowlisted public values enter `dist/backend.js`.
 4. The default Edge keys are already available; `LINEUPS_PUBLISHABLE_KEY` is an optional override. Optionally configure
-   `ALLOWED_ORIGINS` (defaults to the current exact Site domain),
+   `ALLOWED_ORIGINS` (defaults to `https://taktikstudyo.com` only when absent),
    `LINEUPS_SECRET_KEY` (preferred modern server-only secret), `LINEUPS_RATE_SALT`.
    The Edge runtime supplies the modern SUPABASE_SECRET_KEYS and SUPABASE_PUBLISHABLE_KEYS dictionaries by default; the function reads their `default` entries. No legacy key is used.
    Never supply server secrets to the frontend build. No secrets were fetched.
+   The local origin parser accepts a comma-separated list of HTTPS origins,
+   normalizes a trailing slash and removes duplicates. Empty/invalid entries,
+   wildcards, credentials, paths, queries and fragments fail configuration.
+   An explicit list replaces the default; subdomains are not implicitly allowed.
+   Before an approved production rollout, check any existing origin override and
+   the Cloudflare widget's allowed hostname. Turnstile verification is unchanged.
 5. Deploy Edge Function `lineups` with verify_jwt=false because there are no user
    sessions. Its body validates the apikey header; default JWT verification does
    not support modern publishable keys.

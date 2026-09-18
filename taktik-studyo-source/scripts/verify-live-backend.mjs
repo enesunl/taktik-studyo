@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {SHARE_BYTES} from '../src/lib/validation.js';
 process.loadEnvFile('.env');
 const url=process.env.SUPABASE_URL,key=process.env.SUPABASE_PUBLISHABLE_KEY;
-const origin='https://taktik-studyo.unql9enes.chatgpt.site';
+const origin='https://taktikstudyo.com';
 const request=(path,options={})=>{const headers=new Headers({apikey:key,origin,'Content-Type':'application/json'});for(const [k,v] of Object.entries(options.headers||{})){if(v===null)headers.delete(k);else headers.set(k,v);}return fetch(url+path,{...options,headers,signal:AbortSignal.timeout(25000)});};
 const result=await request('/rest/v1/teams?select=id,name&limit=1');assert.equal(result.status,200);
 const [team]=await result.json();
