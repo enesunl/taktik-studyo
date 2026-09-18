@@ -1,5 +1,8 @@
 'use strict';
 window.createTacticsBoard=function(root=document,options={}){
+const scoped=Object.hasOwn(options,'draftContext'),draftContext=options.draftContext;
+if(scoped&&(root===document||options.storageKey!==undefined||!draftContext?.isActive()))throw new Error('Invalid scoped board context');
+let disposed=false,cancelGesture=null,resizeObserver=null,offDraftScope=()=>{};
 const teams=window.TAKTIK_TEAMS || [
 ['Galatasaray','GS','#a51935','#efb62a'],['Fenerbahçe','FB','#19294d','#f3d233'],['Beşiktaş','BJK','#222222','#eeeeee'],['Trabzonspor','TS','#702039','#8cc1dc'],['Samsunspor','SAM','#ca303a','#eeeeee'],['Başakşehir','İBF','#ed7835','#213a63'],['Göztepe','GÖZ','#bb2039','#edc932'],['Çaykur Rizespor','RİZ','#198c55','#276dad'],['Kasımpaşa','KAS','#173c74','#ffffff'],['Konyaspor','KON','#23855c','#ffffff'],['Alanyaspor','ALA','#ef802b','#228756'],['Gaziantep FK','GFK','#c3313c','#252b2b'],['Eyüpspor','EYP','#713576','#e6be42'],['Kocaelispor','KOC','#148255','#242b28'],['Gençlerbirliği','GEN','#b72637','#262725'],['Erzurumspor FK','ERZ','#2c65ad','#ffffff'],['Amedspor','AMD','#168553','#c5353d'],['Çorum FK','ÇOR','#c1303b','#242a28']].map(([name,short,color,color2])=>({name,short,color,color2}));
 const shapes=['4-3-3','4-2-3-1','4-4-2','3-5-2','3-4-3','5-3-2','4-1-4-1','4-4-1-1','4-1-2-1-2','4-3-1-2','4-2-2-2','4-2-4','4-5-1','3-4-2-1','3-4-1-2','3-3-3-1','3-3-1-3','3-2-4-1','3-6-1','5-4-1','5-2-3','5-2-1-2','5-2-2-1','2-3-5'];
@@ -12,14 +15,16 @@ function coordinates(shape){const rows=shape.split('-').map(Number),result=[{x:5
 const roleNames={KL:'Kaleci',STP:'Stoper',SLB:'Sol bek',SĞB:'Sağ bek',ÖL:'Ön libero',MO:'Orta saha',OO:'Oyun kurucu',SLK:'Sol kanat',SĞK:'Sağ kanat',SF:'Forvet'};
 function initialPlayers(shape){return coordinates(shape).map((p,i)=>({...p,id:i,number:i===0?1:[3,4,5,2,8,6,10,7,9,11][i-1],name:roleNames[p.role],renamed:false}));}
 state.players=teamPlayers(state.team,state.formation);
-const draftKey=options.storageKey || 'taktik:draft:main:v1';
+const draftKey=scoped?null:options.storageKey || 'taktik:draft:main:v1';
 let draftTimer=null;
-const restored=window.TAKTIK_DRAFTS?.read(draftKey);
+const scopedWriter=scoped?draftContext.createWriter({getState:()=>state,canSave:()=>!disposed&&activeGesture===null,eventTarget:window}):null;
+const restored=scoped?draftContext.read():window.TAKTIK_DRAFTS?.read(draftKey);
 if(options.initialState)state=JSON.parse(JSON.stringify(options.initialState));
 if(restored)state=restored;
 if(!shapes.includes(state.formation))shapes.push(state.formation);
-function persistDraft(){clearTimeout(draftTimer);draftTimer=setTimeout(()=>{if(activeGesture===null)window.TAKTIK_DRAFTS?.write(draftKey,state);},250);}
-window.addEventListener('pagehide',()=>{clearTimeout(draftTimer);if(activeGesture===null)window.TAKTIK_DRAFTS?.write(draftKey,state);});
+function persistDraft(){if(disposed)return;if(scoped){scopedWriter.schedule();return;}clearTimeout(draftTimer);draftTimer=setTimeout(()=>{if(!disposed&&activeGesture===null)window.TAKTIK_DRAFTS?.write(draftKey,state);},250);}
+const saveOnPagehide=()=>{clearTimeout(draftTimer);if(!disposed&&activeGesture===null)window.TAKTIK_DRAFTS?.write(draftKey,state);};
+if(!scoped)window.addEventListener('pagehide',saveOnPagehide);
 
 
 function squadFor(team=state.team){const rosters=window.TAKTIK_ROSTERS?.teams;return rosters&&Object.hasOwn(rosters,team.name)?rosters[team.name]:null;}
@@ -93,18 +98,20 @@ function onPointerDown(e){
  };
  const end=ev=>{
   if(finished)return;if(ev?.type==='pointerup'&&Number.isFinite(ev.clientX)&&Number.isFinite(ev.clientY))move(ev);finished=true;
-  b.removeEventListener('pointermove',move);b.removeEventListener('pointerup',end);b.removeEventListener('pointercancel',end);b.removeEventListener('lostpointercapture',end);activeGesture=null;
+  b.removeEventListener('pointermove',move);b.removeEventListener('pointerup',end);b.removeEventListener('pointercancel',end);b.removeEventListener('lostpointercapture',end);activeGesture=null;cancelGesture=null;
   const cancelled=ev?.type!=='pointerup';
   if(moved&&cancelled){state=JSON.parse(JSON.stringify(undoEntry));if(history[history.length-1]===undoEntry)history.pop();}
   else if(moved){const target=findTarget();if(target){const destination={x:target.x,y:target.y,role:target.role};Object.assign(target,{x:start.px,y:start.py,role:start.role});Object.assign(p,destination);announce(p.name+' ile '+target.name+' yer değiştirdi.');}}
   if(moved)render();else b.classList.remove('dragging');
  };
+ cancelGesture=()=>end({type:'pointercancel'});
  b.addEventListener('pointermove',move);b.addEventListener('pointerup',end);b.addEventListener('pointercancel',end);b.addEventListener('lostpointercapture',end);
 }
 function onPlayerKey(e){if(drawingMode!=='move'||activeGesture!==null)return;const delta={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];if(!delta)return;e.preventDefault();const id=Number(e.currentTarget.dataset.id),p=state.players.find(p=>p.id===id);selectPlayer(id);if(!e.repeat)snapshot();const step=e.shiftKey?3:1;p.x=clamp(p.x+delta[0]*step,9,91);const padY=Math.max(9,(e.currentTarget.offsetHeight/2+3)/pitch.getBoundingClientRect().height*100);p.y=clamp(p.y+delta[1]*step,padY,Math.min(92,100-padY));state.customized=true;updatePlayerElement(e.currentTarget,p);$('boardFormation').textContent=state.formation+' · Özel';persistDraft();}
-function render(){(root===document?document.documentElement:root).style.setProperty('--team',state.team.color);(root===document?document.documentElement:root).style.setProperty('--team2',state.team.color2);$('activeTeam').textContent=state.team.name;badge($('activeBadge'),state.team);$('boardFormation').textContent=state.formation+(state.customized?' · Özel':'');const d=descriptions[state.formation]||['Esnek','Oyuncuların konumlarını oyun planına göre serbestçe düzenle.'];$('formationTitle').textContent=state.formation;$('formationTag').textContent=d[0];$('formationDescription').textContent=d[1];$('undo').disabled=history.length===0;renderTeams();renderFormations();renderPlayers();renderEditor();renderSquad();renderDrawing();renderExpandedIdentity();options.onChange?.({team:state.team.name,formation:state.formation,customized:state.customized});persistDraft();}
+function render(){if(disposed)return;(root===document?document.documentElement:root).style.setProperty('--team',state.team.color);(root===document?document.documentElement:root).style.setProperty('--team2',state.team.color2);$('activeTeam').textContent=state.team.name;badge($('activeBadge'),state.team);$('boardFormation').textContent=state.formation+(state.customized?' · Özel':'');const d=descriptions[state.formation]||['Esnek','Oyuncuların konumlarını oyun planına göre serbestçe düzenle.'];$('formationTitle').textContent=state.formation;$('formationTag').textContent=d[0];$('formationDescription').textContent=d[1];$('undo').disabled=history.length===0;renderTeams();renderFormations();renderPlayers();renderEditor();renderSquad();renderDrawing();renderExpandedIdentity();options.onChange?.({team:state.team.name,formation:state.formation,customized:state.customized});persistDraft();}
 const drawingCanvas=$('drawingCanvas');
 function renderDrawing(){
+ if(disposed)return;
  const ctx=drawingCanvas.getContext?.('2d');if(!ctx)return;
  const rect=pitch.getBoundingClientRect();if(!rect.width||!rect.height)return;
  const ratio=Math.min(window.devicePixelRatio||1,3),width=Math.round(rect.width*ratio),height=Math.round(rect.height*ratio);
@@ -136,17 +143,18 @@ function onDrawingStart(e){
  const move=ev=>{if(ev.pointerId!==undefined&&ev.pointerId!==e.pointerId)return;const p=point(ev),last=stroke.points[stroke.points.length-1];if(Math.hypot((p.x-last.x)*rect.width,(p.y-last.y)*rect.height)<1.5)return;stroke.points.push(p);renderDrawing();};
  const end=ev=>{
   if(finished)return;finished=true;
-  drawingCanvas.removeEventListener('pointermove',move);drawingCanvas.removeEventListener('pointerup',end);drawingCanvas.removeEventListener('pointercancel',end);drawingCanvas.removeEventListener('lostpointercapture',end);activeGesture=null;
+  drawingCanvas.removeEventListener('pointermove',move);drawingCanvas.removeEventListener('pointerup',end);drawingCanvas.removeEventListener('pointercancel',end);drawingCanvas.removeEventListener('lostpointercapture',end);activeGesture=null;cancelGesture=null;
   if(ev.type!=='pointerup'){state=JSON.parse(JSON.stringify(undoEntry));if(history[history.length-1]===undoEntry)history.pop();}
   else if(Number.isFinite(ev.clientX)&&Number.isFinite(ev.clientY))move(ev);
   renderDrawing();$('undo').disabled=history.length===0;persistDraft();
  };
+ cancelGesture=()=>end({type:'pointercancel'});
  drawingCanvas.addEventListener('pointermove',move);drawingCanvas.addEventListener('pointerup',end);drawingCanvas.addEventListener('pointercancel',end);drawingCanvas.addEventListener('lostpointercapture',end);
 }
 $('drawingToggle').onclick=()=>setDrawingMode(drawingMode==='move'?'pen':'move');$('penTool').onclick=()=>setDrawingMode('pen');$('eraserTool').onclick=()=>setDrawingMode('eraser');$('finishDrawing').onclick=()=>setDrawingMode('move');
 $('drawingColor').addEventListener('input',e=>{drawingColor=e.target.value;setDrawingMode('pen');});drawingCanvas.addEventListener('pointerdown',onDrawingStart);
-root.addEventListener('keydown',e=>{if(e.key==='Escape'&&drawingMode!=='move'&&activeGesture===null){setDrawingMode('move');$('drawingToggle').focus();}});
-if(typeof ResizeObserver!=='undefined'){const observer=new ResizeObserver(renderDrawing);observer.observe(pitch);}else window.addEventListener('resize',renderDrawing);
+const onBoardKeydown=e=>{if(e.key==='Escape'&&drawingMode!=='move'&&activeGesture===null){setDrawingMode('move');$('drawingToggle').focus();}};root.addEventListener('keydown',onBoardKeydown);
+if(typeof ResizeObserver!=='undefined'){resizeObserver=new ResizeObserver(renderDrawing);resizeObserver.observe(pitch);}else window.addEventListener('resize',renderDrawing);
 
 function playerAtPoint(clientX,clientY){
  const rect=pitch.getBoundingClientRect();
@@ -172,11 +180,12 @@ function onSquadDrag(e,athleteId){
   ev.preventDefault?.();ghost.style.left=(point.x-65)+'px';ghost.style.top=(point.y-26)+'px';highlight();
  };
  const end=ev=>{
-  if(finished)return;if(ev.type==='pointerup'&&Number.isFinite(ev.clientX)&&Number.isFinite(ev.clientY))move(ev);finished=true;activeGesture=null;
+  if(finished)return;if(ev.type==='pointerup'&&Number.isFinite(ev.clientX)&&Number.isFinite(ev.clientY))move(ev);finished=true;activeGesture=null;cancelGesture=null;
   button.removeEventListener('pointermove',move);button.removeEventListener('pointerup',end);button.removeEventListener('pointercancel',end);button.removeEventListener('lostpointercapture',end);
   if(frame!==null)cancelAnimationFrame(frame);ghost?.remove();button.classList.remove('bench-drag-origin');root.querySelectorAll('.player').forEach(el=>el.classList.remove('swap-target'));
   if(moved){suppressSquadClickUntil=Date.now()+500;const target=ev.type==='pointerup'?playerAtPoint(point.x,point.y):null;if(target)replaceAthlete(athleteId,target.id);else if(ev.type==='pointerup')announce('Değiştirmek için sahadaki bir oyuncunun üzerine bırak.');}
  };
+ cancelGesture=()=>end({type:'pointercancel'});
  button.addEventListener('pointermove',move);button.addEventListener('pointerup',end);button.addEventListener('pointercancel',end);button.addEventListener('lostpointercapture',end);
 }
 function renderExpandedIdentity(){
@@ -211,14 +220,25 @@ $('customForm').onsubmit=e=>{e.preventDefault();if(dialogMode==='team'){const na
 render();
 if(root===document&&document.modelContext?.registerTool){const lifecycle=new AbortController();const context=document.modelContext;const register=tool=>{try{Promise.resolve(context.registerTool(tool,{signal:lifecycle.signal})).catch(()=>{});}catch{}};register({name:'read_tactics_board',description:'Read the selected team, formation, available formations and all player positions.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true},execute(){return JSON.parse(JSON.stringify({...state,availableFormations:shapes,availableTeams:teams.map(t=>t.name)}));}});register({name:'set_formation',description:'Apply an available formation to the visible tactics board, preserving player names and numbers.',inputSchema:{type:'object',properties:{formation:{type:'string'}},required:['formation'],additionalProperties:false},annotations:{readOnlyHint:false},execute(input){if(!input||typeof input.formation!=='string'||!shapes.includes(input.formation))throw new Error('Unknown formation');applyFormation(input.formation);return {formation:state.formation,players:state.players};}});register({name:'move_players',description:'Move players by id to percentage coordinates on the visible football pitch.',inputSchema:{type:'object',properties:{players:{type:'array',items:{type:'object',properties:{id:{type:'integer'},x:{type:'number',minimum:9,maximum:91},y:{type:'number',minimum:9,maximum:92}},required:['id','x','y'],additionalProperties:false}}},required:['players'],additionalProperties:false},annotations:{readOnlyHint:false},execute(input){if(!input||!Array.isArray(input.players)||!input.players.length||input.players.some(p=>!p||!Number.isInteger(p.id)||!state.players.some(s=>s.id===p.id)||!Number.isFinite(p.x)||!Number.isFinite(p.y)||p.x<9||p.x>91||p.y<9||p.y>92))throw new Error('Invalid player position');snapshot();input.players.forEach(p=>Object.assign(state.players.find(s=>s.id===p.id),{x:p.x,y:p.y}));state.customized=true;render();return {players:state.players};}});window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});}
 
+function assertBoardActive(){if(disposed||(scoped&&!draftContext.isActive()))throw new Error('Inactive board context');}
+function disposeScopedBoard(){
+ if(!scoped||disposed)return;
+ disposed=true;cancelGesture?.();closeExpanded();
+ scopedWriter.dispose();offDraftScope();clearTimeout(toastTimer);
+ resizeObserver?.disconnect();window.removeEventListener('resize',renderDrawing);
+ root.removeEventListener('keydown',onBoardKeydown);
+ root.replaceChildren();history=[];
+}
 const api={
- getState:()=>JSON.parse(JSON.stringify(state)),
+ getState(){assertBoardActive();return JSON.parse(JSON.stringify(state));},
  getTeams:()=>teams.map(t=>({...t})),
  getFormations:()=>[...shapes],
- selectTeam(name){const team=teams.find(t=>t.name===name);if(!team)throw new Error('Geçersiz takım');selectTeam(team);},
- applyFormation(shape){if(!shapes.includes(shape))throw new Error('Geçersiz diziliş');applyFormation(shape);},
+ selectTeam(name){assertBoardActive();const team=teams.find(t=>t.name===name);if(!team)throw new Error('Geçersiz takım');selectTeam(team);},
+ applyFormation(shape){assertBoardActive();if(!shapes.includes(shape))throw new Error('Geçersiz diziliş');applyFormation(shape);},
+ ...(scoped?{dispose:disposeScopedBoard}:{}),
 };
 window.TAKTIK_SHARE?.attach(api,$('shareLineup'));
+if(scoped)offDraftScope=draftContext.onDispose(disposeScopedBoard);
 return api;
 };
 async function startMainBoard(){

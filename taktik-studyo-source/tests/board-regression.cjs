@@ -1,7 +1,7 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert');
 class Element{
  constructor(){this.children=[];this.dataset={};this.style={setProperty(){}};this.classList={add(){},remove(){},toggle(){}};this.value='';this.listeners={};this.nodes={};this.offsetHeight=84;}
- append(...args){this.children.push(...args)}replaceChildren(...args){this.children=args}setAttribute(k,v){this[k]=v}removeAttribute(k){delete this[k]}addEventListener(k,fn){this.listeners[k]=fn}removeEventListener(){}querySelector(q){return this.nodes[q]??=new Element()}querySelectorAll(){return []}getBoundingClientRect(){return {left:0,top:0,width:400,height:520}}focus(){}getContext(){return this.ctx??={setTransform(){},clearRect(){},beginPath(){},arc(){},fill(){},moveTo(){},lineTo(){},stroke(){}}}setPointerCapture(){}showModal(){this.open=true}close(){this.open=false}before(node){this.placeholder=node;node.origin=this}replaceWith(node){this.replacement=node}cloneNode(){return new Element()}remove(){this.removed=true}
+ append(...args){this.children.push(...args)}replaceChildren(...args){this.children=args}setAttribute(k,v){this[k]=v}removeAttribute(k){delete this[k]}addEventListener(k,fn){this.listeners[k]=fn}removeEventListener(k,fn){if(this.listeners[k]===fn)delete this.listeners[k]}querySelector(q){return this.nodes[q]??=new Element()}querySelectorAll(){return []}getBoundingClientRect(){return {left:0,top:0,width:400,height:520}}focus(){}getContext(){return this.ctx??={setTransform(){},clearRect(){},beginPath(){},arc(){},fill(){},moveTo(){},lineTo(){},stroke(){}}}setPointerCapture(){}showModal(){this.open=true}close(){this.open=false}before(node){this.placeholder=node;node.origin=this}replaceWith(node){this.replacement=node}cloneNode(){return new Element()}remove(){this.removed=true}
 }
 const document={body:{dataset:{page:'comparison'},style:{overflow:''},append(){}},createElement:()=>new Element(),createComment:()=>new Element(),documentElement:new Element(),querySelectorAll:()=>[],addEventListener(){}};
 const context=vm.createContext({window:{addEventListener(){},scrollBy(){},innerHeight:900},document,setTimeout(){},clearTimeout(){},requestAnimationFrame:()=>1,cancelAnimationFrame(){},URLSearchParams});
@@ -80,4 +80,68 @@ console.log('PASS: bench drop substitutes at target slot, invalid drops do nothi
  const unusualBoard=context.window.createTacticsBoard(new Element(),{initialState:unusual,storageKey:'test:unusual'});
  assert.equal(unusualBoard.getState().team.name,'__proto__');
  console.log('PASS: real board state saves and reloads formation, player movement and drawings; comparison drafts remain independent.');
+
+ const {createUserDraftScope,userDraftKey}=await import('../src/lib/draft-scope.js');
+ const userA='11111111-1111-4111-8111-111111111111',userB='22222222-2222-4222-8222-222222222222';
+ const windowEvents=new Map();
+ context.window.addEventListener=(name,fn)=>{if(!windowEvents.has(name))windowEvents.set(name,new Set());windowEvents.get(name).add(fn);};
+ context.window.removeEventListener=(name,fn)=>windowEvents.get(name)?.delete(fn);
+ const pagehide=()=>{for(const fn of [...(windowEvents.get('pagehide')||[])])fn();};
+ const scopedContext=(scope,slot)=>{
+  const base=scope.context(slot);
+  return {...base,createWriter:options=>base.createWriter({...options,setTimer:context.setTimeout,clearTimer:context.clearTimeout})};
+ };
+ // The exact public shared key still restores, debounces and saves on pagehide.
+ const sharedKey='taktik:draft:shared:'+userA+':v1';
+ const publicBoard=context.window.createTacticsBoard(new Element(),{initialState:sharedState,storageKey:sharedKey});
+ publicBoard.applyFormation('4-4-2');flush();
+ const publicReload=context.window.createTacticsBoard(new Element(),{storageKey:sharedKey});
+ assert.equal(publicReload.getState().formation,'4-4-2');
+ publicReload.applyFormation('3-5-2');pagehide();
+ assert.equal(readDraft(storage,sharedKey).formation,'3-5-2');
+ console.log('PASS: exact public shared v1 key preserves restore, debounce and pagehide behavior.');
+ const pagehideBefore=windowEvents.get('pagehide').size,resizeBefore=windowEvents.get('resize').size;
+ const scopeA=createUserDraftScope({userId:userA,storage});
+ let scopedChanges=0,scopedSchedules=0;
+ const draftContextA=scopedContext(scopeA,'main'),createScopedWriter=draftContextA.createWriter;
+ draftContextA.createWriter=options=>{
+  const writer=createScopedWriter(options);
+  return {...writer,schedule(){scopedSchedules++;writer.schedule();}};
+ };
+ const scopedRootA=new Element(),scopedA=context.window.createTacticsBoard(scopedRootA,{draftContext:draftContextA,onChange:()=>scopedChanges++});
+ scopedA.applyFormation('4-4-2');flush();
+ const savedA=saved.get(userDraftKey(userA,'main'));
+ scopedA.applyFormation('3-5-2');const staleCallbacks=[...pending.values()];
+ // Account disposal also cancels an active gesture and restores expanded layout.
+ control(scopedRootA,'expandBoard').onclick();
+ const dragging=control(scopedRootA,'players').children[0];
+ dragging.listeners.pointerdown({button:0,currentTarget:dragging,clientX:100,clientY:100,pointerId:30});
+ dragging.listeners.pointermove({clientX:120,clientY:90,pointerId:30});
+ const changesBeforeDispose=scopedChanges,schedulesBeforeDispose=scopedSchedules;
+ scopeA.dispose();
+ assert.notEqual(scopedRootA.removed,true);assert.equal(scopedRootA.children.length,0);
+ assert.equal(scopedChanges,changesBeforeDispose);assert.equal(scopedSchedules,schedulesBeforeDispose);
+ assert.equal(scopedRootA.listeners.keydown,undefined);
+ for(const event of ['pointermove','pointerup','pointercancel','lostpointercapture'])assert.equal(dragging.listeners[event],undefined);
+ assert.equal(control(scopedRootA,'expandedDialog').open,false);assert.equal(document.body.style.overflow,'');
+ assert.equal(windowEvents.get('pagehide').size,pagehideBefore);assert.equal(windowEvents.get('resize').size,resizeBefore);
+ assert.throws(()=>scopedA.getState());assert.throws(()=>scopedA.applyFormation('4-3-3'));
+ const scopeB=createUserDraftScope({userId:userB,storage});
+ const scopedB=context.window.createTacticsBoard(new Element(),{draftContext:scopedContext(scopeB,'main')});
+ assert.equal(scopedB.getState().formation,'4-3-3');
+ scopedB.applyFormation('5-3-2');staleCallbacks.forEach(fn=>fn());flush();pagehide();
+ assert.equal(saved.get(userDraftKey(userA,'main')),savedA);
+ assert.equal(readDraft(storage,userDraftKey(userB,'main')).formation,'5-3-2');
+ const leftScoped=context.window.createTacticsBoard(new Element(),{draftContext:scopedContext(scopeB,'left')});
+ const rightScoped=context.window.createTacticsBoard(new Element(),{draftContext:scopedContext(scopeB,'right')});
+ leftScoped.applyFormation('3-4-3');rightScoped.applyFormation('4-2-3-1');flush();
+ assert.equal(readDraft(storage,userDraftKey(userB,'left')).formation,'3-4-3');
+ assert.equal(readDraft(storage,userDraftKey(userB,'right')).formation,'4-2-3-1');
+ scopeB.dispose();assert.equal(windowEvents.get('pagehide').size,pagehideBefore);
+ assert.equal(windowEvents.get('resize').size,resizeBefore);
+ assert.throws(()=>context.window.createTacticsBoard(new Element(),{draftContext:null}));
+ assert.throws(()=>context.window.createTacticsBoard(document,{draftContext:scopeB.context('main')}));
+ assert.equal(saved.has('taktik:draft:anonymous:main:v2'),false);
+ console.log('PASS: scoped real boards isolate accounts/slots and dispose timers, pagehide, root/resize listeners, gestures and expanded UI.');
+
 })().catch(error=>{console.error(error);process.exitCode=1;});
