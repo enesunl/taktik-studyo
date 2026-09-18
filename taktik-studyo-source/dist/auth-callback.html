@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="referrer" content="no-referrer">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>E-posta Doğrulama — Taktik Stüdyo</title>
+  <link rel="stylesheet" href="auth.css">
+  <script src="backend.js" defer></script>
+</head>
+<body data-auth-page="callback">
+  <main class="auth-card">
+    <a class="brand" href="/">TAKTİK STÜDYO</a>
+    <p class="eyebrow">SON BİR ADIM</p>
+    <h1>E-posta adresini doğrula.</h1>
+    <p class="intro">Devam etmek için aşağıdaki düğmeye bas. Sayfayı açmak tek başına doğrulama işlemini tamamlamaz.</p>
+    <button id="authSubmit" type="button" disabled>E-posta adresimi doğrula</button>
+    <p id="authMessage" class="message" role="alert" aria-live="polite" aria-atomic="true"></p>
+    <p id="profileMessage" class="profile-message" role="status" aria-live="polite"></p>
+    <p class="hint">Doğrulama yaptığın cihazda oturum açılır. Başka bir cihazda e-posta ve şifrenle giriş yapabilirsin.</p>
+    <p class="footnote"><a href="giris.html">Giriş sayfasına git</a></p>
+    <noscript>Doğrulama için JavaScript'i etkinleştir, ardından e-postandaki bağlantıyı yeniden aç.</noscript>
+  </main>
+</body>
+</html>

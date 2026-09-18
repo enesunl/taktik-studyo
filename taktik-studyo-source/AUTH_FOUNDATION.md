@@ -1,4 +1,4 @@
-# Auth foundation (Phase 2, local source only)
+# Auth foundation (Phases 2–4, local source only)
 
 `src/lib/supabase.js` owns the only Supabase client. Catalogue, Auth and future
 profiles code share it. Supabase JS remains pinned to 2.116.0. The public sharing
@@ -8,13 +8,16 @@ Auth uses `persistSession: true`, `autoRefreshToken: true`,
 `detectSessionInUrl: false`, `debug: false` and the deterministic SDK storage key
 `taktik:auth:<Supabase hostname>:v1`. There is no custom token/session storage.
 Existing `taktik:draft:*` keys are unchanged. The existing public Turnstile site
-key remains in the build; no Auth CAPTCHA setting or environment value is added.
+key remains in the build. Phase 4 adds a separate optional public Auth CAPTCHA
+config hook; no real Auth CAPTCHA setting or environment value is changed.
 
 ## Module API
 
 Import `auth` and `safeInternalRedirect` from `src/lib/auth.js`; neither is a
 window global. `backend-entry.js` starts initialization without gating public
-catalogue or sharing. No login, register, profile, guard or recovery UI exists yet.
+catalogue or sharing. Phase 4 adds login/register/confirmation pages; see
+[Auth email confirmation](AUTH_EMAIL_CONFIRMATION.md) for the callback, profile
+bootstrap and deferred production configuration. Guards and recovery UI remain deferred.
 
 | Method | Result |
 | --- | --- |
@@ -23,6 +26,8 @@ catalogue or sharing. No login, register, profile, guard or recovery UI exists y
 | `getCurrentUser()` | Local identity snapshot or null; not authorization evidence |
 | `validateUser()` | Calls SDK `getUser()` on every invocation; `{ok:true,user}` on success |
 | `signInWithPassword({email,password,captchaToken?})` | Delegates to SDK; `{ok:true,user}` |
+| `signUpWithPassword({email,password,username,emailRedirectTo,captchaToken?})` | Validates input/callback; generic `{ok:true,status:'confirmation_pending'}` |
+| `verifyEmailToken(tokenHash)` | Click-only email verification caller; limited `{ok:true,user}` |
 | `signOut()` | SDK `signOut({scope:'local'})`; `{ok:true,state}`; no draft deletion |
 | `subscribe(listener)` | Deferred state delivery, including initial snapshot; returns unsubscribe |
 | `dispose()` | Unsubscribes controller, cancels pending notifications; allows reinitialization |
@@ -41,8 +46,8 @@ cannot replace newer Auth state. Repeated identical events and duplicate listene
 registration are suppressed. Subscribers run in a later task, outside the SDK
 Auth callback, and must unsubscribe during their own cleanup. `dispose()` affects
 only this controller, not the shared SDK's refresh lifecycle or stored session.
-`PASSWORD_RECOVERY` is preserved as an event for future consumers; no callback URL
-or recovery flow is processed here.
+`PASSWORD_RECOVERY` has the distinct `password_recovery` status for future consumers.
+Phase 4 handles only `type=email`; no recovery flow is processed here.
 
 Local session/user information is for interface state only. Security-sensitive
 callers use `validateUser()` and database RLS/grants remain the real data boundary.
@@ -64,6 +69,6 @@ Browser output is generated only by `npm run build`.
 Phase 1 migrations are not applied to production by this work. Authenticated
 catalogue access requires those grants/policies before a future production login
 rollout. Frontend fallback is not proof that production permissions are ready.
-Auth settings, confirmation/recovery templates, draft isolation and UI remain
-later phases. Production SQL, settings, secrets and deployment require separate
-explicit approval.
+Phase 3 draft isolation helpers and Phase 4 Auth UI are local implementations;
+protected-route wiring and recovery remain later phases. Production SQL, Auth
+settings/templates, secrets and deployment require separate explicit approval.

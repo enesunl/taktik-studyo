@@ -1,3 +1,4 @@
+import {usernameValid, emailValid, emailTokenValid, confirmationUrlValid} from './auth-validation.js';
 const failure = code => Object.freeze({ok:false, error:Object.freeze({code})});
 const success = value => Object.freeze({ok:true, ...value});
 const userView = user => user && typeof user.id === 'string' && user.id
@@ -104,6 +105,40 @@ export function createAuthSession(client) {
       return success({user});
     } catch { return failure('user_validation_failed'); }
   }
+  async function signUpWithPassword({email, password, username, emailRedirectTo, captchaToken} = {}) {
+    if (typeof email !== 'string' || !emailValid(email.trim()) || !usernameValid(username) || typeof password !== 'string'
+      || password.length < 12 || !confirmationUrlValid(emailRedirectTo)) return failure('invalid_form');
+    const ready = await initialize();
+    if (!ready.ok) return ready;
+    if (state.user) return failure('existing_session');
+    const generation = epoch;
+    try {
+      const result = await client.auth.signUp({email:email.trim(), password,
+        options:{data:{username}, emailRedirectTo, ...(typeof captchaToken === 'string' ? {captchaToken} : {})}});
+      if (generation !== epoch) return failure('state_changed');
+      // Supabase can obfuscate existing accounts; do not disclose account existence.
+      if (result.error && !['user_already_exists','email_exists'].includes(result.error.code)) return failure('sign_up_failed');
+      // Never expose returned user/session or infer confirmation from signUp data.
+      // An unexpected auto-confirmed SDK session remains owned by the SDK.
+      return success({status:'confirmation_pending'});
+    } catch { return failure('sign_up_failed'); }
+  }
+  async function verifyEmailToken(tokenHash) {
+    if (!emailTokenValid(tokenHash)) return failure('confirmation_invalid');
+    const ready = await initialize();
+    if (!ready.ok) return ready;
+    // Recheck at click time as well as page load; never silently replace a session.
+    if (state.user) return failure('existing_session');
+    const generation = epoch, start = revision;
+    try {
+      const result = await client.auth.verifyOtp({token_hash:tokenHash, type:'email'});
+      if (generation !== epoch) return failure('state_changed');
+      if (result.error || !result.data?.session || !userView(result.data.user)) return failure('confirmation_failed');
+      if (revision === start) {revision++; liveEvent = true; publish(result.data.user, 'SIGNED_IN');}
+      else if (state.user?.id !== result.data.user.id) return failure('state_changed');
+      return success({user:state.user});
+    } catch { return failure('confirmation_failed'); }
+  }
   function subscribe(listener) {
     if (typeof listener !== 'function') throw new TypeError('Expected listener');
     if (!listeners.has(listener)) {
@@ -121,5 +156,5 @@ export function createAuthSession(client) {
     // No signOut, storage clearing or SDK shutdown: client is shared with catalogue.
   }
   return Object.freeze({initialize, getState:() => state, getCurrentUser:() => state.user,
-    signInWithPassword, signOut, subscribe, validateUser, dispose});
+    signInWithPassword, signUpWithPassword, verifyEmailToken, signOut, subscribe, validateUser, dispose});
 }

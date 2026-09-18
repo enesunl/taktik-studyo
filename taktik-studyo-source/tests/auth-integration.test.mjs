@@ -6,6 +6,8 @@ import {build} from 'esbuild';
 import {createClient} from '@supabase/supabase-js';
 import {createCatalogue} from '../src/lib/catalogue.js';
 import {toShare} from '../src/lib/validation.js';
+import {createAuthSession} from '../src/lib/auth-session.js';
+import {createAuthPageApi} from '../src/lib/auth-page-api.js';
 
 const url = 'https://abcdefghijklmnopqrst.supabase.co';
 const key = 'sb_publishable_local_test_only';
@@ -105,4 +107,48 @@ test('real SDK singleton with mocked HTTP: persistent session, catalogue, public
     assert.doesNotMatch(JSON.stringify(window), /fake-refresh|test_signature|fake-password/);
     assert.deepEqual(Object.keys(window).sort(), ['TAKTIK_BACKEND','TAKTIK_DRAFTS','TAKTIK_ROSTERS','TAKTIK_SHARE','TAKTIK_TEAMS','localStorage'].sort());
   } finally {auth.dispose(); await client.auth.stopAutoRefresh();}
+});
+
+test('real SDK with two independent mocked devices: TokenHash confirmation needs no PKCE verifier', async () => {
+  const calls = [], stores = [new Map(),new Map()];
+  const confirmed = {...user,email_confirmed_at:'2026-09-18T10:00:00Z',user_metadata:{username:'Cross_device'}};
+  const http = async (input,options = {}) => {
+    const target = new URL(input); assert.equal(target.origin,url);
+    const body = options.body ? JSON.parse(options.body) : null;
+    calls.push({path:target.pathname,body});
+    if (target.pathname === '/auth/v1/signup') {
+      assert.equal(target.searchParams.get('redirect_to'),'https://taktikstudyo.com/auth-callback.html');
+      return Response.json({...user,user_metadata:body.data,identities:[]});
+    }
+    if (target.pathname === '/auth/v1/verify') {
+      assert.equal(body.token_hash,'fake-cross-device-token'); assert.equal(body.type,'email');
+      assert.equal('code_verifier' in body,false);
+      return Response.json({access_token:jwt,refresh_token:'fake-refresh',token_type:'bearer',expires_in:3600,user:confirmed});
+    }
+    if (target.pathname === '/auth/v1/user') return Response.json(confirmed);
+    if (target.pathname === '/rest/v1/profiles') {
+      assert.equal(target.searchParams.get('select'),'id,username,display_name,created_at,updated_at');
+      assert.equal(target.searchParams.get('id'),'eq.'+id);
+      return Response.json([{id,username:'Cross_device'}]);
+    }
+    throw Error('Unexpected fake request');
+  };
+  const clients = stores.map(store => createClient(url,key,{global:{fetch:http},auth:{persistSession:true,autoRefreshToken:false,
+    detectSessionInUrl:false,storage:{getItem:k => store.get(k) ?? null,setItem:(k,v) => store.set(k,v),removeItem:k => store.delete(k)}}}));
+  const controllers = clients.map(createAuthSession);
+  const apis = clients.map((client,i) => createAuthPageApi({client,auth:controllers[i],origin:'https://taktikstudyo.com'}));
+  try {
+    await Promise.all(apis.map(api => api.initialize()));
+    assert.deepEqual(await apis[0].signUp({email:user.email,password:'twelve chars pass',username:'Cross_device'}),{ok:true,status:'confirmation_pending'});
+    assert.equal(controllers[0].getCurrentUser(),null); assert.equal(stores[1].size,0);
+    assert.equal(calls.some(call => call.path.endsWith('/verify')),false);
+    assert.deepEqual(await apis[1].verifyEmail('fake-cross-device-token'),{ok:true,profile:{ok:true,status:'ready'}});
+    assert.equal(controllers[1].getCurrentUser().id,id);
+    assert.equal(controllers[0].getCurrentUser(),null,'PC does not gain phone session');
+    assert.doesNotMatch(JSON.stringify(stores.map(store => [...store])),/fake-cross-device-token|code-verifier/);
+    assert.equal(calls.filter(call => call.path.endsWith('/verify')).length,1);
+  } finally {
+    controllers.forEach(auth => auth.dispose());
+    await Promise.all(clients.map(client => client.auth.stopAutoRefresh()));
+  }
 });
