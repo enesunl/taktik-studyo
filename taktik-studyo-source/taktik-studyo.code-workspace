@@ -1,0 +1,16 @@
+{
+  "folders": [{ "path": "." }],
+  "settings": {
+    "files.exclude": { "**/node_modules": true },
+    "search.exclude": { "**/node_modules": true, "dist/backend.js": true },
+    "files.encoding": "utf8"
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      { "label": "Taktik: Local server", "type": "shell", "command": "node scripts/serve-local.cjs", "problemMatcher": [] },
+      { "label": "Taktik: Build backend", "type": "shell", "command": "npm run build", "group": "build", "problemMatcher": [] },
+      { "label": "Taktik: Local tests", "type": "shell", "command": "npm test", "group": "test", "problemMatcher": [] }
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+project_id = "taktik-studyo"
+
+[auth]
+enabled = false
+
+[functions.lineups]
+# No user sessions. The function validates the publishable apikey header itself.
+verify_jwt = false
+entrypoint = "./functions/lineups/index.ts"
