@@ -1,8 +1,11 @@
 import { supabase, publicConfig } from './lib/supabase.js';
+import { auth } from './lib/auth.js';
 import { createCatalogue } from './lib/catalogue.js';
 import { readDraft, writeDraft } from './lib/drafts.js';
 import { shareValid, toShare, SHARE_BYTES } from './lib/validation.js';
 import { createSharingUI } from './lib/sharing-ui.js';
+// Session restore does not gate public catalogue/sharing and exposes no window state.
+void auth.initialize();
 function prepareShare(state){
   const payload=toShare(state),body=JSON.stringify(payload);
   if(!shareValid(payload)||new TextEncoder().encode(body).length>SHARE_BYTES)throw new Error('Kadro veya çizim paylaşım sınırını aşıyor.');
