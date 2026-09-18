@@ -77,6 +77,14 @@ kullanılır. Hareketler yerel state → localStorage akışındadır. Paylaşı
 yalnızca Edge üzerinden; doğrudan shared_lineups INSERT veya ayrıcalıklı RPC
 çağrısı frontend'de yoktur.
 
+Yeni paylaşım URL'si `/?lineup=<UUID>` biçimindedir ve `window.location.origin`
+üzerinden üretilir. Ana sayfa `URLSearchParams` ile tek bir UUID v4 doğrulayıp
+mevcut Edge `GET?id=<UUID>` isteğini kullanır. Boş, geçersiz veya tekrarlanan
+parametrelerde paylaşım yüklenmez. Eski `/lineup/<UUID>` bağlantıları mevcut
+rewrite ile desteklenir; query parametresi varsa önceliklidir. UUID'ye özel taslak
+anahtarı korunur. Yeni format deep-link rewrite gerektirmez; bu yerel değişiklik
+production'a deploy edilmemiştir.
+
 ## 4. Build dosyaları
 
 | Dosya | Görev |
@@ -87,7 +95,7 @@ yalnızca Edge üzerinden; doğrudan shared_lineups INSERT veya ayrıcalıklı R
 | `.env.example` | Üç public build değişkeninin boş şablonu |
 | `.env` | Bu yerel kopyadaki üç public değer; Git dışında |
 | `dist/backend.js` | Üretilen ve yayınlanan bundle; elle düzenleme |
-| `dist/_redirects` | Paylaşımlı kadro URL rewrite |
+| `dist/_redirects` | Eski `/lineup/<UUID>` bağlantıları için rewrite; yeni query formatı gerektirmez |
 | `.openai/hosting.json` | Mevcut Sites yayın kimliği/klasörü |
 
 Build komutu sadece `dist/backend.js` üretir. `dist/` temizlenmemelidir:

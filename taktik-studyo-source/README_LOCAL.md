@@ -56,7 +56,7 @@ Bu sunucuda otomatik rebuild/HMR yoktur.
 
 ## Test ve backend sınırları
 
-`npm test` mevcut dokuz yerel testi ve saha regresyon kontrolünü çalıştırır.
+`npm test` yerel testleri ve saha regresyon kontrolünü çalıştırır.
 Veritabanı testi bellek içi PGlite kullanır; canlı Supabase'e migration uygulamaz.
 Bağımlılık sürümleri `package-lock.json` ile sabittir.
 
@@ -64,6 +64,15 @@ Takım/oyuncu okuması mevcut Supabase'e public anahtarla bağlanır. Ağ/API ha
 statik katalog kullanılır. Kadro düzenlemeleri localStorage'dadır; her harekette
 veritabanına yazılmaz. Localhost'un localStorage'ı canlı sitenin kaydından ayrıdır;
 farklı portlar da ayrı tarayıcı kayıt alanı oluşturur.
+
+Yeni paylaşım bağlantıları mevcut sayfanın origin'iyle `/?lineup=<UUID>` biçiminde
+oluşturulur; örneğin `https://taktikstudyo.com/?lineup=<UUID>`. Ana sayfa query
+parametresini UUID v4 olarak doğrular ve mevcut Edge `GET?id=<UUID>` akışını kullanır.
+Yeni bağlantılar statik hosting deep-link rewrite kuralı gerektirmez.
+Eski `/lineup/<UUID>` bağlantıları mevcut rewrite desteğiyle çalışmaya devam eder.
+`lineup` query parametresi varsa önceliklidir; boş/geçersiz/tekrarlanan değerler
+hata gösterir, eski yola fallback yapılmaz. UUID'ye özel yerel taslak anahtarı
+korunur; paylaşılan kayıt ve ana saha taslağı değiştirilmez.
 
 **Paylaşım origin yapılandırması:** yerel Edge kaynaklarında `ALLOWED_ORIGINS`
 tanımlanmamışsa varsayılan `https://taktikstudyo.com` kullanılır. Tanımlanmışsa

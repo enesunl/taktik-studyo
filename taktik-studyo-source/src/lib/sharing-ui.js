@@ -37,8 +37,9 @@ export function createSharingUI(backend,siteKey) {
         try{
           const id=await backend.saveLineup(snapshot,token);
           if(finished)return;
-          const url=new URL('/lineup/'+id,window.location.origin).href;
-          link.value=url;open.href=url;result.hidden=false;save.hidden=true;widget.hidden=true;notice.textContent='Kadro bağlantın hazır.';
+          const url=new URL('/',window.location.origin);
+          url.searchParams.set('lineup',id);
+          link.value=url.href;open.href=url.href;result.hidden=false;save.hidden=true;widget.hidden=true;notice.textContent='Kadro bağlantın hazır.';
         }catch(error){if(!finished)notice.textContent=error.message || 'Paylaşım tamamlanamadı.';}
         finally{token='';busy=false;close.disabled=false;if(!finished&&sdk&&widgetId!==null)sdk.reset(widgetId);}
       };

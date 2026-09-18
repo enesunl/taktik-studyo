@@ -81,11 +81,17 @@ allows saving after token completion. The token is sent in `x-bot-token` to the
 existing Edge Function. Tokens are reset after submission and on expiry/error.
 The browser never inserts shared_lineups or calls create_shared_lineup.
 
-The returned backend UUID forms `/lineup/<id>`; `_redirects` rewrites this to the
-existing index page. A root base URL resolves all existing assets/PNG paths. This
-route uses Edge GET?id, not table SELECT, then starts the same board engine with
-that snapshot. Local edits use a separate shared-ID draft key, leaving the main
-and comparison drafts intact. Shared DB snapshots remain immutable to clients.
+The returned backend UUID forms `/?lineup=<id>` using `window.location.origin`.
+The index page reads it with URLSearchParams and validates a single UUID v4 before
+calling the existing Edge GET?id flow, not table SELECT. Empty, invalid or repeated
+lineup parameters show the existing load error without requesting a shared lineup.
+New links require no deep-link rewrite. Legacy `/lineup/<id>` links still use
+`_redirects` (or the local server rewrite); a query parameter takes precedence and
+an invalid query never falls back to the legacy path. A root base URL resolves
+all existing assets/PNG paths. The same board engine loads the snapshot; local
+edits keep the existing shared-ID draft key, leaving main and comparison drafts
+intact. Shared DB snapshots remain immutable to clients. This URL change is local
+and has not been deployed to production.
 
 The Site remains owner-private. Opening shared links requires site access; this
 update does not change the hosting audience. The dialog states this limitation.

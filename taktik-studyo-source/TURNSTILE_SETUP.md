@@ -33,7 +33,7 @@ Domain geçişi yalnızca yerel kaynaklarda hazırlandı. Production Edge, envir
 ve Cloudflare widget ayarları bu değişiklikte güncellenmedi. Yeni varsayılan,
 production'da açıkça tanımlanmış eski bir `ALLOWED_ORIGINS` değerini geçersiz kılmaz.
 
-Gerçek tarayıcıda widget/token ile oluşturma → `/lineup/<id>` açma →
+Gerçek tarayıcıda widget/token ile oluşturma → `/?lineup=<id>` açma →
 yenileme akışının canlı testi tamamlanmalıdır. Site şu an özel erişimli olduğundan
 bağlantıyı açacak kişinin siteye erişim izni de bulunmalıdır.
 

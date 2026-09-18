@@ -225,9 +225,13 @@ async function startMainBoard(){
  await window.TAKTIK_BACKEND?.ready;
  if(document.body.dataset.page!=='comparison'){
  const options={},path=window.location?.pathname||'/';
- if(path.startsWith('/lineup/')){
-  const id=path.slice('/lineup/'.length).replace(/\/$/,'');
+ const params=new URLSearchParams(window.location?.search||'');
+ const hasLineup=params.has('lineup');
+ // Query links take precedence; retain old paths for existing shared links.
+ if(hasLineup||path.startsWith('/lineup/')){
+  const id=hasLineup?params.get('lineup'):path.slice('/lineup/'.length).replace(/\/$/,'');
   try{
+   if((hasLineup&&params.getAll('lineup').length!==1)||!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id))throw new Error('Geçersiz paylaşım bağlantısı.');
    options.initialState=await window.TAKTIK_BACKEND.readLineup(id);
    options.storageKey='taktik:draft:shared:'+id+':v1';
    const heading=document.querySelector('.page-heading h1');if(heading)heading.textContent='Paylaşılan kadro.';
