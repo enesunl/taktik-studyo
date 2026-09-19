@@ -22,8 +22,8 @@ const jwt = [Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base
   Buffer.from(JSON.stringify({sub:id,role:'authenticated',exp:Math.floor(Date.now()/1000)+3600})).toString('base64url'),
   'test_signature_not_a_real_token'].join('.');
 
-test('real SDK singleton with mocked HTTP: persistent session, catalogue, public sharing and local logout', async () => {
-  const calls = [], creations = [], storageCalls = [];
+test('real SDK main singleton persists normal Auth; dedicated recovery construction never persists', async () => {
+  const calls = [], creations = [], storageCalls = [], clients = [];
   const storage = new Map([['taktik:draft:main:v1','untouched'], ['taktik:draft:shared:'+id+':v1','shared-untouched']]);
   const sdkStorage = {getItem:k => storage.get(k) ?? null,
     setItem(k,v){storageCalls.push(k); storage.set(k,v);}, removeItem(k){storageCalls.push(k); storage.delete(k);}};
@@ -32,6 +32,8 @@ test('real SDK singleton with mocked HTTP: persistent session, catalogue, public
     const headers = new Headers(options.headers), method = options.method || 'GET';
     calls.push({path:target.pathname, method, headers, body:options.body});
     if (target.pathname === '/auth/v1/token') return Response.json({access_token:jwt, refresh_token:'fake-refresh',
+      token_type:'bearer', expires_in:3600, user});
+    if (target.pathname === '/auth/v1/verify') return Response.json({access_token:jwt, refresh_token:'fake-refresh',
       token_type:'bearer', expires_in:3600, user});
     if (target.pathname === '/auth/v1/user') return Response.json(user);
     if (target.pathname === '/auth/v1/logout') {assert.equal(target.searchParams.get('scope'), 'local'); return new Response(null, {status:204});}
@@ -52,11 +54,12 @@ test('real SDK singleton with mocked HTTP: persistent session, catalogue, public
     plugins:[{name:'fake-sdk-boundary',setup(b){b.onResolve({filter:/^@supabase\/supabase-js$/}, () => ({path:'sdk',namespace:'test'}));
       b.onLoad({filter:/.*/,namespace:'test'}, () => ({contents:'export const createClient = globalThis.testCreateClient;'}));}}]});
   const window = {localStorage:sdkStorage};
-  const context = vm.createContext({window, module:{exports:{}}, URL, TextEncoder, AbortSignal, setTimeout,
+  const context = vm.createContext({window, module:{exports:{}}, URL, Headers, Response, TextEncoder, AbortSignal, setTimeout,
     fetch:http, document:{getElementById(){throw Error('unexpected catalogue fallback');}},
     testCreateClient(u,k,options){
       creations.push({url:u,key:k,options});
       client = createClient(u,k,{...options,auth:{...options.auth,storage:sdkStorage}});
+      clients.push(client);
       return client;
     }});
   vm.runInContext(output.outputFiles[0].text, context);
@@ -106,7 +109,21 @@ test('real SDK singleton with mocked HTTP: persistent session, catalogue, public
     assert.ok(storageCalls.every(k => k.startsWith(config.storageKey)));
     assert.doesNotMatch(JSON.stringify(window), /fake-refresh|test_signature|fake-password/);
     assert.deepEqual(Object.keys(window).sort(), ['TAKTIK_BACKEND','TAKTIK_DRAFTS','TAKTIK_ROSTERS','TAKTIK_SHARE','TAKTIK_TEAMS','localStorage'].sort());
-  } finally {auth.dispose(); await client.auth.stopAutoRefresh();}
+    const writesBeforeRecovery = storageCalls.length;
+    assert.equal((await auth.completePasswordRecovery({tokenHash:'phase5-recovery-token-fixture',password:'new password 12'})).ok,true);
+    assert.equal(creations.length,2,'dedicated client created only for completion');
+    const recoveryConfig = creations[1].options.auth;
+    assert.equal(creations[1].url,url); assert.equal(creations[1].key,key);
+    assert.equal(recoveryConfig.persistSession,false); assert.equal(recoveryConfig.autoRefreshToken,false);
+    assert.equal(recoveryConfig.detectSessionInUrl,false); assert.equal(recoveryConfig.debug,false);
+    assert.equal('storage' in recoveryConfig,false,'production recovery factory supplies no custom token storage');
+    assert.notEqual(recoveryConfig.storageKey,config.storageKey);
+    assert.notEqual(creations[0].options.global.fetch,creations[1].options.global.fetch);
+    assert.equal(storageCalls.length,writesBeforeRecovery,'even an injected storage adapter is unused by nonpersistent SDK');
+    assert.equal(storage.has(config.storageKey),false);
+    assert.equal(auth.getState().status,'signed_out'); assert.equal(auth.getCurrentUser(),null);
+    assert.doesNotMatch(JSON.stringify(window),/phase5-recovery|fake-refresh|test_signature|new password/);
+  } finally {auth.dispose(); await Promise.all(clients.map(c => c.auth.dispose()));}
 });
 
 test('real SDK with two independent mocked devices: TokenHash confirmation needs no PKCE verifier', async () => {
