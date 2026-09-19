@@ -1,4 +1,11 @@
 import {usernameValid, emailValid, emailTokenValid, confirmationUrlValid, recoveryUrlValid} from './auth-validation.js';
+import {isAuthApiError, isAuthSessionMissingError} from '@supabase/supabase-js';
+// Verified against auth-js 2.116.0 error-codes.ts and Supabase Auth error docs.
+// Unknown errors (including bare 401/403) are non-destructive validation failures.
+const invalidSessionCodes = new Set(['session_not_found','session_expired','bad_jwt',
+  'user_not_found','refresh_token_not_found','refresh_token_already_used']);
+const invalidSessionError = error => isAuthSessionMissingError(error)
+  || (isAuthApiError(error) && invalidSessionCodes.has(error.code));
 const failure = code => Object.freeze({ok:false, error:Object.freeze({code})});
 const success = value => Object.freeze({ok:true, ...value});
 const userView = user => user && typeof user.id === 'string' && user.id
@@ -13,6 +20,7 @@ export function createAuthSession(client, createRecoveryClient = null) {
   let subscription = null, pending = null, epoch = 0, revision = 0, liveEvent = false;
   let recovery = null, recoveryBusy = false;
   const listeners = new Map();
+  const invalidators = new Set();
   function notify(listener, marker, snapshot, generation) {
     // Do not run consumer Auth calls inside the SDK's synchronous callback/lock.
     setTimeout(() => {
@@ -38,7 +46,11 @@ export function createAuthSession(client, createRecoveryClient = null) {
       : currentUser ? (event === 'PASSWORD_RECOVERY' ? 'password_recovery' : 'signed_in') : 'signed_out';
     const next = Object.freeze({status, user:currentUser, event});
     if (JSON.stringify(next) === JSON.stringify(state)) return;
+    const identityChanged = state.user?.id !== next.user?.id || state.status !== next.status;
     state = next;
+    // Synchronous privacy teardown only; callbacks must not call async SDK APIs.
+    // Ordinary subscribers/validation still run outside the SDK callback lock.
+    if (identityChanged) for (const invalidate of invalidators) {try {invalidate();} catch {}}
     for (const [listener, marker] of listeners) notify(listener, marker, state, epoch);
   }
   function initialize() {
@@ -116,16 +128,44 @@ export function createAuthSession(client, createRecoveryClient = null) {
   async function validateUser() {
     const ready = await initialize();
     if (!ready.ok) return ready;
-    const generation = epoch, start = revision;
+    const generation = epoch, start = revision, id = state.user?.id;
+    const unchanged = () => generation === epoch && revision === start && state.user?.id === id;
+    // getUser may itself clear a missing session. Accept only a single SIGNED_OUT
+    // transition; A -> B (even B -> signed_out) must invalidate A's result.
+    const sdkCleared = () => generation === epoch && revision === start + 1
+      && state.status === 'signed_out' && !state.user && state.event === 'SIGNED_OUT';
+    let cleaning = false;
     try {
       // Always ask Auth server; never accept the restored local user as proof.
       const result = await client.auth.getUser();
-      if (generation !== epoch || revision !== start) return failure('state_changed');
+      if (invalidSessionError(result.error)) {
+        if (sdkCleared()) return failure('unauthenticated');
+        if (!unchanged()) return failure('state_changed');
+        if (recoveryBusy || state.status === 'password_recovery') return failure('state_changed');
+        // Read through the public SDK, never internal storage. This also catches
+        // another tab's replacement session before its Auth event is delivered.
+        const local = await client.auth.getSession();
+        if (sdkCleared()) return failure('unauthenticated');
+        if (!unchanged() || (local.data?.session?.user?.id && local.data.session.user.id !== id)) return failure('state_changed');
+        if (local.error) return failure('user_validation_failed');
+        // No await between the last identity/generation check and SDK dispatch.
+        cleaning = true;
+        const cleaned = await client.auth.signOut({scope:'local'});
+        if (!unchanged() && !sdkCleared()) return failure('state_changed');
+        if (cleaned.error) return failure('session_cleanup_failed');
+        if (unchanged()) {revision++; liveEvent = true; publish(null,'SIGNED_OUT');}
+        return failure('unauthenticated');
+      }
+      if (!unchanged()) return failure('state_changed');
       if (result.error) return failure('user_validation_failed');
       const user = userView(result.data?.user);
-      if (!user) return failure('unauthenticated');
+      // A malformed success response is not proof that a restored session is bad.
+      if (!user) return failure(id ? 'user_validation_failed' : 'unauthenticated');
       return success({user});
-    } catch { return failure('user_validation_failed'); }
+    } catch {
+      if (!unchanged() && !sdkCleared()) return failure('state_changed');
+      return failure(cleaning ? 'session_cleanup_failed' : 'user_validation_failed');
+    }
   }
   async function signUpWithPassword({email, password, username, emailRedirectTo, captchaToken} = {}) {
     if (typeof email !== 'string' || !emailValid(email.trim()) || !usernameValid(username) || typeof password !== 'string'
@@ -296,10 +336,12 @@ export function createAuthSession(client, createRecoveryClient = null) {
     epoch++; revision++; liveEvent = false;
     recovery = null;
     subscription?.unsubscribe(); subscription = null; pending = null;
-    listeners.clear(); state = Object.freeze({status:'idle', user:null, event:null});
+    for (const invalidate of invalidators) {try {invalidate();} catch {}}
+    invalidators.clear(); listeners.clear(); state = Object.freeze({status:'idle', user:null, event:null});
     // No signOut, storage clearing or SDK shutdown: client is shared with catalogue.
   }
   return Object.freeze({initialize, getState:() => state, getCurrentUser:() => state.user,
+    onInvalidate(callback) {invalidators.add(callback); return () => invalidators.delete(callback);},
     signInWithPassword, signUpWithPassword, verifyEmailToken, requestPasswordReset, completePasswordRecovery,
     signOut, subscribe, validateUser, dispose});
 }

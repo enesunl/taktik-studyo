@@ -7,6 +7,8 @@ import { createSharingUI } from './lib/sharing-ui.js';
 import { createAuthPageApi } from './lib/auth-page-api.js';
 import { mountAuthPage } from './lib/auth-ui.js';
 import { mountRecoveryPage } from './lib/recovery-ui.js';
+import { startPage } from './lib/page-bootstrap.js';
+import { resolvePage } from './lib/page-routes.js';
 const authPage = document.body?.dataset.authPage;
 if (['login','register','callback','forgot','reset'].includes(authPage)) {
   const mount = ['forgot','reset'].includes(authPage) ? mountRecoveryPage : mountAuthPage;
@@ -14,8 +16,6 @@ if (['login','register','callback','forgot','reset'].includes(authPage)) {
     api:createAuthPageApi({auth,client:supabase,origin:window.location.origin,
       captchaConfigured:typeof __AUTH_TURNSTILE_SITE_KEY__ === 'string' && !!__AUTH_TURNSTILE_SITE_KEY__})});
 }
-// Session restore does not gate public catalogue/sharing and exposes no window state.
-void auth.initialize();
 function prepareShare(state){
   const payload=toShare(state),body=JSON.stringify(payload);
   if(!shareValid(payload)||new TextEncoder().encode(body).length>SHARE_BYTES)throw new Error('Kadro veya çizim paylaşım sınırını aşıyor.');
@@ -31,11 +31,22 @@ window.TAKTIK_DRAFTS={
   write(key,state){let ok=false;try{ok=writeDraft(window.localStorage,key,state);}catch{}if(!ok)status('Taslak bu tarayıcıya kaydedilemedi. Açık kadro üzerinde çalışmaya devam edebilirsin.');return ok;}
 };
 const catalogue=createCatalogue(supabase);
+let catalogueReady = null;
 window.TAKTIK_BACKEND={
   enabled:!!supabase,
   source:supabase?'loading':'fallback',
   validateShare:prepareShare,
   ready:Promise.resolve(),
+  loadCatalogue(){
+    if (!supabase) return Promise.resolve();
+    if (!catalogueReady) catalogueReady=catalogue.load().then(data=>{
+      window.TAKTIK_BACKEND.source='supabase';
+      window.TAKTIK_TEAMS=data.teams;
+      window.TAKTIK_ROSTERS={...window.TAKTIK_ROSTERS,teams:data.rosters};
+    }).catch(()=>{window.TAKTIK_BACKEND.source='fallback';status('Güncel kadrolar alınamadı. Kayıtlı takım listesiyle çalışıyorsun.');});
+    window.TAKTIK_BACKEND.ready=catalogueReady;
+    return catalogueReady;
+  },
   async sharingReady(){
     if(!supabase)return false;
     const response=await fetch(publicConfig.url+'/functions/v1/lineups',{method:'OPTIONS',headers:{apikey:publicConfig.key},signal:AbortSignal.timeout(8000)});
@@ -62,10 +73,15 @@ window.TAKTIK_BACKEND={
   }
 };
 window.TAKTIK_SHARE=createSharingUI(window.TAKTIK_BACKEND,__TURNSTILE_SITE_KEY__);
-if(supabase && !authPage){
-  window.TAKTIK_BACKEND.ready=catalogue.load().then(data=>{
-    window.TAKTIK_BACKEND.source='supabase';
-    window.TAKTIK_TEAMS=data.teams;
-    window.TAKTIK_ROSTERS={...window.TAKTIK_ROSTERS,teams:data.rosters};
-  }).catch(()=>{window.TAKTIK_BACKEND.source='fallback';status('Güncel kadrolar alınamadı. Kayıtlı takım listesiyle çalışıyorsun.');});
+if (!authPage && document.body) {
+  // Classic defer scripts finish in document order before DOMContentLoaded.
+  // Auth callback/recovery sanitization above stays synchronous, before any await.
+  let lifecycle;
+  const start = () => {lifecycle?.dispose?.();lifecycle=startPage({auth,document,window,backend:window.TAKTIK_BACKEND});};
+  if (document.readyState === 'loading' || document.readyState === 'interactive')
+    document.addEventListener('DOMContentLoaded',start,{once:true});
+  else start();
+  window.addEventListener('pageshow',event=>{
+    if(event.persisted && ['protected','landing'].includes(resolvePage(window.location).kind))start();
+  });
 }

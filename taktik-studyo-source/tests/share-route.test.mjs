@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import {resolvePage} from '../src/lib/page-routes.js';
 
 const source=readFileSync(new URL('../dist/app.js',import.meta.url),'utf8');
 const id='01234567-89ab-4cde-8fab-0123456789ab';
@@ -14,15 +15,17 @@ async function load(url,{page,readError,backendMissing=false,ready=Promise.resol
  const location=new URL(url,'https://taktikstudyo.com');
  const nodes={'.workspace':{style:{}},'.page-heading h1':{textContent:'Taktik tahtası.'},'.eyebrow':{textContent:'Normal'}};
  const comparisonLink={addEventListener(_name,fn){this.click=fn;}};
- const document={body:{dataset:{page}},querySelector:selector=>nodes[selector],getElementById:()=>comparisonLink};
+ const containers={landing:{hidden:false},sharedViewer:{hidden:true}};
+ const document={body:{dataset:{page}},querySelector:selector=>nodes[selector],getElementById:id=>containers[id] || comparisonLink};
  const reads=[],mounts=[];
  const window={location};
- if(!backendMissing)window.TAKTIK_BACKEND={ready,async readLineup(value){reads.push(value);if(readError)throw readError;return snapshot;}};
+ if(!backendMissing)window.TAKTIK_BACKEND={loadCatalogue:()=>ready,async readLineup(value){reads.push(value);if(readError)throw readError;return snapshot;}};
  const context=vm.createContext({window,document,URLSearchParams});
- const started=vm.runInContext(source,context);
+ vm.runInContext(source,context);
  window.createTacticsBoard=(root,options)=>{assert.equal(root,document);mounts.push(options);return {getState:()=>snapshot};};
- await started;
- return {reads,mounts,nodes,comparisonLink};
+ const route=resolvePage(location);
+ if(['shared','share_error'].includes(route.kind)) await window.TAKTIK_APP.mountShared(route);
+ return {reads,mounts,nodes,comparisonLink,containers};
 }
 
 function assertFailed(result){
@@ -42,12 +45,10 @@ test('query links load through readLineup and retain the shared-ID draft key on 
  }
 });
 
-test('missing lineup parameters keep normal startup and comparison navigation',async()=>{
+test('normal landing and protected comparison never auto-mount a board',async()=>{
  for(const url of ['/','/?utm_source=test']){
   const result=await load(url,{backendMissing:true});
-  assert.deepEqual(result.reads,[]);assert.equal(result.mounts.length,1);
-  assert.deepEqual(Object.keys(result.mounts[0]),[]);
-  result.comparisonLink.click();assert.equal(result.comparisonLink.href,'karsilastirma.html?sol=Shared%20team');
+  assert.deepEqual(result.reads,[]);assert.equal(result.mounts.length,0);
  }
  const comparison=await load('/karsilastirma.html?lineup='+id,{page:'comparison'});
  assert.deepEqual(comparison.reads,[]);assert.equal(comparison.mounts.length,0);

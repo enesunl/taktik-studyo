@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {fileURLToPath} from 'node:url';
 import {build} from 'esbuild';
-import {createClient} from '@supabase/supabase-js';
+import {createClient,isAuthApiError,isAuthSessionMissingError} from '@supabase/supabase-js';
 import {createCatalogue} from '../src/lib/catalogue.js';
 import {toShare} from '../src/lib/validation.js';
 import {createAuthSession} from '../src/lib/auth-session.js';
@@ -52,10 +52,11 @@ test('real SDK main singleton persists normal Auth; dedicated recovery construct
     bundle:true, write:false, platform:'browser', format:'cjs', target:'es2022',
     define:{__SUPABASE_URL__:JSON.stringify(url), __SUPABASE_PUBLISHABLE_KEY__:JSON.stringify(key), __TURNSTILE_SITE_KEY__:'"test-site-key"'},
     plugins:[{name:'fake-sdk-boundary',setup(b){b.onResolve({filter:/^@supabase\/supabase-js$/}, () => ({path:'sdk',namespace:'test'}));
-      b.onLoad({filter:/.*/,namespace:'test'}, () => ({contents:'export const createClient = globalThis.testCreateClient;'}));}}]});
+      b.onLoad({filter:/.*/,namespace:'test'}, () => ({contents:'export const createClient = globalThis.testCreateClient; export const isAuthApiError=globalThis.testIsAuthApiError; export const isAuthSessionMissingError=globalThis.testIsAuthSessionMissingError;'}));}}]});
   const window = {localStorage:sdkStorage};
   const context = vm.createContext({window, module:{exports:{}}, URL, Headers, Response, TextEncoder, AbortSignal, setTimeout,
-    fetch:http, document:{getElementById(){throw Error('unexpected catalogue fallback');}},
+    fetch:http, testIsAuthApiError:isAuthApiError, testIsAuthSessionMissingError:isAuthSessionMissingError,
+    document:{getElementById(){throw Error('unexpected catalogue fallback');}},
     testCreateClient(u,k,options){
       creations.push({url:u,key:k,options});
       client = createClient(u,k,{...options,auth:{...options.auth,storage:sdkStorage}});
@@ -65,7 +66,8 @@ test('real SDK main singleton persists normal Auth; dedicated recovery construct
   vm.runInContext(output.outputFiles[0].text, context);
   const auth = context.module.exports.auth, backend = window.TAKTIK_BACKEND;
   try {
-    await auth.initialize(); await backend.ready;
+    assert.equal(calls.length,0,'backend definition does not eagerly fetch catalogue or restore Auth');
+    await auth.initialize(); await backend.loadCatalogue();
     assert.equal(creations.length, 1);
     const config = creations[0].options.auth;
     assert.equal(config.persistSession, true); assert.equal(config.autoRefreshToken, true);

@@ -38,7 +38,7 @@ test('server validation fails closed without erasing restored identity on networ
   assert.deepEqual(await auth.validateUser(), {ok:false, error:{code:'user_validation_failed'}});
   assert.equal(auth.getCurrentUser().id, user.id);
   f.client.auth.getUser = async () => ({error:null, data:{user:null}});
-  assert.equal((await auth.validateUser()).error.code, 'unauthenticated');
+  assert.equal((await auth.validateUser()).error.code, 'user_validation_failed');
   f.client.auth.getUser = async () => { throw Error('internal stack and credentials'); };
   assert.deepEqual(await auth.validateUser(), {ok:false, error:{code:'user_validation_failed'}});
   auth.dispose();

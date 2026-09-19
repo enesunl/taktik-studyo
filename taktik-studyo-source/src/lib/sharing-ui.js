@@ -13,7 +13,9 @@ const el=(tag,cls,text)=>{const element=document.createElement(tag);if(cls)eleme
 export function createSharingUI(backend,siteKey) {
   return {attach(board,trigger){
     if(!trigger)return;
-    trigger.addEventListener('click',async()=>{
+    const dialogs=new Set();let disposed=false;
+    const openDialog=async()=>{
+      if(disposed)return;
       const snapshot=board.getState(),dialog=el('dialog','share-dialog');
       const top=el('div','dialog-heading'),title=el('h2','','Kadroyu Paylaş'),close=el('button','','×');close.type='button';close.setAttribute('aria-label','Kapat');top.append(title,close);
       const intro=el('p','share-description','Kadronun bu anını bir bağlantı olarak kaydet. Sonraki düzenlemelerin paylaştığın kaydı değiştirmez.');
@@ -28,7 +30,8 @@ export function createSharingUI(backend,siteKey) {
       dialog.append(top,intro,label,widget,notice,save,result);document.body.append(dialog);dialog.showModal();
       let token='',widgetId=null,sdk=null,busy=false,finished=false;
       const invalidate=message=>{token='';save.disabled=true;notice.textContent=message;};
-      const cleanup=()=>{finished=true;if(sdk&&widgetId!==null)sdk.remove(widgetId);dialog.remove();trigger.focus();};
+      const cleanup=()=>{if(finished)return;finished=true;token='';if(sdk&&widgetId!==null)sdk.remove(widgetId);dialog.remove();dialogs.delete(cleanup);if(!disposed)trigger.focus();};
+      dialogs.add(cleanup);
       close.onclick=()=>dialog.close();dialog.addEventListener('close',cleanup,{once:true});
       dialog.addEventListener('click',event=>{if(busy||event.target!==dialog)return;const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)dialog.close();});
       copy.onclick=async()=>{try{await navigator.clipboard.writeText(link.value);notice.textContent='Bağlantı kopyalandı.';}catch{link.focus();link.select();notice.textContent='Bağlantıyı seçip kopyalayabilirsin.';}};
@@ -50,6 +53,7 @@ export function createSharingUI(backend,siteKey) {
       try{
         backend.validateShare?.(snapshot);
         if(!await backend.sharingReady())throw new Error('Paylaşım şu anda kullanılamıyor.');
+        if(finished)return;
         sdk=await loadTurnstile();if(finished)return;
         widgetId=sdk.render(widget,{sitekey:siteKey,action:'share_lineup',theme:'dark',
           callback:value=>{if(finished||!result.hidden)return;token=value;save.disabled=busy;notice.textContent='Doğrulama tamamlandı. Bağlantını oluşturabilirsin.';},
@@ -58,6 +62,9 @@ export function createSharingUI(backend,siteKey) {
           'timeout-callback':()=>invalidate('Doğrulama zaman aşımına uğradı. Yeniden dene.')
         });
       }catch(error){if(!finished)notice.textContent=error.message || 'Doğrulama yüklenemedi.';}
-    });
+    };
+    trigger.addEventListener('click',openDialog);
+    // Scoped board teardown also removes its body-mounted modal and widget.
+    return ()=>{disposed=true;trigger.removeEventListener('click',openDialog);for(const cleanup of [...dialogs])cleanup();};
   }};
 }

@@ -2,7 +2,7 @@
 window.createTacticsBoard=function(root=document,options={}){
 const scoped=Object.hasOwn(options,'draftContext'),draftContext=options.draftContext;
 if(scoped&&(root===document||options.storageKey!==undefined||!draftContext?.isActive()))throw new Error('Invalid scoped board context');
-let disposed=false,cancelGesture=null,resizeObserver=null,offDraftScope=()=>{};
+let disposed=false,cancelGesture=null,resizeObserver=null,offDraftScope=()=>{},disposeSharing=()=>{};
 const teams=window.TAKTIK_TEAMS || [
 ['Galatasaray','GS','#a51935','#efb62a'],['Fenerbahçe','FB','#19294d','#f3d233'],['Beşiktaş','BJK','#222222','#eeeeee'],['Trabzonspor','TS','#702039','#8cc1dc'],['Samsunspor','SAM','#ca303a','#eeeeee'],['Başakşehir','İBF','#ed7835','#213a63'],['Göztepe','GÖZ','#bb2039','#edc932'],['Çaykur Rizespor','RİZ','#198c55','#276dad'],['Kasımpaşa','KAS','#173c74','#ffffff'],['Konyaspor','KON','#23855c','#ffffff'],['Alanyaspor','ALA','#ef802b','#228756'],['Gaziantep FK','GFK','#c3313c','#252b2b'],['Eyüpspor','EYP','#713576','#e6be42'],['Kocaelispor','KOC','#148255','#242b28'],['Gençlerbirliği','GEN','#b72637','#262725'],['Erzurumspor FK','ERZ','#2c65ad','#ffffff'],['Amedspor','AMD','#168553','#c5353d'],['Çorum FK','ÇOR','#c1303b','#242a28']].map(([name,short,color,color2])=>({name,short,color,color2}));
 const shapes=['4-3-3','4-2-3-1','4-4-2','3-5-2','3-4-3','5-3-2','4-1-4-1','4-4-1-1','4-1-2-1-2','4-3-1-2','4-2-2-2','4-2-4','4-5-1','3-4-2-1','3-4-1-2','3-3-3-1','3-3-1-3','3-2-4-1','3-6-1','5-4-1','5-2-3','5-2-1-2','5-2-2-1','2-3-5'];
@@ -224,6 +224,7 @@ function assertBoardActive(){if(disposed||(scoped&&!draftContext.isActive()))thr
 function disposeScopedBoard(){
  if(!scoped||disposed)return;
  disposed=true;cancelGesture?.();closeExpanded();
+ disposeSharing();
  scopedWriter.dispose();offDraftScope();clearTimeout(toastTimer);
  resizeObserver?.disconnect();window.removeEventListener('resize',renderDrawing);
  root.removeEventListener('keydown',onBoardKeydown);
@@ -237,35 +238,36 @@ const api={
  applyFormation(shape){assertBoardActive();if(!shapes.includes(shape))throw new Error('Geçersiz diziliş');applyFormation(shape);},
  ...(scoped?{dispose:disposeScopedBoard}:{}),
 };
-window.TAKTIK_SHARE?.attach(api,$('shareLineup'));
+disposeSharing=window.TAKTIK_SHARE?.attach(api,$('shareLineup')) || (()=>{});
 if(scoped)offDraftScope=draftContext.onDispose(disposeScopedBoard);
 return api;
 };
-async function startMainBoard(){
- await window.TAKTIK_BACKEND?.ready;
- if(document.body.dataset.page!=='comparison'){
- const options={},path=window.location?.pathname||'/';
- const params=new URLSearchParams(window.location?.search||'');
- const hasLineup=params.has('lineup');
- // Query links take precedence; retain old paths for existing shared links.
- if(hasLineup||path.startsWith('/lineup/')){
-  const id=hasLineup?params.get('lineup'):path.slice('/lineup/'.length).replace(/\/$/,'');
+// Definitions only. backend-entry starts routes after every defer script is ready.
+window.TAKTIK_APP={
+ mountStudio(root,scope){
+  const fragment=document.getElementById('studioTemplate').content.cloneNode(true);
+  for(const element of fragment.querySelectorAll('[id]'))element.dataset.control=element.id;
+  root.append(fragment);
+  const board=window.createTacticsBoard(root,{draftContext:scope.context('main')});
+  const link=document.getElementById('comparisonLink');
+  const chooseTeam=()=>{link.href='karsilastirma.html?sol='+encodeURIComponent(board.getState().team.name);};
+  link?.addEventListener('click',chooseTeam);
+  return ()=>{link?.removeEventListener('click',chooseTeam);board.dispose();};
+ },
+ async mountShared(route){
+  const landing=document.getElementById('landing'),viewer=document.getElementById('sharedViewer');
+  if(landing)landing.hidden=true;if(viewer)viewer.hidden=false;
   try{
-   if((hasLineup&&params.getAll('lineup').length!==1)||!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id))throw new Error('Geçersiz paylaşım bağlantısı.');
-   options.initialState=await window.TAKTIK_BACKEND.readLineup(id);
-   options.storageKey='taktik:draft:shared:'+id+':v1';
+   if(route.kind!=='shared')throw new Error('Invalid share');
+   await window.TAKTIK_BACKEND.loadCatalogue();
+   const state=await window.TAKTIK_BACKEND.readLineup(route.id);
    const heading=document.querySelector('.page-heading h1');if(heading)heading.textContent='Paylaşılan kadro.';
    const note=document.querySelector('.eyebrow');if(note)note.textContent='PAYLAŞILAN KADRONUN YEREL KOPYASI';
+   window.createTacticsBoard(document,{initialState:state,storageKey:'taktik:draft:shared:'+route.id+':v1'});
   }catch{
    const workspace=document.querySelector('.workspace');if(workspace)workspace.style.display='none';
    const heading=document.querySelector('.page-heading h1');if(heading)heading.textContent='Kadro yüklenemedi.';
    const note=document.querySelector('.eyebrow');if(note)note.textContent='BAĞLANTI GEÇERSİZ, SÜRESİ DOLMUŞ VEYA ŞU ANDA ERİŞİLEMİYOR.';
-   return;
   }
  }
- const board=window.createTacticsBoard(document,options);
- const link=document.getElementById('comparisonLink');
- if(link)link.addEventListener('click',()=>{link.href='karsilastirma.html?sol='+encodeURIComponent(board.getState().team.name);});
-}
-}
-startMainBoard();
+};

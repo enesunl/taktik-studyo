@@ -1,4 +1,5 @@
 import {consumeEmailLink, emailValid, usernameValid} from './auth-validation.js';
+import {loginDestination} from './auth-redirects.js';
 
 const messages = {
   invalid_form:'Alanları kontrol et. Geçerli bir e-posta ve şifre gir.',
@@ -89,6 +90,7 @@ export function mountAuthPage({document, location, history, eventTarget, api, pa
           ? 'Kayıt işlemi uygunsa doğrulama bağlantısı e-posta adresine gönderildi. E-postandaki bağlantıyı açıp doğrulama düğmesine bas.'
           : 'Giriş başarılı. Bu tarayıcıda oturumun açık.';
       if (result.profile) profileMessage.textContent = profileMessages[result.profile.status] || profileMessages.profile_error;
+      if (page === 'login') location.assign(loginDestination(location.search));
     } catch { if (!disposed) error(callback ? 'confirmation_failed' : page === 'register' ? 'sign_up_failed' : 'sign_in_failed'); }
     finally {
       busy = false; clearPasswords();

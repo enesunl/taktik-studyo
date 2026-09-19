@@ -61,7 +61,7 @@ test('callback verification error is controlled, consumes memory reference and d
   assert.doesNotMatch(f.fields.authMessage.textContent,/RAW PRIVATE|fake-token/); page.dispose();
 });
 
-test('callback never uses local/session storage, console, innerHTML or navigation', async () => {
+test('callback never uses local/session storage, console, innerHTML or automatic navigation', async () => {
   const f = pageFixture();
   for (const property of ['localStorage','sessionStorage','console']) {
     Object.defineProperty(f.options.eventTarget,property,{get(){throw Error(property+' forbidden');}});
@@ -70,7 +70,7 @@ test('callback never uses local/session storage, console, innerHTML or navigatio
   const page = mountAuthPage(f.options); await page.ready; await f.fields.authSubmit.emit('click'); page.dispose();
   for (const file of ['auth-ui.js','auth-validation.js','auth-page-api.js','profile-bootstrap.js']) {
     const source = readFileSync(new URL('../src/lib/'+file,import.meta.url),'utf8');
-    assert.doesNotMatch(source,/\b(?:localStorage|sessionStorage|console)\s*[.[]|\.innerHTML\s*=|location\.(?:href|assign|replace)\s*[=(]/);
+    assert.doesNotMatch(source,/\b(?:localStorage|sessionStorage|console)\s*[.[]|\.innerHTML\s*=/);
   }
 });
 

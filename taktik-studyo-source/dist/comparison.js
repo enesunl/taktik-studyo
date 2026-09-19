@@ -1,6 +1,6 @@
 'use strict';
-(async () => {
- await window.TAKTIK_BACKEND?.ready;
+window.TAKTIK_COMPARISON={mount(scope){
+ const cleanups=[];
  const template=document.getElementById('boardTemplate');
  const params=new URLSearchParams(location.search);
  const boardApis={};
@@ -21,8 +21,9 @@
    formationSelect.value=state.formation;
   };
   const team=side==='left'?(params.get('sol')||'Galatasaray'):'Fenerbahçe';
-  const api=window.createTacticsBoard(mount,{team,onChange:sync,storageKey:'taktik:draft:comparison:'+side+':v1'});
+  const api=window.createTacticsBoard(mount,{team,onChange:sync,draftContext:scope.context(side)});
   boardApis[side]=api;
+  teamSelect.replaceChildren();
   for(const t of api.getTeams()){
    const option=document.createElement('option');option.value=t.name;option.textContent=t.name;teamSelect.append(option);
   }
@@ -31,8 +32,11 @@
    const option=document.createElement('option');option.value=shape;option.textContent=shape;formationSelect.append(option);
   }
   sync(api.getState());
-  teamSelect.addEventListener('change',()=>api.selectTeam(teamSelect.value));
-  formationSelect.addEventListener('change',()=>api.applyFormation(formationSelect.value));
+  const changeTeam=()=>api.selectTeam(teamSelect.value),changeFormation=()=>api.applyFormation(formationSelect.value);
+  teamSelect.addEventListener('change',changeTeam);
+  formationSelect.addEventListener('change',changeFormation);
+  cleanups.push(()=>{teamSelect.removeEventListener('change',changeTeam);formationSelect.removeEventListener('change',changeFormation);api.dispose();teamSelect.replaceChildren();formationSelect.replaceChildren();});
  }
  // Each editor owns its player selection, squad, formation, colors and undo history.
-})();
+ return ()=>{for(const cleanup of cleanups)cleanup();};
+}};

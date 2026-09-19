@@ -54,7 +54,7 @@ export function pageFixture(page = 'callback', search = '?token_hash=fake-token-
     async signIn(args){calls.push({kind:'login',args}); return {ok:true,profile:{status:'ready'}};},
     async signUp(args){calls.push({kind:'signup',args}); return {ok:true,status:'confirmation_pending'};}};
   f.options = {page,api:f.api,eventTarget:events,document:{getElementById:id => fields[id] || null},
-    location:{search,pathname:page === 'callback' ? '/auth-callback.html' : '/giris.html'},
+    location:{search,pathname:page === 'callback' ? '/auth-callback.html' : '/giris.html',assign(url){calls.push({kind:'navigate',url});}},
     history:{replaceState(...args){historyCalls.push(args);}}};
   f.historyCalls = historyCalls;
   return f;
