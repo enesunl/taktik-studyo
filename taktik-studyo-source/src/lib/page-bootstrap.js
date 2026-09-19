@@ -2,8 +2,10 @@ import {resolvePage} from './page-routes.js';
 import {createProtectedPage} from './protected-page.js';
 import {chooseLegacyDrafts} from './legacy-import-ui.js';
 import {mountLanding} from './landing-ui.js';
+import {createProfileApi} from './profile-api.js';
+import {mountProfile} from './profile-ui.js';
 
-export function startPage({auth,document,window,backend}) {
+export function startPage({auth,document,window,backend,client}) {
   const route = resolvePage(window.location);
   if (route.kind === 'shared' || route.kind === 'share_error') {
     // No Auth initialization, validation, profile bootstrap or user draft scope.
@@ -19,8 +21,10 @@ export function startPage({auth,document,window,backend}) {
   const retry = document.getElementById('guardRetry'), login = document.getElementById('guardLogin');
   const logout = document.getElementById('signOut');
   let storage;
-  try {storage = window.localStorage;} catch {storage = {getItem(){return null;},setItem(){throw Error('Storage unavailable');}};}
-  const guard = createProtectedPage({auth,storage,path:route.path,navigate:url => window.location.replace(url),
+  if (route.page !== 'profile') {
+    try {storage = window.localStorage;} catch {storage = {getItem(){return null;},setItem(){throw Error('Storage unavailable');}};}
+  }
+  const guard = createProtectedPage({auth,storage,drafts:route.page !== 'profile',path:route.path,navigate:url => window.location.replace(url),
     show(state) {
       const ready = state === 'ready';
       content.hidden = !ready; content.inert = !ready; status.hidden = ready;
@@ -29,8 +33,11 @@ export function startPage({auth,document,window,backend}) {
         : state === 'logout_error' ? 'Çıkış yapılamadı. Tekrar deneyebilir veya giriş sayfasına gidebilirsin.'
         : 'Oturum şu anda doğrulanamadı. Biraz sonra tekrar dene.';
     },
-    async mount(scope,current) {
-      if (route.page === 'profile') return () => {};
+    async mount(scope,current,validatedUser) {
+      if (route.page === 'profile') {
+        const api = createProfileApi({client,validatedUser,current});
+        return mountProfile({document,api,validatedUser,current}).dispose;
+      }
       await chooseLegacyDrafts({scope,slots:route.page === 'studio' ? ['main'] : ['left','right'],
         document,container:document.getElementById('legacyImport')});
       if (!current()) return;

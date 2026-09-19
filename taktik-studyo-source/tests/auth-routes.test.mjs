@@ -14,6 +14,7 @@ import {writeDraft,readDraft} from '../src/lib/drafts.js';
 import {startPage} from '../src/lib/page-bootstrap.js';
 import {mountAuthPage} from '../src/lib/auth-ui.js';
 import {fixture,pageFixture} from './helpers/auth-fixture.mjs';
+import {profileDocument} from './helpers/profile-fixture.mjs';
 
 const A='11111111-1111-4111-8111-111111111111',B='22222222-2222-4222-8222-222222222222';
 const deferred=()=>{let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};};
@@ -180,6 +181,7 @@ function bootFixture(path,initial=state(A)){
     TAKTIK_APP:{mountStudio(root,scope){calls.push(['studio',scope.context('main').key,scope.context('main').read()]);return ()=>calls.push(['dispose']);},mountShared:r=>calls.push(['shared',r])},
     TAKTIK_COMPARISON:{mount:scope=>{calls.push(['comparison',scope.context('left').key,scope.context('right').key]);return ()=>calls.push(['dispose']);}}});
   const options={auth:f.auth,window,document:{getElementById:id=>nodes[id],createElement:()=>new Node()},backend:{loadCatalogue:async()=>calls.push(['catalogue'])}};
+  options.document=profileDocument(options.document).document;
   return {...f,nodes,storage,calls,options};
 }
 
@@ -199,7 +201,7 @@ test('actual page bootstrap wires validated studio/comparison keys and waits for
   }
 });
 
-test('profile shell is guarded and never fetches catalogue or profile data',async()=>{
+test('profile route is guarded and never fetches catalogue even when profile client is unavailable',async()=>{
   for(const initial of [state(null),state(A)]){
     const f=bootFixture('/profil.html',initial),page=startPage(f.options);await page.ready;
     assert.equal(f.calls.filter(c=>c[0]==='catalogue').length,0);

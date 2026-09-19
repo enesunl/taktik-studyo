@@ -24,4 +24,13 @@
 .legacy-prompt{padding:18px 22px;border:1px solid #b8c7a7;background:#f3f7ec;border-radius:10px;margin-bottom:12px}
 .legacy-prompt button{margin:0 12px 8px 0}.legacy-prompt button:first-of-type{background:#18231d;color:#d1f48b}
 .import-area:empty{display:none}
+.profile-card{max-width:560px;margin:24px 0;padding:28px;background:#fff;border:1px solid var(--line);border-radius:12px}
+.profile-card form{display:flex;flex-direction:column;align-items:stretch;gap:10px}
+.profile-card label{font-weight:600;margin-top:12px}
+.profile-card input{box-sizing:border-box;width:100%;min-width:0;border:1px solid #a6b49c;border-radius:7px;padding:12px;font:inherit;color:var(--ink);background:#fff}
+.profile-card button{font:inherit;font-weight:600;padding:12px 18px;border:1px solid #18231d;border-radius:7px;background:#18231d;color:#d1f48b;cursor:pointer;align-self:flex-start}
+.profile-card button:disabled{opacity:.65;cursor:wait}
+.profile-help,.profile-optional{font-size:13px;line-height:1.6;color:#56634f;font-weight:400}.profile-help{margin:0 0 12px}
+.profile-email{font-size:14px;color:#56634f}.profile-email span{display:block;margin-top:6px;color:var(--ink);overflow-wrap:anywhere}
+#profileStatus{line-height:1.6;overflow-wrap:anywhere}#profileStatus:empty{display:none}
 @media(max-width:700px){.route-header{padding-inline:20px}.route-nav,.route-nav>span{gap:14px;font-size:13px}.landing-main{grid-template-columns:1fr;gap:45px;padding:42px 24px}.hero-description{font-size:18px}.hero-field{max-width:310px;width:85%;justify-self:center;transform:rotate(2deg)}.hero-copy h1{letter-spacing:-1px}.hero-footnote{margin-top:28px}}

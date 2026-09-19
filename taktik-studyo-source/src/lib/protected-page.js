@@ -2,7 +2,7 @@ import {createUserDraftScope} from './draft-scope.js';
 import {loginUrl} from './auth-redirects.js';
 
 // UX/privacy guard. Server JWT/RLS remain the backend authorization boundary.
-export function createProtectedPage({auth, storage, path, mount, show, navigate}) {
+export function createProtectedPage({auth, storage, path, mount, show, navigate, drafts = true}) {
   let generation = 0, stopped = false, signingOut = false, logoutBlocked = false, scope = null, cleanup = null;
   let observed = null, off = null, offInvalidate = () => {};
   let validations = 0;
@@ -45,12 +45,13 @@ export function createProtectedPage({auth, storage, path, mount, show, navigate}
         return;
       }
       if (verified.user?.id !== id) {show('error'); return;}
-      const next = createUserDraftScope({userId:id,storage,isCurrent:current});
-      if (!next) {show('error'); return;}
+      const next = drafts ? createUserDraftScope({userId:id,storage,isCurrent:current}) : null;
+      if (drafts && !next) {show('error'); return;}
       scope = next;
       // Only an empty shell/import decision is visible until mount completes.
       show('ready');
-      const unmount = await mount(next,current);
+      const validatedUser = Object.freeze({id,email:verified.user.email || null});
+      const unmount = await mount(next,current,validatedUser);
       if (!current()) {unmount?.(); return;}
       cleanup = unmount;
     } catch {if (current()) {clear(); show('error');}}

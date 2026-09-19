@@ -77,7 +77,7 @@ if (!authPage && document.body) {
   // Classic defer scripts finish in document order before DOMContentLoaded.
   // Auth callback/recovery sanitization above stays synchronous, before any await.
   let lifecycle;
-  const start = () => {lifecycle?.dispose?.();lifecycle=startPage({auth,document,window,backend:window.TAKTIK_BACKEND});};
+  const start = () => {lifecycle?.dispose?.();lifecycle=startPage({auth,document,window,backend:window.TAKTIK_BACKEND,client:supabase});};
   if (document.readyState === 'loading' || document.readyState === 'interactive')
     document.addEventListener('DOMContentLoaded',start,{once:true});
   else start();
