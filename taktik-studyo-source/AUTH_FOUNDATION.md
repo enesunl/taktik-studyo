@@ -1,7 +1,9 @@
-# Auth foundation (Phases 2–4, local source only)
+# Auth foundation (Phases 2–5, local source only)
 
-`src/lib/supabase.js` owns the only Supabase client. Catalogue, Auth and future
-profiles code share it. Supabase JS remains pinned to 2.116.0. The public sharing
+`src/lib/supabase.js` owns the main persistent Supabase client. Catalogue, normal
+Auth and profiles share it. Password recovery completion alone uses a dedicated
+non-persistent client from `src/lib/recovery-client.js`; reset email requests stay
+on the main client. Supabase JS remains pinned to 2.116.0. The public sharing
 adapter still calls the lineups Edge Function using fetch, independently of Auth.
 
 Auth uses `persistSession: true`, `autoRefreshToken: true`,
@@ -17,7 +19,8 @@ Import `auth` and `safeInternalRedirect` from `src/lib/auth.js`; neither is a
 window global. `backend-entry.js` starts initialization without gating public
 catalogue or sharing. Phase 4 adds login/register/confirmation pages; see
 [Auth email confirmation](AUTH_EMAIL_CONFIRMATION.md) for the callback, profile
-bootstrap and deferred production configuration. Guards and recovery UI remain deferred.
+bootstrap and deferred production configuration. Phase 5 adds
+[password recovery](AUTH_PASSWORD_RECOVERY.md); protected-route guards remain deferred.
 
 | Method | Result |
 | --- | --- |
@@ -28,6 +31,8 @@ bootstrap and deferred production configuration. Guards and recovery UI remain d
 | `signInWithPassword({email,password,captchaToken?})` | Delegates to SDK; `{ok:true,user}` |
 | `signUpWithPassword({email,password,username,emailRedirectTo,captchaToken?})` | Validates input/callback; generic `{ok:true,status:'confirmation_pending'}` |
 | `verifyEmailToken(tokenHash)` | Click-only email verification caller; limited `{ok:true,user}` |
+| `requestPasswordReset({email,redirectTo,captchaToken?})` | Exact recovery URL; generic `{ok:true,status:'recovery_requested'}` |
+| `completePasswordRecovery({tokenHash,password})` | Verify recovery → password update → local sign-out; `{ok:true,status:'password_updated'}` |
 | `signOut()` | SDK `signOut({scope:'local'})`; `{ok:true,state}`; no draft deletion |
 | `subscribe(listener)` | Deferred state delivery, including initial snapshot; returns unsubscribe |
 | `dispose()` | Unsubscribes controller, cancels pending notifications; allows reinitialization |
@@ -46,8 +51,9 @@ cannot replace newer Auth state. Repeated identical events and duplicate listene
 registration are suppressed. Subscribers run in a later task, outside the SDK
 Auth callback, and must unsubscribe during their own cleanup. `dispose()` affects
 only this controller, not the shared SDK's refresh lifecycle or stored session.
-`PASSWORD_RECOVERY` has the distinct `password_recovery` status for future consumers.
-Phase 4 handles only `type=email`; no recovery flow is processed here.
+`PASSWORD_RECOVERY` has the distinct `password_recovery` status and remains so
+across same-session updates/refreshes until sign-out. Phase 5 starts this lifecycle
+before verification; the email confirmation callback still accepts only `type=email`.
 
 Local session/user information is for interface state only. Security-sensitive
 callers use `validateUser()` and database RLS/grants remain the real data boundary.
@@ -69,6 +75,6 @@ Browser output is generated only by `npm run build`.
 Phase 1 migrations are not applied to production by this work. Authenticated
 catalogue access requires those grants/policies before a future production login
 rollout. Frontend fallback is not proof that production permissions are ready.
-Phase 3 draft isolation helpers and Phase 4 Auth UI are local implementations;
-protected-route wiring and recovery remain later phases. Production SQL, Auth
+Phase 3 draft isolation helpers and Phase 4–5 Auth UI are local implementations;
+protected-route wiring remains a later phase. Production SQL, Auth
 settings/templates, secrets and deployment require separate explicit approval.

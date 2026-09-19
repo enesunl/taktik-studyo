@@ -1,4 +1,4 @@
-import {confirmationUrl, emailValid, usernameValid} from './auth-validation.js';
+import {confirmationUrl, emailValid, usernameValid, recoveryUrl, emailTokenValid} from './auth-validation.js';
 import {createProfileBootstrap} from './profile-bootstrap.js';
 const fail = code => ({ok:false,error:{code}});
 
@@ -34,6 +34,24 @@ export function createAuthPageApi({auth, client, origin, captchaConfigured = fal
       if (auth.getCurrentUser() || auth.getState().status === 'password_recovery') return fail('existing_session');
       const result = await auth.verifyEmailToken(tokenHash);
       return result.ok ? {ok:true,profile:await profile()} : result;
+    },
+    async requestPasswordReset({email,captchaToken} = {}) {
+      email = typeof email === 'string' ? email.trim() : '';
+      if (!emailValid(email)) return fail('invalid_form');
+      const redirectTo = recoveryUrl(origin);
+      if (!redirectTo) return fail('recovery_invalid');
+      if (!captchaCheck(captchaToken)) return fail('captcha_required');
+      const ready = await auth.initialize(); if (!ready.ok) return ready;
+      if (auth.getCurrentUser() || auth.getState().status === 'password_recovery') return fail('existing_session');
+      return auth.requestPasswordReset({email,redirectTo,captchaToken});
+    },
+    async completePasswordRecovery({tokenHash,password} = {}) {
+      if (!emailTokenValid(tokenHash)) return fail('recovery_invalid');
+      if (typeof password !== 'string' || password.length < 12) return fail('invalid_form');
+      const ready = await auth.initialize(); if (!ready.ok) return ready;
+      if (auth.getCurrentUser() || auth.getState().status === 'password_recovery') return fail('existing_session');
+      // Credential reset never bootstraps a profile.
+      return auth.completePasswordRecovery({tokenHash,password});
     },
   });
 }

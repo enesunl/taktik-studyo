@@ -8,8 +8,10 @@ No production settings, users, migrations, environment values or deployments wer
 
 ## Browser and Auth API
 
-The existing single Auth-aware Supabase client remains the only client. No raw
-client, session, token or SDK error is exported to `window`. Auth pages receive a
+Normal Auth, catalogue and profiles share the existing Auth-aware client. Phase 5
+isolates password recovery completion in a dedicated non-persistent client; email
+confirmation still uses the main client. No raw client, session, token or SDK error
+is exported to `window`. Auth pages receive a
 module-local facade (`auth-page-api.js`). Catalogue loading is skipped on these
 pages; public catalogue/sharing initialization continues on existing pages.
 
@@ -103,8 +105,9 @@ session on the phone only. The PC receives no automatic session and can use norm
 email/password login after confirmation. This differs from
 [PKCE's same-browser verifier requirement](https://supabase.com/docs/guides/auth/sessions/pkce-flow);
 see [`verifyOtp`](https://supabase.com/docs/reference/javascript/auth-verifyotp).
-The callback deliberately rejects `type=recovery`; a dedicated recovery flow is
-deferred and must not be routed through this confirmation page.
+The callback deliberately rejects `type=recovery`; Phase 5's dedicated
+[password recovery flow](AUTH_PASSWORD_RECOVERY.md) must be used instead of this
+confirmation page.
 
 ## Profile bootstrap and security boundary
 

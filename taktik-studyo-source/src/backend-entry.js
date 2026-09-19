@@ -6,9 +6,11 @@ import { shareValid, toShare, SHARE_BYTES } from './lib/validation.js';
 import { createSharingUI } from './lib/sharing-ui.js';
 import { createAuthPageApi } from './lib/auth-page-api.js';
 import { mountAuthPage } from './lib/auth-ui.js';
+import { mountRecoveryPage } from './lib/recovery-ui.js';
 const authPage = document.body?.dataset.authPage;
-if (['login','register','callback'].includes(authPage)) {
-  mountAuthPage({document,location:window.location,history:window.history,eventTarget:window,page:authPage,
+if (['login','register','callback','forgot','reset'].includes(authPage)) {
+  const mount = ['forgot','reset'].includes(authPage) ? mountRecoveryPage : mountAuthPage;
+  mount({document,location:window.location,history:window.history,eventTarget:window,page:authPage,
     api:createAuthPageApi({auth,client:supabase,origin:window.location.origin,
       captchaConfigured:typeof __AUTH_TURNSTILE_SITE_KEY__ === 'string' && !!__AUTH_TURNSTILE_SITE_KEY__})});
 }

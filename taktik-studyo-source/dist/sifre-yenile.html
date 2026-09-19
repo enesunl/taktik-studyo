@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="referrer" content="no-referrer">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Yeni Şifre — Taktik Stüdyo</title>
+  <link rel="stylesheet" href="auth.css">
+  <script src="backend.js" defer></script>
+</head>
+<body data-auth-page="reset">
+  <main class="auth-card">
+    <span class="brand">TAKTİK STÜDYO</span>
+    <p class="eyebrow">YENİ BAŞLANGIÇ</p>
+    <h1>Yeni şifreni belirle.</h1>
+    <p class="intro">Bağlantı yalnızca formu gönderdiğinde kullanılır. İşlem tamamlanana kadar bu sayfada kal.</p>
+    <form id="authForm">
+      <label for="password">Yeni şifre</label>
+      <input id="password" name="password" type="password" autocomplete="new-password" minlength="12" aria-describedby="passwordHint" required>
+      <p id="passwordHint" class="hint">En az 12 karakter. Şifre yöneticini kullanabilirsin.</p>
+      <label for="passwordConfirmation">Yeni şifre tekrar</label>
+      <input id="passwordConfirmation" name="passwordConfirmation" type="password" autocomplete="new-password" minlength="12" required>
+      <button id="authSubmit" type="submit" disabled>Şifremi güncelle</button>
+    </form>
+    <p id="authMessage" class="message" role="alert" aria-live="polite" aria-atomic="true"></p>
+    <div id="recoveryLinks" class="footnote">
+      <p><a href="/giris.html">Giriş sayfasına dön</a></p>
+      <p><a href="/sifremi-unuttum.html">Yeni sıfırlama bağlantısı iste</a></p>
+    </div>
+    <noscript>Şifreni yenilemek için JavaScript'i etkinleştir, ardından e-postandaki bağlantıyı yeniden aç.</noscript>
+  </main>
+</body>
+</html>

@@ -1,4 +1,4 @@
-import {usernameValid, emailValid, emailTokenValid, confirmationUrlValid} from './auth-validation.js';
+import {usernameValid, emailValid, emailTokenValid, confirmationUrlValid, recoveryUrlValid} from './auth-validation.js';
 const failure = code => Object.freeze({ok:false, error:Object.freeze({code})});
 const success = value => Object.freeze({ok:true, ...value});
 const userView = user => user && typeof user.id === 'string' && user.id
@@ -8,9 +8,10 @@ const userView = user => user && typeof user.id === 'string' && user.id
 
 // SDK owns session persistence and token refresh. This controller keeps only a
 // UI identity snapshot; it is never an authorization proof. RLS remains decisive.
-export function createAuthSession(client) {
+export function createAuthSession(client, createRecoveryClient = null) {
   let state = Object.freeze({status:'idle', user:null, event:null});
   let subscription = null, pending = null, epoch = 0, revision = 0, liveEvent = false;
+  let recovery = null, recoveryBusy = false;
   const listeners = new Map();
   function notify(listener, marker, snapshot, generation) {
     // Do not run consumer Auth calls inside the SDK's synchronous callback/lock.
@@ -21,7 +22,20 @@ export function createAuthSession(client) {
   }
   function publish(user, event) {
     const currentUser = userView(user);
-    const status = currentUser ? (event === 'PASSWORD_RECOVERY' ? 'password_recovery' : 'signed_in') : 'signed_out';
+    // Also retain recovery classification for an event broadcast by another tab.
+    if (!recovery && event === 'PASSWORD_RECOVERY' && currentUser)
+      recovery = {userId:currentUser.id,changed:false,phase:'external'};
+    if (recovery && !recoveryBusy) {
+      if (event === 'SIGNED_OUT') {
+        if (recovery.phase !== 'cleanup') recovery.changed = true;
+        if (!recoveryBusy) recovery = null;
+      } else if (currentUser) {
+        if (recovery.userId && recovery.userId !== currentUser.id) recovery.changed = true;
+        else recovery.userId = currentUser.id;
+      }
+    }
+    const status = recovery && event !== 'SIGNED_OUT' ? 'password_recovery'
+      : currentUser ? (event === 'PASSWORD_RECOVERY' ? 'password_recovery' : 'signed_in') : 'signed_out';
     const next = Object.freeze({status, user:currentUser, event});
     if (JSON.stringify(next) === JSON.stringify(state)) return;
     state = next;
@@ -41,6 +55,13 @@ export function createAuthSession(client) {
             if (!['INITIAL_SESSION','SIGNED_IN','SIGNED_OUT','TOKEN_REFRESHED','USER_UPDATED','PASSWORD_RECOVERY'].includes(event)) return;
             if (event === 'INITIAL_SESSION' && liveEvent) return;
             if (event !== 'INITIAL_SESSION') liveEvent = true;
+            if (recoveryBusy && recovery) {
+              // Only main-client events enter this snapshot. Dedicated recovery
+              // events never publish a user into normal application Auth state.
+              recovery.mainUser = event === 'SIGNED_OUT' ? null : userView(session?.user);
+              recovery.mainEvent = event;
+              if (recovery.mainUser || event === 'SIGNED_OUT') recovery.changed = true;
+            }
             revision++;
             publish(event === 'SIGNED_OUT' ? null : session?.user, event);
           }).data.subscription;
@@ -65,6 +86,7 @@ export function createAuthSession(client) {
   async function signInWithPassword(credentials) {
     const ready = await initialize();
     if (!ready.ok) return ready;
+    if (recoveryBusy || recovery) return failure('existing_session');
     if (!credentials || typeof credentials.email !== 'string' || !credentials.email.trim()
       || typeof credentials.password !== 'string' || !credentials.password) return failure('invalid_credentials');
     const generation = epoch, start = revision;
@@ -110,7 +132,7 @@ export function createAuthSession(client) {
       || password.length < 12 || !confirmationUrlValid(emailRedirectTo)) return failure('invalid_form');
     const ready = await initialize();
     if (!ready.ok) return ready;
-    if (state.user) return failure('existing_session');
+    if (state.user || recoveryBusy || recovery) return failure('existing_session');
     const generation = epoch;
     try {
       const result = await client.auth.signUp({email:email.trim(), password,
@@ -128,7 +150,7 @@ export function createAuthSession(client) {
     const ready = await initialize();
     if (!ready.ok) return ready;
     // Recheck at click time as well as page load; never silently replace a session.
-    if (state.user) return failure('existing_session');
+    if (state.user || recoveryBusy || recovery) return failure('existing_session');
     const generation = epoch, start = revision;
     try {
       const result = await client.auth.verifyOtp({token_hash:tokenHash, type:'email'});
@@ -138,6 +160,127 @@ export function createAuthSession(client) {
       else if (state.user?.id !== result.data.user.id) return failure('state_changed');
       return success({user:state.user});
     } catch { return failure('confirmation_failed'); }
+  }
+  async function requestPasswordReset({email, redirectTo, captchaToken} = {}) {
+    if (typeof email !== 'string' || !emailValid(email.trim()) || !recoveryUrlValid(redirectTo)) return failure('invalid_form');
+    const ready = await initialize(); if (!ready.ok) return ready;
+    if (state.user || state.status === 'password_recovery' || recoveryBusy) return failure('existing_session');
+    const generation = epoch;
+    try {
+      const result = await client.auth.resetPasswordForEmail(email.trim(), {redirectTo,
+        ...(typeof captchaToken === 'string' ? {captchaToken} : {})});
+      if (generation !== epoch) return failure('state_changed');
+      // Account-specific errors receive the same response as an obfuscated success.
+      if (result.error && !['user_not_found','identity_not_found','email_exists','user_already_exists'].includes(result.error.code))
+        return failure('recovery_request_failed');
+      return success({status:'recovery_requested'});
+    } catch { return failure('recovery_request_failed'); }
+  }
+  async function completePasswordRecovery({tokenHash, password} = {}) {
+    if (!emailTokenValid(tokenHash)) return failure('recovery_invalid');
+    if (typeof password !== 'string' || password.length < 12) return failure('invalid_form');
+    const ready = await initialize(); if (!ready.ok) return ready;
+    if (state.user || state.status === 'password_recovery' || recoveryBusy) return failure('existing_session');
+    const generation = epoch;
+    if (typeof createRecoveryClient !== 'function') return failure('auth_unavailable');
+    // Re-read through the public SDK API before consuming a token; another tab's
+    // persistent login may be visible before its Auth event is delivered here.
+    try {
+      const main = await client.auth.getSession();
+      if (generation !== epoch || main.error) return failure('state_changed');
+      if (main.data?.session?.user || state.user || recoveryBusy || state.status === 'password_recovery') return failure('existing_session');
+    } catch {return failure('recovery_failed');}
+    const operation = {userId:null,changed:false,phase:'verify',mainUser:null,mainEvent:'SIGNED_OUT'};
+    recovery = operation; recoveryBusy = true;
+    revision++; liveEvent = true; publish(null,'RECOVERY_STARTED');
+    const current = () => generation === epoch && recovery === operation;
+    let recoveryUserId = null;
+    const ownsSession = () => !!operation.userId && recoveryUserId === operation.userId;
+    const canUpdate = () => current() && ownsSession() && !operation.changed && !state.user;
+    let dedicated = null, recoverySubscription = null, transport = null;
+    let code = 'recovery_failed', passwordUpdated = false;
+    try {
+      dedicated = createRecoveryClient();
+      if (dedicated?.client === client) dedicated = null;
+      if (!dedicated?.client) throw new Error('Dedicated recovery client required');
+      recoverySubscription = dedicated.client.auth.onAuthStateChange((event, session) => {
+        if (event === 'INITIAL_SESSION') return;
+        const identity = event === 'SIGNED_OUT' ? null : userView(session?.user);
+        recoveryUserId = identity?.id || null;
+        if (event === 'SIGNED_OUT') {
+          if (operation.phase !== 'cleanup') operation.changed = true;
+        } else if (identity) {
+          if (operation.userId && operation.userId !== identity.id) operation.changed = true;
+          else operation.userId = identity.id;
+        }
+      }).data.subscription;
+      transport = dedicated.transport.begin({
+        canVerify:() => current() && !operation.changed && !state.user && operation.phase === 'verify',
+        canMutate:() => ownsSession() && (operation.phase === 'cleanup' || canUpdate()),
+        onBlocked:() => {operation.changed = true; operation.transportBlocked = true;},
+      });
+      const result = await dedicated.client.auth.verifyOtp({token_hash:tokenHash,type:'recovery'});
+      tokenHash = null;
+      transport?.authorize(result.data?.session?.access_token);
+      if (userView(result.data?.user) && result.data?.session?.user?.id === result.data.user.id) {
+        if (operation.userId && operation.userId !== result.data.user.id) operation.changed = true;
+        operation.userId = result.data.user.id;
+      }
+      if (!current() || operation.changed) code = 'state_changed';
+      else if (!result.error && result.data?.session && userView(result.data.user)
+        && result.data.session.user?.id === result.data.user.id) {
+        const id = result.data.user.id;
+        const recovered = await dedicated.client.auth.getSession();
+        recoveryUserId = recovered.data?.session?.user?.id || null;
+        // Public SDK read catches a main-storage switch whose event is delayed.
+        const main = await client.auth.getSession();
+        if (main.data?.session?.user) {
+          operation.mainUser = userView(main.data.session.user); operation.mainEvent = 'SIGNED_IN';
+          operation.changed = true;
+        }
+        if (recovered.error || main.error || !current() || operation.changed || recoveryUserId !== id) {
+          operation.changed = true; code = 'state_changed';
+        }
+        else {
+          if (!canUpdate()) code = 'state_changed';
+          else {
+            operation.phase = 'update'; code = 'password_update_failed';
+            const updated = await dedicated.client.auth.updateUser({password});
+            if (!canUpdate()) code = 'state_changed';
+            else if (!updated.error && updated.data?.user?.id === id) {passwordUpdated = true; code = null;}
+            else if (!updated.error) {operation.changed = true; code = 'state_changed';}
+          }
+        }
+      }
+    } catch { if (!current() || operation.changed) code = 'state_changed'; }
+    finally {tokenHash = null; password = null;}
+    // Cleanup is isolated even if the main client changed account or was disposed.
+    try {
+      if (ownsSession() && !operation.transportBlocked) {
+        operation.phase = 'cleanup';
+        let cleaned = false;
+        try {
+          const result = await dedicated.client.auth.signOut({scope:'local'});
+          if (!result.error && (!recoveryUserId || recoveryUserId === operation.userId)) cleaned = true;
+        } catch {}
+        if (!cleaned) return Object.freeze({...failure('recovery_cleanup_failed'),passwordUpdated});
+      } else if (!current() || operation.changed || recoveryUserId) return failure('state_changed');
+      if (!current() || operation.changed) return failure('state_changed');
+      return code ? failure(code) : success({status:'password_updated'});
+    } finally {
+      transport?.release();
+      recoverySubscription?.unsubscribe();
+      // Public SDK lifecycle cleanup, not manual token/storage manipulation.
+      try {await dedicated?.client?.auth.dispose();} catch {}
+      recoveryBusy = false;
+      if (current()) {
+        recovery = null; revision++;
+        const mainUser = operation.mainUser;
+        publish(mainUser ? {...mainUser,email_confirmed_at:mainUser.emailConfirmedAt} : null,operation.mainEvent);
+      }
+      // Dropping this dedicated memory-only client cannot seed a future main
+      // INITIAL_SESSION, even when signOut failed or the page crashed earlier.
+    }
   }
   function subscribe(listener) {
     if (typeof listener !== 'function') throw new TypeError('Expected listener');
@@ -151,10 +294,12 @@ export function createAuthSession(client) {
   }
   function dispose() {
     epoch++; revision++; liveEvent = false;
+    recovery = null;
     subscription?.unsubscribe(); subscription = null; pending = null;
     listeners.clear(); state = Object.freeze({status:'idle', user:null, event:null});
     // No signOut, storage clearing or SDK shutdown: client is shared with catalogue.
   }
   return Object.freeze({initialize, getState:() => state, getCurrentUser:() => state.user,
-    signInWithPassword, signUpWithPassword, verifyEmailToken, signOut, subscribe, validateUser, dispose});
+    signInWithPassword, signUpWithPassword, verifyEmailToken, requestPasswordReset, completePasswordRecovery,
+    signOut, subscribe, validateUser, dispose});
 }

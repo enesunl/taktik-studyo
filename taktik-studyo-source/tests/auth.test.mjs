@@ -56,7 +56,7 @@ test('sign in delegates credentials and CAPTCHA, local logout exposes no session
   auth.dispose();
 });
 
-test('recovery has a distinct status while normal Auth events and sign-out keep their statuses', async () => {
+test('recovery events stay classified until sign-out; unrelated normal Auth events remain signed-in', async () => {
   const f = fixture(), auth = createAuthSession(f.client);
   try {
     assert.equal(auth.getState().status, 'idle');
@@ -68,11 +68,16 @@ test('recovery has a distinct status while normal Auth events and sign-out keep 
     assert.doesNotMatch(JSON.stringify(auth.getState()), /private-test|access_token|refresh_token/);
     for (const event of ['SIGNED_IN', 'TOKEN_REFRESHED', 'USER_UPDATED']) {
       f.emit(event, session);
-      assert.equal(auth.getState().status, 'signed_in');
+      assert.equal(auth.getState().status, 'password_recovery');
     }
     f.emit('SIGNED_OUT', session);
     assert.equal(auth.getState().status, 'signed_out');
     assert.equal(auth.getCurrentUser(), null);
+    for (const event of ['SIGNED_IN', 'TOKEN_REFRESHED', 'USER_UPDATED']) {
+      f.emit(event, session);
+      assert.equal(auth.getState().status, 'signed_in');
+    }
+    f.emit('SIGNED_OUT', null);
     for (const invalidSession of [null, {user:{}}, {user:{id:''}}]) {
       f.emit('PASSWORD_RECOVERY', invalidSession);
       assert.equal(auth.getState().status, 'signed_out');

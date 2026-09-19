@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="referrer" content="no-referrer">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Şifremi Unuttum — Taktik Stüdyo</title>
+  <link rel="stylesheet" href="auth.css">
+  <script src="backend.js" defer></script>
+</head>
+<body data-auth-page="forgot">
+  <main class="auth-card">
+    <span class="brand">TAKTİK STÜDYO</span>
+    <p class="eyebrow">HESABINA DÖN</p>
+    <h1>Şifreni sıfırla.</h1>
+    <p class="intro">E-posta adresini gir. Hesabın varsa yeni şifre belirleyebilmen için bir bağlantı göndereceğiz.</p>
+    <form id="authForm">
+      <label for="email">E-posta</label>
+      <input id="email" name="email" type="email" autocomplete="email" required>
+      <button id="authSubmit" type="submit" disabled>Şifre sıfırlama bağlantısı gönder</button>
+    </form>
+    <p id="authMessage" class="message" role="alert" aria-live="polite" aria-atomic="true"></p>
+    <p id="recoveryLinks" class="footnote"><a href="/giris.html">Giriş sayfasına dön</a></p>
+    <noscript>Şifre sıfırlama bağlantısı istemek için JavaScript'i etkinleştir.</noscript>
+  </main>
+</body>
+</html>

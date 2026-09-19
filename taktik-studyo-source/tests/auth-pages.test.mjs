@@ -146,7 +146,8 @@ test('static Auth pages provide accessible local-only forms with safe callback r
     assert.match(html,/role="alert" aria-live="polite"/);
     assert.match(html,/<button id="authSubmit" type="(?:submit|button)" disabled>/);
     assert.match(html,/<script src="backend.js" defer>/);
-    assert.doesNotMatch(html,/(?:src|href)="(?:https?:)?\/\/|sifremi-unuttum|studyo\.html|profil\.html/);
+    assert.doesNotMatch(html,/(?:src|href)="(?:https?:)?\/\/|studyo\.html|profil\.html/);
+    if (name === 'giris') assert.match(html,/<a href="\/sifremi-unuttum.html">Şifremi unuttum<\/a>/);
     assert.ok(html.indexOf('name="referrer" content="no-referrer"') < html.indexOf('<link'));
     for (const input of html.matchAll(/<input id="([^"]+)"[^>]*>/g)) {
       assert.ok(html.includes('<label for="'+input[1]+'">'));
