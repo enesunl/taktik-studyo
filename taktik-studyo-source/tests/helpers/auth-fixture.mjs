@@ -50,8 +50,9 @@ export function pageFixture(page = 'callback', search = '?token_hash=fake-token-
   const events = element(), historyCalls = [], calls = [];
   const f = {fields,events,calls,state:{status:'signed_out',user:null}};
   f.api = {async initialize(){return {ok:true};},getState:() => f.state,
+    isCurrentResult:result => result.ok,
     async verifyEmail(token){calls.push({kind:'verify',token}); f.state = {status:'signed_in',user}; return {ok:true,userId:id,profile:{status:'ready'}};},
-    async signIn(args){calls.push({kind:'login',args}); return {ok:true,profile:{status:'ready'}};},
+    async signIn(args){calls.push({kind:'login',args}); f.state = {status:'signed_in',user}; return {ok:true,userId:id,profile:{status:'ready'}};},
     async signUp(args){calls.push({kind:'signup',args}); return {ok:true,status:'confirmation_pending'};}};
   f.options = {page,api:f.api,eventTarget:events,document:{getElementById:id => fields[id] || null},
     location:{search,pathname:page === 'callback' ? '/auth-callback.html' : '/giris.html',assign(url){calls.push({kind:'navigate',url});},replace(url){calls.push({kind:'replace',url});}},

@@ -4,18 +4,37 @@ const fail = code => ({ok:false,error:{code}});
 
 // Passed directly to the bundled UI, never attached to window.
 export function createAuthPageApi({auth, client, origin, captchaConfigured = false}) {
-  const profile = createProfileBootstrap(client, id => auth.getCurrentUser()?.id === id);
+  const resultGuards = new WeakMap();
+  function completed(result, current) {
+    resultGuards.set(result,current);
+    return result;
+  }
+  async function finishSignIn(result) {
+    if (!result.ok) return result;
+    const userId = result.user.id;
+    const current = () => auth.isCurrentResult(result)
+      && auth.getState().status === 'signed_in' && auth.getCurrentUser()?.id === userId;
+    if (!current()) return fail('state_changed');
+    const ownProfile = createProfileBootstrap(client, id => id === userId && current());
+    const profile = await ownProfile();
+    if (!current()) return fail('state_changed');
+    // Keep the generation guard private; only the pinned identity reaches UI.
+    return completed({ok:true,userId,profile},current);
+  }
   const captchaCheck = token => !captchaConfigured || (typeof token === 'string' && token.length > 0 && token.length <= 2048);
   return Object.freeze({
     initialize:() => auth.initialize(), getState:() => auth.getState(),
+    isCurrentResult:result => resultGuards.get(result)?.() === true,
     async signIn({email,password,captchaToken} = {}) {
       email = typeof email === 'string' ? email.trim() : '';
       if (!emailValid(email) || typeof password !== 'string' || !password) return fail('invalid_form');
+      const entered = auth.getState();
       const ready = await auth.initialize(); if (!ready.ok) return ready;
       if (auth.getCurrentUser()) return fail('existing_session');
+      if (entered.status !== 'idle' && entered !== auth.getState()) return fail('state_changed');
       if (!captchaCheck(captchaToken)) return fail('captcha_required');
       const result = await auth.signInWithPassword({email,password,captchaToken});
-      return result.ok ? {ok:true,profile:await profile()} : result;
+      return finishSignIn(result);
     },
     async signUp({email,password,username,captchaToken} = {}) {
       email = typeof email === 'string' ? email.trim() : '';
@@ -24,25 +43,23 @@ export function createAuthPageApi({auth, client, origin, captchaConfigured = fal
       const emailRedirectTo = confirmationUrl(origin);
       if (!emailRedirectTo) return fail('callback_origin_not_allowed');
       if (!captchaCheck(captchaToken)) return fail('captcha_required');
+      const entered = auth.getState();
       const ready = await auth.initialize(); if (!ready.ok) return ready;
       if (auth.getCurrentUser()) return fail('existing_session');
+      if (entered.status !== 'idle' && entered !== auth.getState()) return fail('state_changed');
       // The confirmation field stays in the form; this API never receives it.
-      return auth.signUpWithPassword({email,password,username,emailRedirectTo,captchaToken});
+      const result = await auth.signUpWithPassword({email,password,username,emailRedirectTo,captchaToken});
+      if (!result.ok) return result;
+      const current = () => auth.isCurrentResult(result);
+      return current() ? completed(result,current) : fail('state_changed');
     },
     async verifyEmail(tokenHash) {
+      const entered = auth.getState();
       const ready = await auth.initialize(); if (!ready.ok) return ready;
       if (auth.getCurrentUser() || auth.getState().status === 'password_recovery') return fail('existing_session');
+      if (entered.status !== 'idle' && entered !== auth.getState()) return fail('state_changed');
       const result = await auth.verifyEmailToken(tokenHash);
-      if (!result.ok) return result;
-      const userId = result.user.id;
-      const current = () => auth.getState().status === 'signed_in' && auth.getCurrentUser()?.id === userId;
-      if (!current()) return fail('state_changed');
-      const ownProfile = createProfileBootstrap(client, id => id === userId && current());
-      const profileResult = await ownProfile();
-      if (!current()) return fail('state_changed');
-      // Only the confirmed identity, never a token/session, reaches the UI so it
-      // can recheck the account immediately before fixed-target navigation.
-      return {ok:true,userId,profile:profileResult};
+      return finishSignIn(result);
     },
     async requestPasswordReset({email,captchaToken} = {}) {
       email = typeof email === 'string' ? email.trim() : '';

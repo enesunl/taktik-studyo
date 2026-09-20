@@ -87,7 +87,8 @@ export function mountAuthPage({document, location, history, eventTarget, api, pa
         else error(result.error?.code);
         return;
       }
-      if (callback) {
+      if (!api.isCurrentResult(result)) {error('state_changed'); return;}
+      if (callback || page === 'login') {
         const state = api.getState();
         if (!result.userId || state.status !== 'signed_in' || state.user?.id !== result.userId) {error('state_changed'); return;}
       }
@@ -99,6 +100,7 @@ export function mountAuthPage({document, location, history, eventTarget, api, pa
           ? 'Kayıt işlemi uygunsa doğrulama bağlantısı e-posta adresine gönderildi. E-postandaki bağlantıyı açıp doğrulama düğmesine bas.'
           : 'Giriş başarılı. Bu tarayıcıda oturumun açık.';
       if (result.profile) profileMessage.textContent = profileMessages[result.profile.status] || profileMessages.profile_error;
+      if (!api.isCurrentResult(result)) {error('state_changed'); profileMessage.textContent = ''; return;}
       if (page === 'login') location.assign(loginDestination(location.search));
       else if (page === 'register') location.replace('/giris.html?reason=confirmation_pending');
       else if (callback) location.replace('/studyo.html');

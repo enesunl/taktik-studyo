@@ -8,6 +8,30 @@ No production settings, users, migrations, environment values or deployments wer
 
 ## Browser and Auth API
 
+### Account-switch completion guards
+
+Login and email verification retain a private result guard through server
+validation, profile bootstrap and the final UI/navigation boundary. The guard
+captures controller epoch, identity/status generation and user id. Identity/status
+changes advance that generation synchronously; A -> B -> A cannot revive A's old
+operation. Same-identity refresh events do not create a new identity generation.
+The initial signed-out -> SDK-returned-user transition is allowed exactly once;
+subsequent account changes return `state_changed` without bootstrap or navigation.
+
+Profile bootstrap is pinned to the validated result's id and generation, never
+retargeted to the mutable current user. `isCurrentResult(result)` checks a private
+WeakMap guard before success UI and again before navigation; results expose only
+the pinned `userId`, never generation counters, session or tokens. These guards
+are lifecycle checks, not server authorization. Existing invalid/unconfirmed
+session cleanup still rechecks identity/revision and SDK session before local
+sign-out; stale completion never adds a compensating logout. Already-dispatched
+SDK/network side effects are not made atomic or rolled back by these checks.
+
+`tests/auth-navigation-race.test.mjs` uses deferred promises for validation,
+verification and bootstrap races, A/B/A transitions, final UI gating, normal
+login and unconfirmed cleanup regressions. No timeout-based synchronization is
+used for these tests.
+
 ### Required confirmation gate (post-Phase 7 hardening)
 
 The hosted project must have **Authentication → Providers → Email → Confirm

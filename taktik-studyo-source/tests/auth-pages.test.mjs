@@ -100,7 +100,8 @@ test('login and signup disable duplicate keyboard submissions during pending req
     const first = f.fields.authForm.emit('submit');
     await f.fields.authForm.emit('submit'); assert.equal(f.calls.length,1);
     assert.equal(f.fields.authSubmit.disabled,true); assert.equal(f.fields.authForm.attributes['aria-busy'],'true');
-    wait.resolve({ok:true,...(kind === 'register' ? {status:'confirmation_pending'} : {})}); await first;
+    if (kind === 'login') f.state = {status:'signed_in',user};
+    wait.resolve({ok:true,...(kind === 'register' ? {status:'confirmation_pending'} : {userId:user.id})}); await first;
     assert.equal(f.fields.authSubmit.disabled,true); assert.equal(f.fields.password.value,'');
     assert.equal(f.fields.authForm.attributes['aria-busy'],'false'); page.dispose();
   }
@@ -115,7 +116,7 @@ test('login failure is controlled, retry enabled; profile failure keeps success 
   assert.doesNotMatch(f.fields.authMessage.textContent,/raw account/);
   assert.equal(f.fields.authSubmit.disabled,false); assert.equal(f.fields.password.value,'');
   f.fields.password.value = 'twelve characters';
-  f.api.signIn = async () => ({ok:true,profile:{ok:false,status:'username_conflict'}});
+  f.api.signIn = async () => {f.state = {status:'signed_in',user}; return {ok:true,userId:user.id,profile:{ok:false,status:'username_conflict'}};};
   await f.fields.authForm.emit('submit');
   assert.match(f.fields.authMessage.textContent,/Giriş başarılı/);
   assert.match(f.fields.profileMessage.textContent,/kullanıcı adı kullanılamıyor/); page.dispose();

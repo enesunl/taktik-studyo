@@ -68,7 +68,7 @@ test('safe next accepts exact paths only; duplicates and encoded external tricks
     assert.equal(loginDestination('?next='+encodeURIComponent(next)),'/studyo.html');
   assert.equal(loginDestination('?next=/profil.html&next=/profil.html'),'/studyo.html');
   for(const profile of ['ready','profile_incomplete','username_conflict','profile_error']){
-    const f=pageFixture('login','?next=/profil.html');f.api.signIn=async()=>({ok:true,profile:{status:profile}});
+    const f=pageFixture('login','?next=/profil.html');f.api.signIn=async()=>{f.state=state(A);return {ok:true,userId:A,profile:{status:profile}};};
     const page=mountAuthPage(f.options);await page.ready;await f.fields.authForm.emit('submit');
     assert.deepEqual(f.calls,[{kind:'navigate',url:'/profil.html'}]);page.dispose();
   }

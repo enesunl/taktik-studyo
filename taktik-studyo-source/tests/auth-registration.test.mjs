@@ -171,7 +171,7 @@ test('login validates input, trims only email and returns profile success withou
     for (const args of [{...credentials,email:'bad'}, {...credentials,password:''}])
       assert.equal((await f.api.signIn(args)).error.code,'invalid_form');
     assert.equal(f.calls.login.length,0);
-    assert.deepEqual(await f.api.signIn(credentials),{ok:true,profile:{ok:true,status:'ready'}});
+    assert.deepEqual(await f.api.signIn(credentials),{ok:true,userId:user.id,profile:{ok:true,status:'ready'}});
     assert.deepEqual(f.calls.login,[{email:credentials.email.trim(),password:credentials.password}]);
     assert.equal(f.calls.getUser,2);
   } finally {f.auth.dispose();}
@@ -184,7 +184,7 @@ test('login/confirmation profile failure or conflict never reverses Auth success
     f.insertResult = {error:{code:'23505',message:'private'}};
     try {
       assert.deepEqual(await f.api[operation](operation === 'signIn' ? credentials : 'token'),
-        {ok:true,...(operation === 'verifyEmail' ? {userId:user.id} : {}),profile:{ok:false,status:conflict ? 'username_conflict' : 'profile_error'}});
+        {ok:true,userId:user.id,profile:{ok:false,status:conflict ? 'username_conflict' : 'profile_error'}});
       assert.equal(f.auth.getState().status,'signed_in');
     } finally {f.auth.dispose();}
   }
