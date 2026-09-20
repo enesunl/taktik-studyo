@@ -29,6 +29,27 @@ test('invalid or empty origin configuration fails closed, including mixed valid 
   for (const value of invalid) assert.throws(() => parseAllowedOrigins(value), /ALLOWED_ORIGINS/);
 });
 
+test('production origin regression: default and explicit configuration allow preflight with exact headers', async () => {
+  for (const config of [undefined, production]) {
+    let accesses = 0;
+    const handler = createHandler({
+      origins:parseAllowedOrigins(config), publicKey:'public-test',
+      client:{from() { accesses++; }, rpc() { accesses++; }},
+      verifyBot:async () => { accesses++; return false; }
+    });
+    const response = await handler(new Request('https://db.test/functions/v1/lineups', {
+      method:'OPTIONS', headers:{origin:production,'access-control-request-method':'POST',
+        'access-control-request-headers':'apikey, content-type, x-bot-token'}
+    }));
+    assert.equal(response.status, 204);
+    assert.equal(response.headers.get('Access-Control-Allow-Origin'), production);
+    assert.equal(response.headers.get('Access-Control-Allow-Methods'), 'GET, POST, OPTIONS');
+    assert.equal(response.headers.get('Access-Control-Allow-Headers'), 'apikey, content-type, x-bot-token');
+    assert.equal(response.headers.get('Vary'), 'Origin');
+    assert.equal(accesses, 0);
+  }
+});
+
 test('configured origins support preflight, verified sharing and reads with exact CORS headers', async () => {
   const origins = parseAllowedOrigins(`${production},${preview}`);
   const payload = {team_name:'Test',formation:'4-3-3',lineup_data:{team:{name:'Test',short:'T',color:'#123456',color2:'#abcdef'},customized:false,players:Array.from({length:11},(_,id)=>({id,x:50,y:50,role:'MO',name:'Test',number:id+1,renamed:false}))},drawing_data:[]};
@@ -70,17 +91,38 @@ test('configured origins support preflight, verified sharing and reads with exac
   assert.equal(writes, 2); assert.equal(reads, 2); assert.equal(verifications, 2);
 });
 
-test('unlisted, missing and deceptive origins receive 403 without CORS or database access', async () => {
-  const client = {rpc() { assert.fail('must not write'); },from() { assert.fail('must not read'); }};
-  const handler = createHandler({client,origins:parseAllowedOrigins(),publicKey:'public-test',rateSalt:'test-only'});
+test('unlisted, missing and deceptive origins receive 403 before Turnstile or database access without reflection', async () => {
+  let writes = 0, reads = 0, verifications = 0;
+  const client = {rpc() { writes++; },from() { reads++; }};
+  const handler = createHandler({client,origins:parseAllowedOrigins(),publicKey:'public-test',rateSalt:'test-only',
+    verifyBot:async () => { verifications++; return true; }});
+  const payload = {team_name:'Test',formation:'4-3-3',lineup_data:{team:{name:'Test',short:'T',color:'#123456',color2:'#abcdef'},customized:false,players:Array.from({length:11},(_,id)=>({id,x:50,y:50,role:'MO',name:'Test',number:id+1,renamed:false}))},drawing_data:[]};
   const denied = [undefined, 'null', '*', 'http://localhost:4173', 'https://www.taktikstudyo.com',
+    'https://evil.example', 'https://taktikstudyo.com.evil.example', 'http://taktikstudyo.com',
     'https://taktikstudyo.com.evil.test', 'https://taktikstudyo.com:8443',
     'https://taktik-studyo.unql9enes.chatgpt.site'];
   for (const origin of denied) for (const method of ['OPTIONS','GET','POST']) {
-    const headers = {apikey:'public-test'};
+    const headers = {apikey:'public-test','content-type':'application/json','x-bot-token':'fixture-token'};
     if (origin !== undefined) headers.origin = origin;
-    const response = await handler(new Request('https://db.test/functions/v1/lineups', {method,headers}));
+    const url = 'https://db.test/functions/v1/lineups' + (method === 'GET' ? '?id=01234567-89ab-4cde-8fab-0123456789ab' : '');
+    const response = await handler(new Request(url, {method,headers,
+      ...(method === 'POST' ? {body:JSON.stringify(payload)} : {})}));
     assert.equal(response.status, 403);
     assert.equal(response.headers.get('Access-Control-Allow-Origin'), null);
   }
+  assert.equal(writes, 0); assert.equal(reads, 0); assert.equal(verifications, 0);
+});
+
+test('production-origin GET rejects invalid UUIDs before database access', async () => {
+  let reads = 0;
+  const handler = createHandler({origins:parseAllowedOrigins(),publicKey:'public-test',
+    client:{from() { reads++; }}});
+  for (const id of ['', 'not-a-uuid', '01234567-89ab-1cde-8fab-0123456789ab', '01234567-89ab-4cde-0fab-0123456789ab']) {
+    const response = await handler(new Request('https://db.test/functions/v1/lineups?id=' + id, {
+      headers:{origin:production,apikey:'public-test'}
+    }));
+    assert.equal(response.status, 400);
+    assert.equal(response.headers.get('Access-Control-Allow-Origin'), production);
+  }
+  assert.equal(reads, 0);
 });

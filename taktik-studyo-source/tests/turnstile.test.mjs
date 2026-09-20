@@ -11,7 +11,8 @@ test('Turnstile fails closed on absent key/token, bad action/hostname, denial an
  assert.equal(await verify(req()),false);assert.equal(calls,0);
  assert.equal(await createBotVerifier({secret:null,origins:[origin],fetcher:()=>{throw Error('must not fetch')}})(req('fixture-token')),false);
  assert.equal(await verify(req('fixture-token')),true);assert.equal(calls,1);
- for(const data of [{success:false},{success:true,action:'wrong',hostname:new URL(origin).hostname},{success:true,action:'share_lineup',hostname:'evil.test'}]){
+ for(const data of [{success:false},{success:'true',action:'share_lineup',hostname:new URL(origin).hostname},{success:true,action:'wrong',hostname:new URL(origin).hostname},
+  ...['evil.test','taktikstudyo.com.evil.example','www.taktikstudyo.com','taktik-studyo.unql9enes.chatgpt.site'].map(hostname=>({success:true,action:'share_lineup',hostname}))]){
   const bad=createBotVerifier({secret:'unit-test-fixture',origins:[origin],fetcher:async()=>({ok:true,json:async()=>data})});assert.equal(await bad(req('fixture-token')),false);
  }
  const unavailable=createBotVerifier({secret:'unit-test-fixture',origins:[origin],fetcher:async()=>{throw Error('offline')}});assert.equal(await unavailable(req('fixture-token')),false);
