@@ -1,6 +1,5 @@
 import {resolvePage} from './page-routes.js';
 import {createProtectedPage} from './protected-page.js';
-import {chooseLegacyDrafts} from './legacy-import-ui.js';
 import {mountLanding} from './landing-ui.js';
 import {createProfileApi} from './profile-api.js';
 import {mountProfile} from './profile-ui.js';
@@ -38,8 +37,8 @@ export function startPage({auth,document,window,backend,client}) {
         const api = createProfileApi({client,validatedUser,current});
         return mountProfile({document,api,validatedUser,current}).dispose;
       }
-      await chooseLegacyDrafts({scope,slots:route.page === 'studio' ? ['main'] : ['left','right'],
-        document,container:document.getElementById('legacyImport')});
+      // Open the user's own draft directly. Device-wide legacy drafts are
+      // neither imported nor deleted as a side effect of opening a board.
       if (!current()) return;
       await backend.loadCatalogue();
       if (!current()) return;

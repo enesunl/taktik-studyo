@@ -43,7 +43,7 @@ the public shared engine/draft behavior is unchanged.
 3. Call `auth.validateUser()`, which calls the Auth server's `getUser()`.
 4. Require a successful result with the same current user id and generation.
 5. Create an immutable `createUserDraftScope` from that validated id.
-6. Resolve optional legacy import choices, load catalogue on demand, then mount.
+6. Load catalogue on demand, then mount directly with the user's own draft.
 
 See the [Supabase getUser contract](https://supabase.com/docs/reference/javascript/auth-getuser).
 `getSession()`/a local snapshot alone cannot mount protected content. Validation
@@ -120,14 +120,16 @@ The guard directly reuses Phase 3 `createUserDraftScope`, its contexts, writers,
 validation and importer. The earlier snapshot-only `bindAuthenticatedDrafts`
 helper is not wired alongside the guard; there is no competing mount lifecycle.
 
-`legacy-import-ui.js` inspects only the known legacy keys and current user's
-targets. A valid legacy slot with no target offers **İçe aktar** or **Yeni taslakla
-devam et**. No automatic import or cross-user key enumeration occurs. Left/right
-decisions are separate. Import preserves the source and existing destinations,
-including the existing second destination check before write. This narrows a race
-window; localStorage does not provide an atomic compare-and-set guarantee.
-The board mounts after the decision, so an accepted import is immediately visible.
-Scope disposal dismisses an outstanding prompt without importing.
+Studio/comparison startup no longer calls `chooseLegacyDrafts` or shows the legacy
+import decision screen. After validation, each board opens its own user-scoped
+draft, or its default state if none exists. Device-wide legacy drafts are neither
+automatically imported nor deleted, including on account switches. Auth/email
+confirmation gates and public shared draft keys remain unchanged.
+
+The existing `legacy-import-ui.js` helper and scope importer remain available as
+source utilities with their unit tests; no startup UI currently invokes them.
+Their explicit import contract still preserves source/existing destinations and
+rechecks the destination before writing. This is not atomic localStorage CAS.
 
 ## Public share and catalogue independence
 
@@ -139,7 +141,7 @@ Auth initialization failure cannot gate this flow.
 
 `TAKTIK_BACKEND.loadCatalogue()` loads the existing catalogue lazily. Landing,
 Auth pages and profile shell do not start teams/players requests. Protected board
-pages request catalogue only after validation/import decision; valid public share
+pages request catalogue only after validation; valid public share
 requests load it without Auth validation. Invalid share requests make neither
 catalogue nor shared GET requests. Existing fallback rosters remain available.
 

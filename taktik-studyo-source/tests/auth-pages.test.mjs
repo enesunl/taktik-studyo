@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {mountAuthPage} from '../src/lib/auth-ui.js';
-import {pageFixture,session} from './helpers/auth-fixture.mjs';
+import {pageFixture,session,fixture,user} from './helpers/auth-fixture.mjs';
 const deferred = () => {let resolve; const promise = new Promise(r => {resolve = r;}); return {promise,resolve};};
 
 test('callback sanitizes immediately before async restore, load never verifies, click verifies exactly once', async () => {
@@ -19,11 +19,13 @@ test('callback sanitizes immediately before async restore, load never verifies, 
   await f.fields.authSubmit.emit('click');
   assert.deepEqual(f.calls,[{token:'fake-token-hash'}]);
   assert.equal(f.fields.authSubmit.disabled,true);
-  verification.resolve({ok:true,profile:{status:'ready'}}); await click;
+  f.state={status:'signed_in',user:session.user};
+  verification.resolve({ok:true,userId:session.user.id,profile:{status:'ready'}}); await click;
   assert.match(f.fields.authMessage.textContent,/doğrulandı/);
   assert.match(f.fields.authMessage.textContent,/Diğer cihazlarda/);
   assert.doesNotMatch(JSON.stringify(page),/token|session/);
-  await f.fields.authSubmit.emit('click'); assert.equal(f.calls.length,1);
+  assert.deepEqual(f.calls.at(-1),{kind:'replace',url:'/studyo.html'});
+  await f.fields.authSubmit.emit('click'); assert.equal(f.calls.length,2);
   page.dispose();
 });
 
@@ -61,7 +63,7 @@ test('callback verification error is controlled, consumes memory reference and d
   assert.doesNotMatch(f.fields.authMessage.textContent,/RAW PRIVATE|fake-token/); page.dispose();
 });
 
-test('callback never uses local/session storage, console, innerHTML or automatic navigation', async () => {
+test('callback never uses local/session storage, console or innerHTML; navigation follows click success', async () => {
   const f = pageFixture();
   for (const property of ['localStorage','sessionStorage','console']) {
     Object.defineProperty(f.options.eventTarget,property,{get(){throw Error(property+' forbidden');}});
@@ -85,7 +87,7 @@ test('register form validates password match/length and username before sending 
   await f.fields.authForm.emit('submit'); assert.match(f.fields.authMessage.textContent,/3–24/);
   assert.equal(f.calls.length,0);
   f.fields.username.value = 'Name_1'; await f.fields.authForm.emit('submit');
-  assert.deepEqual(f.calls,[{kind:'signup',args:{email:'test@example.test',password:' twelve chars ',username:'Name_1'}}]);
+  assert.deepEqual(f.calls,[{kind:'signup',args:{email:'test@example.test',password:' twelve chars ',username:'Name_1'}},{kind:'replace',url:'/giris.html?reason=confirmation_pending'}]);
   assert.equal(f.fields.password.value,''); assert.equal(f.fields.passwordConfirmation.value,'');
   assert.match(f.fields.authMessage.textContent,/Kayıt işlemi uygunsa/); page.dispose();
 });
@@ -98,7 +100,7 @@ test('login and signup disable duplicate keyboard submissions during pending req
     const first = f.fields.authForm.emit('submit');
     await f.fields.authForm.emit('submit'); assert.equal(f.calls.length,1);
     assert.equal(f.fields.authSubmit.disabled,true); assert.equal(f.fields.authForm.attributes['aria-busy'],'true');
-    wait.resolve({ok:true}); await first;
+    wait.resolve({ok:true,...(kind === 'register' ? {status:'confirmation_pending'} : {})}); await first;
     assert.equal(f.fields.authSubmit.disabled,true); assert.equal(f.fields.password.value,'');
     assert.equal(f.fields.authForm.attributes['aria-busy'],'false'); page.dispose();
   }
@@ -156,4 +158,71 @@ test('static Auth pages provide accessible local-only forms with safe callback r
     }
   }
   assert.match(readFileSync(new URL('../dist/auth.css',import.meta.url),'utf8'),/:focus-visible/);
+});
+
+test('login reason allowlist displays exact controlled copy above the form, rejects unknown/duplicates',async()=>{
+  const reasons={
+    confirmation_pending:'Kaydın oluşturuldu. Devam etmek için e-posta adresine gönderdiğimiz doğrulama bağlantısını onayla.',
+    email_not_confirmed:'E-posta adresini doğrulaman gerekiyor. Gelen kutundaki doğrulama bağlantısını kullan.',
+  };
+  for(const [reason,message] of Object.entries(reasons)){
+    const f=pageFixture('login','?reason='+reason),page=mountAuthPage(f.options);await page.ready;
+    assert.equal(f.fields.authMessage.textContent,message);assert.equal(f.fields.authSubmit.disabled,false);page.dispose();
+  }
+  for(const query of ['?reason=unknown','?reason=CONFIRMATION_PENDING','?reason=confirmation_pendingx','?reason=%3Cimg%20src=x%3E',
+    '?reason=confirmation_pending&reason=confirmation_pending','?reason=email_not_confirmed&reason=confirmation_pending','?reason=confirmation_pending&reason=']){
+    const f=pageFixture('login',query),page=mountAuthPage(f.options);await page.ready;assert.equal(f.fields.authMessage.textContent,'');page.dispose();
+  }
+  const html=readFileSync(new URL('../dist/giris.html',import.meta.url),'utf8');
+  assert.ok(html.indexOf('id="authMessage"')<html.indexOf('<form id="authForm"'));
+});
+
+test('signup with unexpected unconfirmed session cleans locally before fixed login replacement',async()=>{
+  const f=fixture(),form=pageFixture('register','?next=https://attacker.test&email=private');
+  const unconfirmed={...user,email_confirmed_at:undefined};const order=[];
+  f.signupResult={data:{user:unconfirmed,session:{...session,user:unconfirmed}}};f.userResult={data:{user:unconfirmed}};
+  f.client.auth.signOut=async options=>{assert.deepEqual(options,{scope:'local'});order.push('cleanup');f.emit('SIGNED_OUT',null);return {error:null};};
+  form.options.api=f.api;form.options.location.replace=url=>order.push(url);
+  const page=mountAuthPage(form.options);await page.ready;await form.fields.authForm.emit('submit');
+  assert.deepEqual(order,['cleanup','/giris.html?reason=confirmation_pending']);assert.equal(f.auth.getState().status,'signed_out');
+  assert.equal(f.calls.select.length,0);page.dispose();f.auth.dispose();
+});
+
+test('callback fixed studio replacement requires explicit click and accepts recoverable profile outcomes',async()=>{
+  for(const profileStatus of ['ready','profile_incomplete','username_conflict','profile_error']){
+    const f=pageFixture('callback');f.api.verifyEmail=async()=>{f.state={status:'signed_in',user};return {ok:true,userId:user.id,profile:{status:profileStatus}};};
+    const page=mountAuthPage(f.options);await page.ready;assert.equal(f.calls.length,0);
+    await f.fields.authSubmit.emit('click');assert.deepEqual(f.calls,[{kind:'replace',url:'/studyo.html'}]);
+    assert.doesNotMatch(f.calls[0].url,/token|next|email|user/);page.dispose();
+  }
+});
+
+test('callback failure codes and exceptions never navigate or expose raw errors',async()=>{
+  for(const code of ['confirmation_invalid','confirmation_failed','email_not_confirmed','session_cleanup_failed','state_changed','user_validation_failed','throw']){
+    const f=pageFixture('callback');f.api.verifyEmail=async()=>{if(code==='throw')throw Error('RAW secret');return {ok:false,error:{code,message:'RAW secret'}};};
+    const page=mountAuthPage(f.options);await page.ready;await f.fields.authSubmit.emit('click');
+    assert.equal(f.calls.length,0);assert.doesNotMatch(f.fields.authMessage.textContent,/RAW|fake-token/);assert.ok(f.fields.authMessage.textContent);page.dispose();
+  }
+});
+
+test('callback UI rechecks authenticated same identity immediately before navigation',async()=>{
+  for(const state of [{status:'signed_out',user:null},{status:'password_recovery',user},
+    {status:'signed_in',user:{...user,id:'22222222-2222-4222-8222-222222222222'}}]){
+    const f=pageFixture('callback');f.api.verifyEmail=async()=>{f.state=state;return {ok:true,userId:user.id,profile:{status:'ready'}};};
+    const page=mountAuthPage(f.options);await page.ready;await f.fields.authSubmit.emit('click');
+    assert.equal(f.calls.length,0);assert.match(f.fields.authMessage.textContent,/Oturum değişti/);page.dispose();
+  }
+});
+
+test('B account during A callback verify or profile bootstrap blocks A navigation without logging B out',async()=>{
+  for(const stage of ['verify','profile']){
+    const f=fixture(),wait=deferred(),entered=deferred();const B={...user,id:'22222222-2222-4222-8222-222222222222'};
+    if(stage==='verify')f.client.auth.verifyOtp=()=>{entered.resolve();return wait.promise;};
+    else {let reads=0;f.client.auth.getUser=()=>++reads===1?Promise.resolve({data:{user}}):(entered.resolve(),wait.promise);}
+    const form=pageFixture('callback');form.options.api=f.api;
+    const page=mountAuthPage(form.options);await page.ready;const pending=form.fields.authSubmit.emit('click');await entered.promise;
+    f.emit('SIGNED_IN',{...session,user:B});wait.resolve(stage==='verify'?{data:{user,session}}:{data:{user}});await pending;
+    assert.equal(f.auth.getCurrentUser().id,B.id);assert.equal(form.calls.length,0);assert.match(form.fields.authMessage.textContent,/Oturum değişti/);
+    assert.equal(f.calls.select.length,0);page.dispose();f.auth.dispose();
+  }
 });

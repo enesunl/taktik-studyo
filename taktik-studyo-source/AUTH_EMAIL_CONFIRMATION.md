@@ -8,6 +8,61 @@ No production settings, users, migrations, environment values or deployments wer
 
 ## Browser and Auth API
 
+### Required confirmation gate (post-Phase 7 hardening)
+
+The hosted project must have **Authentication → Providers → Email → Confirm
+email enabled**. Backend confirmation enforcement is the primary layer, not
+something the browser can replace. No production setting was inspected or
+changed for this fix. See [Supabase email/password configuration](https://supabase.com/docs/guides/auth/passwords).
+
+The installed `@supabase/supabase-js` / `auth-js` 2.116.0 `User` type defines
+`email_confirmed_at?: string`. The application uses that server `getUser()` field,
+exposed internally as `emailConfirmedAt`; neither `confirmed_at` (which can also
+represent phone confirmation), `phone_confirmed_at`, signup response, local
+restored snapshot nor user-editable metadata is accepted as email proof.
+
+`validateUser()` now requires a same-id server user with a nonempty email
+confirmation timestamp. The current application supports email Auth only. Future
+phone/OAuth flows require their own reviewed access contract rather than bypassing
+this check. The protected guard only mounts after this successful validation;
+unconfirmed users never reach studio/comparison/profile mount, catalogue load,
+draft scope creation or the legacy-import prompt.
+
+If the server returns an unconfirmed same-id user, validation rechecks generation,
+identity and the public SDK `getSession()` before dispatching
+`signOut({scope:'local'})`. It never removes SDK storage keys itself. A stale A
+result after an account switch to B returns `state_changed` without logging B out.
+This preserves the existing best-effort cross-tab checks; it is not an atomic
+lock across tabs or SDK/network work already in flight.
+
+Successful cleanup returns `email_not_confirmed`; protected pages use the existing
+allowlisted login URL with the fixed `reason=email_not_confirmed` code. Login
+renders a fixed verification-required message and never echoes arbitrary query
+values. Cleanup error/exception returns `session_cleanup_failed`, leaves routes
+closed with retry, and is not reported as successful logout. Transient validation
+failures remain `user_validation_failed` without destructive cleanup; known invalid
+session errors retain cleanup plus `unauthenticated` semantics.
+
+`signInWithPassword` maps the typed SDK `AuthApiError.code=email_not_confirmed`
+without reading or matching `error.message`. Even a successful password session
+must pass `validateUser(expectedId)` before login success, profile bootstrap or
+navigation. `verifyEmailToken` likewise requires confirmed same-id server evidence
+after `verifyOtp(type:'email')`; callback parsing and synchronous URL sanitization
+are unchanged. An unexpected signup session is also validated and cleaned if
+unconfirmed, retaining the generic confirmation-pending response after cleanup.
+
+**Configuration limit:** with Confirm email disabled, Supabase can auto-confirm
+users on the server. An `email_confirmed_at` supplied by that server cannot tell
+the browser whether a person clicked a verification email or the backend
+auto-confirmed them. This patch cannot correct that configuration or retrospectively
+prove an email click. Existing auto-confirmed accounts require a separate operational
+review; this task changes no hosted settings, users or database rows.
+
+`tests/auth-email-gate.test.mjs` covers the unconfirmed login/route/callback paths,
+same-id server evidence, cleanup failure, account-switch races and a real installed
+SDK with mocked HTTP/storage. The confirmed login/legacy-import/route regressions
+remain in the full local suite.
+
 Normal Auth, catalogue and profiles share the existing Auth-aware client. Phase 5
 isolates password recovery completion in a dedicated non-persistent client; email
 confirmation still uses the main client. No raw client, session, token or SDK error
@@ -16,7 +71,8 @@ module-local facade (`auth-page-api.js`). Catalogue loading is skipped on these
 pages; public catalogue/sharing initialization continues on existing pages.
 
 - Login trims email, preserves the password exactly, prevents duplicate submits
-  and shows success without navigation. Existing sessions block another login.
+  and navigates to the allowlisted destination only after confirmed server
+  validation. Existing sessions block another login.
 - Registration validates ASCII usernames (3–24 letters/digits/underscore), email,
   minimum 12-character passwords and matching confirmation. Password confirmation
   is checked only in the form and never passed to the API. No username availability
@@ -26,13 +82,22 @@ pages; public catalogue/sharing initialization continues on existing pages.
   returns `{ok:true,status:'confirmation_pending'}` for success and obfuscated/
   known existing-account responses. Neither a null nor an unexpectedly non-null
   returned session exposes account existence or raw credentials. SDK session
-  ownership remains unchanged; the UI does not infer confirmation or redirect.
+  ownership remains with the SDK; the UI does not infer confirmation. A successful
+  `confirmation_pending` result replaces the page with exactly
+  `/giris.html?reason=confirmation_pending`, including after local cleanup of an
+  unexpected unconfirmed session. No email, username, id, token or arbitrary
+  message is carried in that URL. Failure never triggers this redirect.
 - `auth.verifyEmailToken(tokenHash)` delegates to `verifyOtp({token_hash,type:'email'})`
   and returns only the existing limited `userView`. The page facade reduces this
   further to Auth success plus a separate profile outcome. Raw errors map to
   application codes and controlled text via `textContent`.
-- `validateUser()`, local sign-out, redirect whitelist and `password_recovery`
-  status are unchanged. No recovery, route guard or profile editing flow is added.
+- Local sign-out scope, redirect destination whitelist and `password_recovery`
+  classification are preserved; `validateUser()` enforces the confirmation gate above.
+
+Login accepts exactly one `reason` with value `confirmation_pending` or
+`email_not_confirmed`. Unknown values and duplicate parameters display no reason
+message. The fixed Turkish copy is shown inside the login card above the form;
+query text is never echoed. This is a UX hint, not proof of signup or confirmation.
 
 ## Callback contract and future Dashboard setup
 
@@ -93,6 +158,20 @@ Page load never calls `verifyOtp`. Only “E-posta adresimi doğrula” does. Th
 token reference is discarded on submission, page exit and blocked/failed setup.
 Retry after an error or reload requires reopening the original email link.
 
+After that explicit click, successful `verifyOtp(type:'email')` and same-id
+confirmed server validation are followed by the existing profile bootstrap.
+`ready`, `profile_incomplete`, `username_conflict` and `profile_error` do not undo
+Auth success: profile bootstrap is not the access boundary. The callback replaces
+the page with exactly `/studyo.html`, without another email/password login.
+No query-supplied `next` is accepted; an extra callback parameter remains invalid.
+
+The callback facade captures the confirmed identity and checks it before/after
+profile bootstrap. It returns only that user id plus the controlled profile result,
+never the raw session/token. The UI checks the same current signed-in identity
+again before navigation. A different account or recovery/signed-out state prevents
+navigation. Invalid/expired tokens, unconfirmed/mismatched users, cleanup failures,
+state changes and Auth/network failures retain controlled error UI without redirect.
+
 A restored session (including password recovery) blocks verification. The session
 is checked again at click time and in the Auth method. No automatic sign-out or
 silent account switching is performed. The user must sign out and reopen the link,
@@ -101,7 +180,8 @@ change happening while a request is already in flight.
 
 Signup on PC followed by opening the email on a phone works without the PC's PKCE
 verifier: the phone submits TokenHash after a click. Its SDK persists the resulting
-session on the phone only. The PC receives no automatic session and can use normal
+session on the phone only, and the phone continues directly to `/studyo.html` after
+the explicit confirmation button succeeds. The PC receives no automatic session and can use normal
 email/password login after confirmation. This differs from
 [PKCE's same-browser verifier requirement](https://supabase.com/docs/guides/auth/sessions/pkce-flow);
 see [`verifyOtp`](https://supabase.com/docs/reference/javascript/auth-verifyotp).

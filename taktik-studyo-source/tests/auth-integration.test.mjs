@@ -12,7 +12,7 @@ import {createAuthPageApi} from '../src/lib/auth-page-api.js';
 const url = 'https://abcdefghijklmnopqrst.supabase.co';
 const key = 'sb_publishable_local_test_only';
 const id = '11111111-1111-4111-8111-111111111111';
-const user = {id, email:'test@example.test', aud:'authenticated', role:'authenticated'};
+const user = {id, email:'test@example.test', email_confirmed_at:'2026-09-18T10:00:00Z', aud:'authenticated', role:'authenticated'};
 const team = {id:'test', name:'Test', short_name:'T', color_primary:'#123456', color_secondary:'#abcdef', logo_url:null};
 const players = Array.from({length:11}, (_, i) => ({id:String(i), team_id:'test', name:'Player '+i,
   position:'M', shirt_number:i+1, photo_url:null, roles:['MO'], selection_rank:1}));
@@ -161,7 +161,7 @@ test('real SDK with two independent mocked devices: TokenHash confirmation needs
     assert.deepEqual(await apis[0].signUp({email:user.email,password:'twelve chars pass',username:'Cross_device'}),{ok:true,status:'confirmation_pending'});
     assert.equal(controllers[0].getCurrentUser(),null); assert.equal(stores[1].size,0);
     assert.equal(calls.some(call => call.path.endsWith('/verify')),false);
-    assert.deepEqual(await apis[1].verifyEmail('fake-cross-device-token'),{ok:true,profile:{ok:true,status:'ready'}});
+    assert.deepEqual(await apis[1].verifyEmail('fake-cross-device-token'),{ok:true,userId:id,profile:{ok:true,status:'ready'}});
     assert.equal(controllers[1].getCurrentUser().id,id);
     assert.equal(controllers[0].getCurrentUser(),null,'PC does not gain phone session');
     assert.doesNotMatch(JSON.stringify(stores.map(store => [...store])),/fake-cross-device-token|code-verifier/);

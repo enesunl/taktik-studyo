@@ -106,10 +106,12 @@ export function createAuthSession(client, createRecoveryClient = null) {
       const options = typeof credentials.captchaToken === 'string' ? {captchaToken:credentials.captchaToken} : undefined;
       const result = await client.auth.signInWithPassword({email:credentials.email, password:credentials.password, ...(options ? {options} : {})});
       if (generation !== epoch) return failure('state_changed');
+      if (isAuthApiError(result.error) && result.error.code === 'email_not_confirmed') return failure('email_not_confirmed');
       if (result.error || !result.data?.session || !userView(result.data.user)) return failure('sign_in_failed');
       if (revision === start) { revision++; liveEvent = true; publish(result.data.user, 'SIGNED_IN'); }
       else if (state.user?.id !== result.data.user.id) return failure('state_changed');
-      return success({user:state.user});
+      // A session from the password endpoint is not proof of email confirmation.
+      return await validateUser(result.data.user.id);
     } catch { return failure('sign_in_failed'); }
   }
   async function signOut() {
@@ -125,10 +127,11 @@ export function createAuthSession(client, createRecoveryClient = null) {
       return success({state});
     } catch { return failure('sign_out_failed'); }
   }
-  async function validateUser() {
+  async function validateUser(expectedId) {
     const ready = await initialize();
     if (!ready.ok) return ready;
     const generation = epoch, start = revision, id = state.user?.id;
+    if (expectedId !== undefined && id !== expectedId) return failure('state_changed');
     const unchanged = () => generation === epoch && revision === start && state.user?.id === id;
     // getUser may itself clear a missing session. Accept only a single SIGNED_OUT
     // transition; A -> B (even B -> signed_out) must invalidate A's result.
@@ -138,14 +141,24 @@ export function createAuthSession(client, createRecoveryClient = null) {
     try {
       // Always ask Auth server; never accept the restored local user as proof.
       const result = await client.auth.getUser();
-      if (invalidSessionError(result.error)) {
-        if (sdkCleared()) return failure('unauthenticated');
+      const invalid = invalidSessionError(result.error);
+      if (invalid && sdkCleared()) return failure('unauthenticated');
+      if (!unchanged()) return failure('state_changed');
+      if (result.error && !invalid) return failure('user_validation_failed');
+      const user = userView(result.data?.user);
+      // Only same-identity server evidence may trigger unconfirmed-user cleanup.
+      if (!invalid && !user) return failure(id ? 'user_validation_failed' : 'unauthenticated');
+      if (!invalid && user.id !== id) return failure('state_changed');
+      // This application supports email Auth only. Do not fall back to the
+      // phone-capable confirmed_at or user_metadata confirmation flags.
+      const rejected = invalid ? 'unauthenticated' : !user.emailConfirmedAt ? 'email_not_confirmed' : null;
+      if (rejected) {
         if (!unchanged()) return failure('state_changed');
         if (recoveryBusy || state.status === 'password_recovery') return failure('state_changed');
         // Read through the public SDK, never internal storage. This also catches
         // another tab's replacement session before its Auth event is delivered.
         const local = await client.auth.getSession();
-        if (sdkCleared()) return failure('unauthenticated');
+        if (sdkCleared()) return failure(rejected);
         if (!unchanged() || (local.data?.session?.user?.id && local.data.session.user.id !== id)) return failure('state_changed');
         if (local.error) return failure('user_validation_failed');
         // No await between the last identity/generation check and SDK dispatch.
@@ -154,13 +167,8 @@ export function createAuthSession(client, createRecoveryClient = null) {
         if (!unchanged() && !sdkCleared()) return failure('state_changed');
         if (cleaned.error) return failure('session_cleanup_failed');
         if (unchanged()) {revision++; liveEvent = true; publish(null,'SIGNED_OUT');}
-        return failure('unauthenticated');
+        return failure(rejected);
       }
-      if (!unchanged()) return failure('state_changed');
-      if (result.error) return failure('user_validation_failed');
-      const user = userView(result.data?.user);
-      // A malformed success response is not proof that a restored session is bad.
-      if (!user) return failure(id ? 'user_validation_failed' : 'unauthenticated');
       return success({user});
     } catch {
       if (!unchanged() && !sdkCleared()) return failure('state_changed');
@@ -180,8 +188,13 @@ export function createAuthSession(client, createRecoveryClient = null) {
       if (generation !== epoch) return failure('state_changed');
       // Supabase can obfuscate existing accounts; do not disclose account existence.
       if (result.error && !['user_already_exists','email_exists'].includes(result.error.code)) return failure('sign_up_failed');
-      // Never expose returned user/session or infer confirmation from signUp data.
-      // An unexpected auto-confirmed SDK session remains owned by the SDK.
+      // Never infer confirmation from signUp data. Unexpected sessions must also
+      // pass server validation; an unconfirmed own session is cleaned locally.
+      if (result.data?.session && userView(result.data.user)) {
+        if (state.user?.id !== result.data.user.id) return failure('state_changed');
+        const verified = await validateUser(result.data.user.id);
+        if (!verified.ok && verified.error.code !== 'email_not_confirmed') return verified;
+      }
       return success({status:'confirmation_pending'});
     } catch { return failure('sign_up_failed'); }
   }
@@ -198,7 +211,7 @@ export function createAuthSession(client, createRecoveryClient = null) {
       if (result.error || !result.data?.session || !userView(result.data.user)) return failure('confirmation_failed');
       if (revision === start) {revision++; liveEvent = true; publish(result.data.user, 'SIGNED_IN');}
       else if (state.user?.id !== result.data.user.id) return failure('state_changed');
-      return success({user:state.user});
+      return await validateUser(result.data.user.id);
     } catch { return failure('confirmation_failed'); }
   }
   async function requestPasswordReset({email, redirectTo, captchaToken} = {}) {

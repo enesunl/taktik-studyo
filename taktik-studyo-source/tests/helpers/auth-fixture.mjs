@@ -16,7 +16,7 @@ export function fixture({initial = null, captchaConfigured = false, origin = 'ht
     onAuthStateChange(fn) {callback = fn; return {data:{subscription:{unsubscribe(){callback = null;}}}};},
     async getSession(){return {data:{session:current},error:null};},
     async getUser(){calls.getUser++; return f.userResult;},
-    async signUp(args){calls.signup.push(args); return f.signupResult;},
+    async signUp(args){calls.signup.push(args); if (!f.signupResult.error && f.signupResult.data?.session) f.emit('SIGNED_IN',f.signupResult.data.session); return f.signupResult;},
     async signInWithPassword(args){calls.login.push(args); if (!f.loginResult.error) f.emit('SIGNED_IN',session); return f.loginResult;},
     async verifyOtp(args){calls.verify.push(args); if (!f.verificationResult.error) f.emit('SIGNED_IN',session); return f.verificationResult;},
     async signOut(){throw Error('must not sign out');},
@@ -50,11 +50,11 @@ export function pageFixture(page = 'callback', search = '?token_hash=fake-token-
   const events = element(), historyCalls = [], calls = [];
   const f = {fields,events,calls,state:{status:'signed_out',user:null}};
   f.api = {async initialize(){return {ok:true};},getState:() => f.state,
-    async verifyEmail(token){calls.push({kind:'verify',token}); return {ok:true,profile:{status:'ready'}};},
+    async verifyEmail(token){calls.push({kind:'verify',token}); f.state = {status:'signed_in',user}; return {ok:true,userId:id,profile:{status:'ready'}};},
     async signIn(args){calls.push({kind:'login',args}); return {ok:true,profile:{status:'ready'}};},
     async signUp(args){calls.push({kind:'signup',args}); return {ok:true,status:'confirmation_pending'};}};
   f.options = {page,api:f.api,eventTarget:events,document:{getElementById:id => fields[id] || null},
-    location:{search,pathname:page === 'callback' ? '/auth-callback.html' : '/giris.html',assign(url){calls.push({kind:'navigate',url});}},
+    location:{search,pathname:page === 'callback' ? '/auth-callback.html' : '/giris.html',assign(url){calls.push({kind:'navigate',url});},replace(url){calls.push({kind:'replace',url});}},
     history:{replaceState(...args){historyCalls.push(args);}}};
   f.historyCalls = historyCalls;
   return f;

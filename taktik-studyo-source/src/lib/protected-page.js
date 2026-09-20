@@ -33,9 +33,10 @@ export function createProtectedPage({auth, storage, path, mount, show, navigate,
       try {verified = await auth.validateUser();} finally {validations--;}
       if (stopped || signingOut || logoutBlocked) return;
       const cleared = auth.getState().status === 'signed_out' && !auth.getState().user;
-      if (!verified.ok && cleared && ['unauthenticated','session_cleanup_failed'].includes(verified.error?.code)) {
+      if (!verified.ok && cleared && ['unauthenticated','email_not_confirmed','session_cleanup_failed'].includes(verified.error?.code)) {
         observed = snapshot();
         if (verified.error.code === 'unauthenticated') navigate(loginUrl(path));
+        else if (verified.error.code === 'email_not_confirmed') navigate(loginUrl(path) + '&reason=email_not_confirmed');
         else {logoutBlocked = true; show('error');}
         return;
       }

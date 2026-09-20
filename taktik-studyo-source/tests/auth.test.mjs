@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createAuthSession} from '../src/lib/auth-session.js';
 import {safeInternalRedirect} from '../src/lib/auth-redirects.js';
 
-const user = {id:'11111111-1111-4111-8111-111111111111', email:'test@example.test', user_metadata:{untrusted:true}};
+const user = {id:'11111111-1111-4111-8111-111111111111', email:'test@example.test', email_confirmed_at:'2026-09-18T10:00:00Z', user_metadata:{untrusted:true}};
 const session = {user, access_token:'private-test-token', refresh_token:'private-test-refresh'};
 const tick = () => new Promise(resolve => setTimeout(resolve, 10));
 const deferred = () => { let resolve; const promise = new Promise(r => {resolve = r;}); return {promise, resolve}; };
@@ -25,7 +25,7 @@ test('restore is single-flight, identity only, immutable and not server validati
   const first = auth.initialize(); assert.equal(auth.initialize(), first);
   assert.equal((await first).ok, true);
   assert.equal(f.calls.register, 1); assert.equal(f.calls.restore, 1); assert.equal(f.calls.validate, 0);
-  assert.deepEqual(auth.getCurrentUser(), {id:user.id, email:user.email, emailConfirmedAt:null});
+  assert.deepEqual(auth.getCurrentUser(), {id:user.id, email:user.email, emailConfirmedAt:user.email_confirmed_at});
   assert.ok(Object.isFrozen(auth.getState())); assert.ok(Object.isFrozen(auth.getCurrentUser()));
   assert.doesNotMatch(JSON.stringify(auth.getState()), /private-test|untrusted|access_token|refresh_token/);
   assert.equal((await auth.validateUser()).ok, true); assert.equal(f.calls.validate, 1);

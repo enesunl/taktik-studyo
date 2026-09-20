@@ -33,7 +33,16 @@ export function createAuthPageApi({auth, client, origin, captchaConfigured = fal
       const ready = await auth.initialize(); if (!ready.ok) return ready;
       if (auth.getCurrentUser() || auth.getState().status === 'password_recovery') return fail('existing_session');
       const result = await auth.verifyEmailToken(tokenHash);
-      return result.ok ? {ok:true,profile:await profile()} : result;
+      if (!result.ok) return result;
+      const userId = result.user.id;
+      const current = () => auth.getState().status === 'signed_in' && auth.getCurrentUser()?.id === userId;
+      if (!current()) return fail('state_changed');
+      const ownProfile = createProfileBootstrap(client, id => id === userId && current());
+      const profileResult = await ownProfile();
+      if (!current()) return fail('state_changed');
+      // Only the confirmed identity, never a token/session, reaches the UI so it
+      // can recheck the account immediately before fixed-target navigation.
+      return {ok:true,userId,profile:profileResult};
     },
     async requestPasswordReset({email,captchaToken} = {}) {
       email = typeof email === 'string' ? email.trim() : '';

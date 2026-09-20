@@ -13,7 +13,7 @@ import {createUserDraftScope,userDraftKey,legacyDraftKeys} from '../src/lib/draf
 import {writeDraft,readDraft} from '../src/lib/drafts.js';
 import {startPage} from '../src/lib/page-bootstrap.js';
 import {mountAuthPage} from '../src/lib/auth-ui.js';
-import {fixture,pageFixture} from './helpers/auth-fixture.mjs';
+import {fixture,pageFixture,user,session} from './helpers/auth-fixture.mjs';
 import {profileDocument} from './helpers/profile-fixture.mjs';
 
 const A='11111111-1111-4111-8111-111111111111',B='22222222-2222-4222-8222-222222222222';
@@ -75,7 +75,7 @@ test('safe next accepts exact paths only; duplicates and encoded external tricks
   for(const pageName of ['register','callback']){
     const f=pageFixture(pageName),page=mountAuthPage(f.options);await page.ready;
     await (pageName==='callback'?f.fields.authSubmit:f.fields.authForm).emit(pageName==='callback'?'click':'submit');
-    assert.equal(f.calls.some(c=>c.kind==='navigate'),false);page.dispose();
+    assert.deepEqual(f.calls.filter(c=>c.kind==='replace'),[{kind:'replace',url:pageName==='callback'?'/studyo.html':'/giris.html?reason=confirmation_pending'}]);page.dispose();
   }
 });
 
@@ -185,19 +185,24 @@ function bootFixture(path,initial=state(A)){
   return {...f,nodes,storage,calls,options};
 }
 
-test('actual page bootstrap wires validated studio/comparison keys and waits for opt-in imported state',async()=>{
-  for(const path of ['/studyo.html','/karsilastirma.html']){
-    const f=bootFixture(path);writeDraft(f.storage,legacyDraftKeys.main,validDraft);
-    const page=startPage(f.options);await tick();
-    if(path==='/studyo.html'){
-      assert.equal(f.calls.length,0);await f.nodes.legacyImport.children[0].children[1].emit('click');
+test('studio/comparison open directly with own drafts, never prompting, importing or deleting legacy data',async()=>{
+  for(const path of ['/studyo.html','/karsilastirma.html'])for(const existing of [false,true]){
+    const f=bootFixture(path);
+    for(const slot of ['main','left','right']){
+      writeDraft(f.storage,legacyDraftKeys[slot],validDraft);
+      if(existing)writeDraft(f.storage,userDraftKey(A,slot),{...validDraft,formation:'4-4-2'});
     }
+    const before=new Map(f.storage.data),page=startPage(f.options);
     await page.ready;assert.equal(f.nodes.protectedContent.hidden,false);assert.equal(f.calls[0][0],'catalogue');
-    if(path==='/studyo.html'){assert.equal(f.calls[1][1],userDraftKey(A,'main'));assert.equal(f.calls[1][2].team.name,'Legacy');}
+    assert.equal(f.nodes.legacyImport.children.length,0);assert.deepEqual(f.storage.data,before);
+    if(path==='/studyo.html'){
+      assert.equal(f.calls[1][1],userDraftKey(A,'main'));
+      assert.equal(f.calls[1][2]?.formation??null,existing?'4-4-2':null);
+    }
     else assert.deepEqual(f.calls[1],['comparison',userDraftKey(A,'left'),userDraftKey(A,'right')]);
     f.emit(state(B));assert.equal(f.nodes.protectedContent.hidden,true);await tick();
-    if(path==='/studyo.html')await f.nodes.legacyImport.children[0].children[2].emit('click');
-    await tick();assert.ok(f.calls.some(c=>c[1]===userDraftKey(B,path==='/studyo.html'?'main':'left')));page.dispose();
+    assert.ok(f.calls.some(c=>c[1]===userDraftKey(B,path==='/studyo.html'?'main':'left')));
+    assert.equal(f.nodes.legacyImport.children.length,0);assert.deepEqual(f.storage.data,before);page.dispose();
   }
 });
 
@@ -206,6 +211,21 @@ test('profile route is guarded and never fetches catalogue even when profile cli
     const f=bootFixture('/profil.html',initial),page=startPage(f.options);await page.ready;
     assert.equal(f.calls.filter(c=>c[0]==='catalogue').length,0);
     assert.equal(f.nodes.protectedContent.hidden,!initial.user);assert.equal(f.validations.length,initial.user?1:0);page.dispose();
+  }
+});
+
+test('legacy data never creates a startup prompt; only server-confirmed users can open studio/comparison',async()=>{
+  for(const path of ['/studyo.html','/karsilastirma.html'])for(const confirmed of [false,true]){
+    const f=bootFixture(path),real=fixture({initial:session});f.options.auth=real.auth;
+    real.userResult={data:{user:{...user,email_confirmed_at:confirmed?user.email_confirmed_at:undefined}}};
+    real.client.auth.signOut=async options=>{assert.deepEqual(options,{scope:'local'});real.emit('SIGNED_OUT',null);return {error:null};};
+    const slot=path==='/studyo.html'?'main':'left';writeDraft(f.storage,legacyDraftKeys[slot],validDraft);
+    const source=f.storage.getItem(legacyDraftKeys[slot]),page=startPage(f.options);
+    await page.ready;
+    assert.equal(f.nodes.legacyImport.children.length,0);
+    assert.equal(f.calls.some(c=>c[0]==='catalogue'),confirmed);
+    assert.equal(f.calls.some(c=>c[0]===(slot==='main'?'studio':'comparison')),confirmed);
+    assert.equal(f.storage.getItem(legacyDraftKeys[slot]),source);page.dispose();real.auth.dispose();
   }
 });
 

@@ -7,6 +7,10 @@ const messages = {
   short_password:'Şifren en az 12 karakter olmalı.',
   password_mismatch:'Şifreler eşleşmiyor.',
   sign_in_failed:'Giriş yapılamadı. Bilgilerini kontrol edip tekrar dene.',
+  email_not_confirmed:'E-posta adresini doğrulaman gerekiyor. Gelen kutundaki doğrulama bağlantısını kullan.',
+  confirmation_pending:'Kaydın oluşturuldu. Devam etmek için e-posta adresine gönderdiğimiz doğrulama bağlantısını onayla.',
+  state_changed:'Oturum değişti. Devam etmek için sayfayı yeniden aç.',
+  session_cleanup_failed:'Oturum güvenli şekilde kapatılamadı. Giriş yapmadan önce çıkış işlemini yeniden dene.',
   sign_up_failed:'Kayıt işlemi tamamlanamadı. Biraz sonra tekrar dene.',
   confirmation_invalid:'Doğrulama bağlantısı geçersiz. E-postandaki bağlantıyı yeniden aç.',
   confirmation_failed:'Doğrulama tamamlanamadı. Bağlantı kullanılmış veya süresi dolmuş olabilir.',
@@ -83,6 +87,11 @@ export function mountAuthPage({document, location, history, eventTarget, api, pa
         else error(result.error?.code);
         return;
       }
+      if (callback) {
+        const state = api.getState();
+        if (!result.userId || state.status !== 'signed_in' || state.user?.id !== result.userId) {error('state_changed'); return;}
+      }
+      if (page === 'register' && result.status !== 'confirmation_pending') {error('sign_up_failed'); return;}
       finished = true;
       message.textContent = callback
         ? 'E-posta adresin doğrulandı. Bu cihazda oturumun açıldı. Diğer cihazlarda e-posta ve şifrenle giriş yapabilirsin.'
@@ -91,6 +100,8 @@ export function mountAuthPage({document, location, history, eventTarget, api, pa
           : 'Giriş başarılı. Bu tarayıcıda oturumun açık.';
       if (result.profile) profileMessage.textContent = profileMessages[result.profile.status] || profileMessages.profile_error;
       if (page === 'login') location.assign(loginDestination(location.search));
+      else if (page === 'register') location.replace('/giris.html?reason=confirmation_pending');
+      else if (callback) location.replace('/studyo.html');
     } catch { if (!disposed) error(callback ? 'confirmation_failed' : page === 'register' ? 'sign_up_failed' : 'sign_in_failed'); }
     finally {
       busy = false; clearPasswords();
@@ -115,6 +126,10 @@ export function mountAuthPage({document, location, history, eventTarget, api, pa
       if (existingSession()) {blockExisting(); return;}
       initialized = true; button.disabled = false;
       message.textContent = callback ? 'Doğrulama yalnızca aşağıdaki düğmeye bastığında tamamlanır.' : '';
+      if (page === 'login') {
+        const reasons = new URLSearchParams(location.search).getAll('reason');
+        if (reasons.length === 1 && ['email_not_confirmed','confirmation_pending'].includes(reasons[0])) error(reasons[0]);
+      }
     } catch {tokenHash = null; if (!disposed) error('auth_unavailable');}
   })();
   return Object.freeze({ready,dispose});

@@ -144,9 +144,9 @@ test('email callback requires exactly token_hash + type=email and sanitizes vali
 test('verifyOtp uses only token_hash/type, profiles server-verified user and exposes no session', async () => {
   const f = fixture();
   try {
-    assert.deepEqual(await f.api.verifyEmail('a+/-valid-token'),{ok:true,profile:{ok:true,status:'ready'}});
+    assert.deepEqual(await f.api.verifyEmail('a+/-valid-token'),{ok:true,userId:user.id,profile:{ok:true,status:'ready'}});
     assert.deepEqual(f.calls.verify,[{token_hash:'a+/-valid-token',type:'email'}]);
-    assert.equal(f.calls.getUser,1); assert.equal(f.auth.getState().status,'signed_in');
+    assert.equal(f.calls.getUser,2); assert.equal(f.auth.getState().status,'signed_in');
     assert.doesNotMatch(JSON.stringify(f.auth.getState()),/fake-access|fake-refresh|user_metadata/);
   } finally {f.auth.dispose();}
 });
@@ -173,7 +173,7 @@ test('login validates input, trims only email and returns profile success withou
     assert.equal(f.calls.login.length,0);
     assert.deepEqual(await f.api.signIn(credentials),{ok:true,profile:{ok:true,status:'ready'}});
     assert.deepEqual(f.calls.login,[{email:credentials.email.trim(),password:credentials.password}]);
-    assert.equal(f.calls.getUser,1);
+    assert.equal(f.calls.getUser,2);
   } finally {f.auth.dispose();}
 });
 
@@ -184,7 +184,7 @@ test('login/confirmation profile failure or conflict never reverses Auth success
     f.insertResult = {error:{code:'23505',message:'private'}};
     try {
       assert.deepEqual(await f.api[operation](operation === 'signIn' ? credentials : 'token'),
-        {ok:true,profile:{ok:false,status:conflict ? 'username_conflict' : 'profile_error'}});
+        {ok:true,...(operation === 'verifyEmail' ? {userId:user.id} : {}),profile:{ok:false,status:conflict ? 'username_conflict' : 'profile_error'}});
       assert.equal(f.auth.getState().status,'signed_in');
     } finally {f.auth.dispose();}
   }
