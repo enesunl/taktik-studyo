@@ -9,7 +9,7 @@ production configuration change is included.
 | --- | --- |
 | `/`, `/index.html` | Public landing, Auth-aware navigation |
 | `/?lineup=<UUID>` | Public shared lineup, no login requirement |
-| `/lineup/<UUID>` | Legacy public shared lineup, same parser and draft contract |
+| `/lineup/<UUID>` | Legacy public shared lineup, same parser and readonly snapshot viewer |
 | `/giris.html`, `/kayit.html` | Public login/registration |
 | `/auth-callback.html` | Public email confirmation |
 | `/sifremi-unuttum.html`, `/sifre-yenile.html` | Public password recovery |
@@ -34,7 +34,7 @@ synchronously in its existing entry path, before asynchronous Auth calls.
 The normal index board markup is preserved in `studyo.html`'s template. Its mount
 clones the template into a dedicated root and uses the existing board engine.
 Index retains a hidden public shared viewer alongside the landing container;
-the public shared engine/draft behavior is unchanged.
+public shares use the board's readonly renderer without draft persistence.
 
 `protected-page.js` is the single protected lifecycle:
 
@@ -114,7 +114,7 @@ automatic studio navigation.
 | Main | `taktik:draft:<USER_ID>:main:v2` |
 | Comparison left | `taktik:draft:<USER_ID>:comparison:left:v2` |
 | Comparison right | `taktik:draft:<USER_ID>:comparison:right:v2` |
-| Public shared, signed in or out | `taktik:draft:shared:<UUID>:v1` |
+| Public shared, signed in or out | None; always the server snapshot, readonly |
 
 The guard directly reuses Phase 3 `createUserDraftScope`, its contexts, writers,
 validation and importer. The earlier snapshot-only `bindAuthenticatedDrafts`
@@ -124,7 +124,7 @@ Studio/comparison startup no longer calls `chooseLegacyDrafts` or shows the lega
 import decision screen. After validation, each board opens its own user-scoped
 draft, or its default state if none exists. Device-wide legacy drafts are neither
 automatically imported nor deleted, including on account switches. Auth/email
-confirmation gates and public shared draft keys remain unchanged.
+confirmation gates remain unchanged. Public shared views never restore/save drafts.
 
 The existing `legacy-import-ui.js` helper and scope importer remain available as
 source utilities with their unit tests; no startup UI currently invokes them.
@@ -134,7 +134,8 @@ rechecks the destination before writing. This is not atomic localStorage CAS.
 ## Public share and catalogue independence
 
 Public share bootstrap never consults the Auth guard, profile bootstrap or user
-draft importer. Logged-in status does not change its public shared draft key.
+draft importer. Logged-in status does not change its readonly behavior. Legacy
+shared-ID drafts are neither read, written nor deleted; catalogue loading is unnecessary.
 `GET /functions/v1/lineups?id=...` still uses the direct publishable-apikey fetch,
 without an injected Authorization header or direct browser `shared_lineups` query.
 Auth initialization failure cannot gate this flow.

@@ -1,6 +1,9 @@
 'use strict';
 window.createTacticsBoard=function(root=document,options={}){
+const mode=options.mode??'edit',readonly=mode==='readonly';
+if(!['edit','readonly'].includes(mode)||readonly&&!options.initialState)throw new Error('Invalid board mode or snapshot');
 const scoped=Object.hasOwn(options,'draftContext'),draftContext=options.draftContext;
+if(readonly&&scoped)throw new Error('Readonly boards cannot own draft contexts');
 if(scoped&&(root===document||options.storageKey!==undefined||!draftContext?.isActive()))throw new Error('Invalid scoped board context');
 let disposed=false,cancelGesture=null,resizeObserver=null,offDraftScope=()=>{},disposeSharing=()=>{};
 const teams=window.TAKTIK_TEAMS || [
@@ -14,17 +17,17 @@ let state={team:{...(teams.find(t=>t.name===options.team)||teams[0])},formation:
 function coordinates(shape){const rows=shape.split('-').map(Number),result=[{x:50,y:89,role:'KL'}];rows.forEach((n,row)=>{const y=rows.length===2?65-row*42:73-row*(56/(rows.length-1));for(let i=0;i<n;i++){let role=row===0?(i===0&&n===4?'SLB':i===n-1&&n===4?'SĞB':'STP'):row===rows.length-1?(n>=3?(i===0?'SLK':i===n-1?'SĞK':'SF'):'SF'):rows.length>=4&&row===1?'ÖL':row===rows.length-2&&rows.length>=4?'OO':'MO';result.push({x:n===1?50:n===2?34+i*32:16+i*(68/(n-1)),y,role});}});return result;}
 const roleNames={KL:'Kaleci',STP:'Stoper',SLB:'Sol bek',SĞB:'Sağ bek',ÖL:'Ön libero',MO:'Orta saha',OO:'Oyun kurucu',SLK:'Sol kanat',SĞK:'Sağ kanat',SF:'Forvet'};
 function initialPlayers(shape){return coordinates(shape).map((p,i)=>({...p,id:i,number:i===0?1:[3,4,5,2,8,6,10,7,9,11][i-1],name:roleNames[p.role],renamed:false}));}
-state.players=teamPlayers(state.team,state.formation);
+if(!readonly)state.players=teamPlayers(state.team,state.formation);
 const draftKey=scoped?null:options.storageKey || 'taktik:draft:main:v1';
 let draftTimer=null;
 const scopedWriter=scoped?draftContext.createWriter({getState:()=>state,canSave:()=>!disposed&&activeGesture===null,eventTarget:window}):null;
-const restored=scoped?draftContext.read():window.TAKTIK_DRAFTS?.read(draftKey);
+const restored=readonly?null:scoped?draftContext.read():window.TAKTIK_DRAFTS?.read(draftKey);
 if(options.initialState)state=JSON.parse(JSON.stringify(options.initialState));
 if(restored)state=restored;
 if(!shapes.includes(state.formation))shapes.push(state.formation);
 function persistDraft(){if(disposed)return;if(scoped){scopedWriter.schedule();return;}clearTimeout(draftTimer);draftTimer=setTimeout(()=>{if(!disposed&&activeGesture===null)window.TAKTIK_DRAFTS?.write(draftKey,state);},250);}
 const saveOnPagehide=()=>{clearTimeout(draftTimer);if(!disposed&&activeGesture===null)window.TAKTIK_DRAFTS?.write(draftKey,state);};
-if(!scoped)window.addEventListener('pagehide',saveOnPagehide);
+if(!readonly&&!scoped)window.addEventListener('pagehide',saveOnPagehide);
 
 
 function squadFor(team=state.team){const rosters=window.TAKTIK_ROSTERS?.teams;return rosters&&Object.hasOwn(rosters,team.name)?rosters[team.name]:null;}
@@ -76,7 +79,7 @@ function selectTeam(team){snapshot();state.team={...team};state.players=teamPlay
 function renderFormations(){$('formationCount').textContent=shapes.length;$('formationList').replaceChildren();const list=filter==='popular'?shapes.slice(0,6):shapes;list.forEach(shape=>{const b=document.createElement('button');b.className='formation-card'+(shape===state.formation?' active':'');b.setAttribute('aria-label',shape+' dizilişi');b.setAttribute('aria-pressed',shape===state.formation);const mini=document.createElement('span');mini.className='mini-pitch';mini.setAttribute('aria-hidden','true');coordinates(shape).forEach(p=>{const dot=document.createElement('i');dot.className='mini-player';dot.style.left=p.x+'%';dot.style.top=p.y+'%';mini.append(dot);});const label=document.createElement('span');label.textContent=shape;b.append(mini,label);b.onclick=()=>applyFormation(shape);$('formationList').append(b);});}
 function applyFormation(shape){snapshot();const coords=coordinates(shape);state.players=state.players.map((p,i)=>({...p,...coords[i],name:p.athleteId||p.renamed?p.name:roleNames[coords[i].role]}));state.formation=shape;state.customized=false;render();announce(shape+' dizilişi uygulandı.');}
 function updatePlayerElement(button,p){button.style.left=p.x+'%';button.style.top=p.y+'%';button.setAttribute('aria-label',`${p.number} numara ${p.name}, ${p.role}. Düzenlemek için seç, hareket için ok tuşlarını kullan.`);button.setAttribute('aria-pressed',p.id===selected);button.className='player'+(p.id===selected?' selected':'')+(p.role==='KL'?' goalkeeper':'');button.querySelector('b').textContent=p.number??'–';button.querySelector('.player-name').textContent=p.name;button.querySelector('.player-role').textContent=p.role;button.title=p.name;const image=button.querySelector('.player-face');const fallback=button.querySelector('.face-fallback');const src=p.photo||'';if(image.dataset.source!==src){image.dataset.source=src;image.hidden=!src;fallback.hidden=!!src;if(src){image.src=src;image.alt=p.name;image.onerror=()=>{image.hidden=true;fallback.hidden=false;};}else image.removeAttribute('src');}fallback.textContent=p.name.split(' ').map(n=>n[0]).filter(Boolean).slice(0,2).join('');}
-function renderPlayers(){$('players').replaceChildren();state.players.forEach(p=>{const b=document.createElement('button');b.type='button';b.dataset.id=p.id;b.innerHTML='<span class="player-disc"><span class="face-fallback"></span><img class="player-face" draggable="false" hidden><b class="shirt-number"></b></span><span class="player-name"></span><span class="player-role"></span>';updatePlayerElement(b,p);b.addEventListener('pointerdown',onPointerDown);b.addEventListener('keydown',onPlayerKey);b.addEventListener('click',()=>selectPlayer(p.id));$('players').append(b);});}
+function renderPlayers(){$('players').replaceChildren();state.players.forEach(p=>{const b=document.createElement(readonly?'div':'button');if(!readonly)b.type='button';b.dataset.id=p.id;b.innerHTML='<span class="player-disc"><span class="face-fallback"></span><img class="player-face" draggable="false" hidden><b class="shirt-number"></b></span><span class="player-name"></span><span class="player-role"></span>';updatePlayerElement(b,p);if(readonly){b.removeAttribute('aria-pressed');b.setAttribute('aria-label',`${p.number??'–'} numara ${p.name}, ${p.role}`);}else{b.addEventListener('pointerdown',onPointerDown);b.addEventListener('keydown',onPlayerKey);b.addEventListener('click',()=>selectPlayer(p.id));}$('players').append(b);});}
 function selectPlayer(id){selected=id;root.querySelectorAll('.player').forEach(b=>{b.classList.toggle('selected',Number(b.dataset.id)===id);b.setAttribute('aria-pressed',Number(b.dataset.id)===id);});renderEditor();renderSquad();}
 function renderEditor(){const p=state.players.find(p=>p.id===selected);$('noPlayer').hidden=!!p;$('playerForm').hidden=!p;if(!p)return;$('selectedNumber').textContent=p.number;$('selectedRole').textContent=roleNames[p.role];$('playerName').value=p.name;$('playerNumber').value=p.number;$('playerRole').value=p.role;renderRosterSelect(p);}
 function clamp(value,min,max){return Math.min(max,Math.max(min,value));}
@@ -150,6 +153,18 @@ function onDrawingStart(e){
  };
  cancelGesture=()=>end({type:'pointercancel'});
  drawingCanvas.addEventListener('pointermove',move);drawingCanvas.addEventListener('pointerup',end);drawingCanvas.addEventListener('pointercancel',end);drawingCanvas.addEventListener('lostpointercapture',end);
+}
+// Return before installing any editor controls, tools, gestures or persistence.
+if(readonly){
+ const surface=root===document?document.documentElement:root;
+ surface.classList.add('readonly-board');
+ surface.style.setProperty('--team',state.team.color);surface.style.setProperty('--team2',state.team.color2);
+ $('activeTeam').textContent=state.team.name;badge($('activeBadge'),state.team);
+ $('boardFormation').textContent=state.formation;
+ renderPlayers();renderDrawing();
+ if(typeof ResizeObserver!=='undefined'){resizeObserver=new ResizeObserver(renderDrawing);resizeObserver.observe(pitch);}else window.addEventListener('resize',renderDrawing);
+ return Object.freeze({mode,getState(){if(disposed)throw new Error('Inactive board context');return JSON.parse(JSON.stringify(state));},
+  dispose(){if(disposed)return;disposed=true;resizeObserver?.disconnect();window.removeEventListener('resize',renderDrawing);$('players').replaceChildren();drawingCanvas.getContext?.('2d')?.clearRect(0,0,drawingCanvas.width,drawingCanvas.height);}});
 }
 $('drawingToggle').onclick=()=>setDrawingMode(drawingMode==='move'?'pen':'move');$('penTool').onclick=()=>setDrawingMode('pen');$('eraserTool').onclick=()=>setDrawingMode('eraser');$('finishDrawing').onclick=()=>setDrawingMode('move');
 $('drawingColor').addEventListener('input',e=>{drawingColor=e.target.value;setDrawingMode('pen');});drawingCanvas.addEventListener('pointerdown',onDrawingStart);
@@ -231,6 +246,7 @@ function disposeScopedBoard(){
  root.replaceChildren();history=[];
 }
 const api={
+ mode,
  getState(){assertBoardActive();return JSON.parse(JSON.stringify(state));},
  getTeams:()=>teams.map(t=>({...t})),
  getFormations:()=>[...shapes],
@@ -248,7 +264,7 @@ window.TAKTIK_APP={
   const fragment=document.getElementById('studioTemplate').content.cloneNode(true);
   for(const element of fragment.querySelectorAll('[id]'))element.dataset.control=element.id;
   root.append(fragment);
-  const board=window.createTacticsBoard(root,{draftContext:scope.context('main')});
+  const board=window.createTacticsBoard(root,{mode:'edit',draftContext:scope.context('main')});
   const link=document.getElementById('comparisonLink');
   const chooseTeam=()=>{link.href='karsilastirma.html?sol='+encodeURIComponent(board.getState().team.name);};
   link?.addEventListener('click',chooseTeam);
@@ -256,18 +272,19 @@ window.TAKTIK_APP={
  },
  async mountShared(route){
   const landing=document.getElementById('landing'),viewer=document.getElementById('sharedViewer');
+  const boardRoot=document.getElementById('sharedBoard'),status=document.getElementById('sharedStatus');
   if(landing)landing.hidden=true;if(viewer)viewer.hidden=false;
+  boardRoot.hidden=true;status.hidden=false;status.textContent='Kadro yükleniyor…';
   try{
    if(route.kind!=='shared')throw new Error('Invalid share');
-   await window.TAKTIK_BACKEND.loadCatalogue();
    const state=await window.TAKTIK_BACKEND.readLineup(route.id);
-   const heading=document.querySelector('.page-heading h1');if(heading)heading.textContent='Paylaşılan kadro.';
-   const note=document.querySelector('.eyebrow');if(note)note.textContent='PAYLAŞILAN KADRONUN YEREL KOPYASI';
-   window.createTacticsBoard(document,{initialState:state,storageKey:'taktik:draft:shared:'+route.id+':v1'});
+   boardRoot.hidden=false;
+   const board=window.createTacticsBoard(boardRoot,{mode:'readonly',initialState:state});
+   status.hidden=true;
+   return board;
   }catch{
-   const workspace=document.querySelector('.workspace');if(workspace)workspace.style.display='none';
-   const heading=document.querySelector('.page-heading h1');if(heading)heading.textContent='Kadro yüklenemedi.';
-   const note=document.querySelector('.eyebrow');if(note)note.textContent='BAĞLANTI GEÇERSİZ, SÜRESİ DOLMUŞ VEYA ŞU ANDA ERİŞİLEMİYOR.';
+   boardRoot.hidden=true;status.hidden=false;
+   status.textContent='Kadro yüklenemedi. Bağlantı geçersiz, süresi dolmuş veya şu anda erişilemiyor.';
   }
  }
 };

@@ -88,9 +88,10 @@ lineup parameters show the existing load error without requesting a shared lineu
 New links require no deep-link rewrite. Legacy `/lineup/<id>` links still use
 `_redirects` (or the local server rewrite); a query parameter takes precedence and
 an invalid query never falls back to the legacy path. A root base URL resolves
-all existing assets/PNG paths. The same board engine loads the snapshot; local
-edits keep the existing shared-ID draft key, leaving main and comparison drafts
-intact. Shared DB snapshots remain immutable to clients. This URL change is local
+all existing assets/PNG paths. The same board engine renders the server snapshot
+in explicit `readonly` mode, without editor controls, mutation listeners or draft
+reads/writes. Old shared-ID drafts are ignored without deletion; main and comparison
+drafts remain intact. Shared DB snapshots remain immutable to clients. This change is local
 and has not been deployed to production.
 
 The Site remains owner-private. Opening shared links requires site access; this

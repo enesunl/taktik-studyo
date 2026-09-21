@@ -91,16 +91,41 @@ console.log('PASS: bench drop substitutes at target slot, invalid drops do nothi
   const base=scope.context(slot);
   return {...base,createWriter:options=>base.createWriter({...options,setTimer:context.setTimeout,clearTimer:context.clearTimeout})};
  };
- // The exact public shared key still restores, debounces and saves on pagehide.
+ // Public snapshots ignore legacy shared drafts and install no mutation paths.
  const sharedKey='taktik:draft:shared:'+userA+':v1';
- const publicBoard=context.window.createTacticsBoard(new Element(),{initialState:sharedState,storageKey:sharedKey});
- publicBoard.applyFormation('4-4-2');flush();
- const publicReload=context.window.createTacticsBoard(new Element(),{storageKey:sharedKey});
- assert.equal(publicReload.getState().formation,'4-4-2');
- publicReload.applyFormation('3-5-2');pagehide();
- assert.equal(readDraft(storage,sharedKey).formation,'3-5-2');
- console.log('PASS: exact public shared v1 key preserves restore, debounce and pagehide behavior.');
- const pagehideBefore=windowEvents.get('pagehide').size,resizeBefore=windowEvents.get('resize').size;
+ writeDraft(storage,sharedKey,{...sharedState,formation:'4-4-2'});
+ flush(); // Finish unrelated editable-board timers before observing the viewer.
+ const oldDraft=saved.get(sharedKey),drafts=context.window.TAKTIK_DRAFTS;
+ let reads=0,writes=0,changes=0;
+ context.window.TAKTIK_DRAFTS={read(){reads++;return {...sharedState,formation:'4-4-2'};},write(){writes++;}};
+ const publicRoot=new Element(),snapshot=JSON.parse(JSON.stringify(sharedState));
+ snapshot.players[0].x=37;snapshot.drawings=[{tool:'pen',color:'#ff3322',width:4,points:[{x:.25,y:.3},{x:.75,y:.8}]}];
+ const original=JSON.stringify(snapshot),eventsBefore=windowEvents.get('pagehide')?.size||0;
+ const publicBoard=context.window.createTacticsBoard(publicRoot,{mode:'readonly',initialState:snapshot,onChange(){changes++;}});
+ assert.equal(publicBoard.mode,'readonly');assert.equal(JSON.stringify(publicBoard.getState()),original);
+ assert.equal(publicBoard.selectTeam,undefined);assert.equal(publicBoard.applyFormation,undefined);
+ assert.equal(publicRoot.listeners.keydown,undefined);
+ const viewPlayer=control(publicRoot,'players').children[0],viewCanvas=control(publicRoot,'drawingCanvas');
+ assert.equal(viewPlayer.style.left,'37%');assert.equal(viewPlayer['aria-pressed'],undefined);
+ for(const target of [viewPlayer,viewCanvas,publicRoot]){
+  assert.deepEqual(Object.keys(target.listeners),[]);
+  for(const event of ['pointerdown','pointermove','pointerup','touchstart','keydown','click'])
+   target.listeners[event]?.({key:'ArrowRight',button:0,pointerId:90,currentTarget:target,clientX:180,clientY:180,preventDefault(){}});
+ }
+ for(const id of ['teamSearch','squadList','rosterSelect','playerForm','undo','reset','drawingToggle','shareLineup']){
+  const node=control(publicRoot,id);assert.equal(node.onclick,undefined);assert.equal(node.onchange,undefined);assert.equal(node.onsubmit,undefined);
+ }
+ assert.equal(windowEvents.get('pagehide')?.size||0,eventsBefore);
+ snapshot.players[0].x=80;publicBoard.getState().players[0].x=90;
+ flush();pagehide();assert.equal(JSON.stringify(publicBoard.getState()),original);
+ const publicReload=context.window.createTacticsBoard(new Element(),{mode:'readonly',initialState:JSON.parse(original)});
+ assert.equal(JSON.stringify(publicReload.getState()),original);
+ assert.equal(reads,0);assert.equal(writes,0);assert.equal(changes,0);assert.equal(saved.get(sharedKey),oldDraft);
+ publicBoard.dispose();publicReload.dispose();assert.equal(publicRoot.removed,undefined);
+ assert.throws(()=>publicBoard.getState(),/Inactive/);
+ context.window.TAKTIK_DRAFTS=drafts;
+ console.log('PASS: readonly shared snapshots preserve positions/drawings, ignore legacy drafts, expose no mutation APIs/listeners and never persist on pagehide.');
+ const pagehideBefore=windowEvents.get('pagehide')?.size||0,resizeBefore=windowEvents.get('resize')?.size||0;
  const scopeA=createUserDraftScope({userId:userA,storage});
  let scopedChanges=0,scopedSchedules=0;
  const draftContextA=scopedContext(scopeA,'main'),createScopedWriter=draftContextA.createWriter;
@@ -145,10 +170,13 @@ console.log('PASS: bench drop substitutes at target slot, invalid drops do nothi
  console.log('PASS: scoped real boards isolate accounts/slots and dispose timers, pagehide, root/resize listeners, gestures and expanded UI.');
 
  // Exercise the actual new route mount APIs with the real board engine.
+ const createBoard=context.window.createTacticsBoard,editorModes=[];
+ context.window.createTacticsBoard=(root,options)=>{editorModes.push(options.mode);return createBoard(root,options);};
  const nodes=new Map();document.getElementById=id=>{if(!nodes.has(id))nodes.set(id,new Element());return nodes.get(id);};
  document.getElementById('studioTemplate').content=new Element();
  const routedRoot=new Element(),routedScope=createUserDraftScope({userId:userA,storage});
  const stopStudio=context.window.TAKTIK_APP.mountStudio(routedRoot,{context:slot=>scopedContext(routedScope,slot)});
+ assert.deepEqual(editorModes,['edit']);
  assert.equal(control(routedRoot,'activeTeam').textContent,readDraft(storage,userDraftKey(userA,'main')).team.name);
  document.getElementById('comparisonLink').listeners.click();assert.match(document.getElementById('comparisonLink').href,/^karsilastirma.html\?sol=/);
  control(routedRoot,'resetPositions').onclick?.();
@@ -159,6 +187,7 @@ console.log('PASS: bench drop substitutes at target slot, invalid drops do nothi
  assert.equal(document.getElementById('leftBoard').children.length,0,'comparison definition cannot auto-mount');
  const comparisonScope=createUserDraftScope({userId:userB,storage});
  const stopComparison=context.window.TAKTIK_COMPARISON.mount({context:slot=>scopedContext(comparisonScope,slot)});
+ assert.deepEqual(editorModes,['edit','edit','edit']);context.window.createTacticsBoard=createBoard;
  assert.equal(document.getElementById('leftFormation').value,'3-4-3');assert.equal(document.getElementById('rightFormation').value,'4-2-3-1');
  document.getElementById('leftFormation').value='4-4-2';document.getElementById('leftFormation').listeners.change();flush();
  assert.equal(readDraft(storage,userDraftKey(userB,'left')).formation,'4-4-2');assert.equal(readDraft(storage,userDraftKey(userB,'right')).formation,'4-2-3-1');

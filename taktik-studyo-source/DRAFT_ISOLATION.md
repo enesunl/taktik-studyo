@@ -23,8 +23,9 @@ Production callers must obtain the ID from Auth user.id, not DOM, URL or metadat
 Payload remains `{version:1,savedAt,state}` with existing validation and size limits.
 
 `legacyDraftKeys` contains only the three existing main/comparison v1 keys.
-`taktik:draft:shared:<UUID>:v1` stays on its existing code path for both signed-in
-and signed-out visitors. It is neither imported nor enumerated by these helpers.
+Public shared boards use explicit `readonly` mode and never read or write drafts,
+regardless of login state. Old `taktik:draft:shared:<UUID>:v1` entries are ignored
+and left untouched; these helpers neither import nor enumerate them.
 
 ## Scope and explicit legacy import
 

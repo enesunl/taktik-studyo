@@ -13,35 +13,35 @@ const snapshot={team:{name:'Shared team'},formation:'4-3-3',players:[],drawings:
 // initial await; board internals/localStorage are covered by board-regression.cjs.
 async function load(url,{page,readError,backendMissing=false,ready=Promise.resolve()}={}){
  const location=new URL(url,'https://taktikstudyo.com');
- const nodes={'.workspace':{style:{}},'.page-heading h1':{textContent:'Taktik tahtası.'},'.eyebrow':{textContent:'Normal'}};
- const comparisonLink={addEventListener(_name,fn){this.click=fn;}};
- const containers={landing:{hidden:false},sharedViewer:{hidden:true}};
- const document={body:{dataset:{page}},querySelector:selector=>nodes[selector],getElementById:id=>containers[id] || comparisonLink};
+ const containers={landing:{hidden:false},sharedViewer:{hidden:true},sharedBoard:{hidden:true},sharedStatus:{hidden:false,textContent:''}};
+ const document={body:{dataset:{page}},getElementById:id=>containers[id]};
  const reads=[],mounts=[];
  const window={location};
- if(!backendMissing)window.TAKTIK_BACKEND={loadCatalogue:()=>ready,async readLineup(value){reads.push(value);if(readError)throw readError;return snapshot;}};
+ if(!backendMissing)window.TAKTIK_BACKEND={loadCatalogue(){assert.fail('snapshot viewer must not load catalogue');},async readLineup(value){await ready;reads.push(value);if(readError)throw readError;return snapshot;}};
  const context=vm.createContext({window,document,URLSearchParams});
  vm.runInContext(source,context);
- window.createTacticsBoard=(root,options)=>{assert.equal(root,document);mounts.push(options);return {getState:()=>snapshot};};
+ window.createTacticsBoard=(root,options)=>{assert.equal(root,containers.sharedBoard);mounts.push(options);return {getState:()=>snapshot};};
  const route=resolvePage(location);
  if(['shared','share_error'].includes(route.kind)) await window.TAKTIK_APP.mountShared(route);
- return {reads,mounts,nodes,comparisonLink,containers};
+ return {reads,mounts,containers};
 }
 
 function assertFailed(result){
  assert.equal(result.mounts.length,0);
- assert.equal(result.nodes['.workspace'].style.display,'none');
- assert.equal(result.nodes['.page-heading h1'].textContent,'Kadro yüklenemedi.');
+ assert.equal(result.containers.sharedBoard.hidden,true);
+ assert.match(result.containers.sharedStatus.textContent,/Kadro yüklenemedi/);
 }
 
-test('query links load through readLineup and retain the shared-ID draft key on reload',async()=>{
+test('query links always read the server snapshot and mount readonly without a draft key',async()=>{
  for(let attempt=0;attempt<2;attempt++){
   const result=await load('/?utm_source=test&lineup='+id);
   assert.deepEqual(result.reads,[id]);assert.equal(result.mounts.length,1);
   assert.equal(result.mounts[0].initialState,snapshot);
-  assert.equal(result.mounts[0].storageKey,'taktik:draft:shared:'+id+':v1');
-  assert.equal(result.nodes['.page-heading h1'].textContent,'Paylaşılan kadro.');
-  assert.equal(result.nodes['.workspace'].style.display,undefined);
+  assert.equal(result.mounts[0].mode,'readonly');
+  assert.equal('storageKey' in result.mounts[0],false);
+  assert.equal('draftContext' in result.mounts[0],false);
+  assert.equal(result.containers.sharedBoard.hidden,false);
+  assert.equal(result.containers.sharedStatus.hidden,true);
  }
 });
 
@@ -67,7 +67,8 @@ test('invalid, empty, duplicate and non-v4 query IDs fail before any shared-line
 test('legacy paths still work and valid query IDs take precedence',async()=>{
  for(const path of ['/lineup/'+id,'/lineup/'+id+'/']){
   const result=await load(path);assert.deepEqual(result.reads,[id]);
-  assert.equal(result.mounts[0].storageKey,'taktik:draft:shared:'+id+':v1');
+  assert.equal(result.mounts[0].mode,'readonly');
+  assert.equal('storageKey' in result.mounts[0],false);
  }
  const result=await load('/lineup/'+otherId+'?lineup='+id);
  assert.deepEqual(result.reads,[id]);assert.equal(result.mounts[0].initialState,snapshot);
@@ -89,4 +90,13 @@ test('startup waits for backend readiness before reading or mounting',async()=>{
  const pending=load('/?lineup='+id,{ready}).then(result=>{finished=true;return result;});
  await Promise.resolve();assert.equal(finished,false);
  release();const result=await pending;assert.deepEqual(result.reads,[id]);assert.equal(result.mounts.length,1);
+});
+
+test('shared HTML contains a pitch-only shell with no editor or account controls',()=>{
+ const html=readFileSync(new URL('../dist/index.html',import.meta.url),'utf8');
+ const viewer=html.split('<div id="sharedViewer" hidden>')[1];
+ assert.match(viewer,/id="sharedBoard"/);assert.match(viewer,/data-control="pitch"/);
+ assert.match(viewer,/data-control="drawingCanvas"/);
+ assert.match(viewer,/>Paylaşılan kadro<\/h1>/);assert.match(viewer,/Kadro yükleniyor…/);
+ assert.doesNotMatch(viewer,/<(?:button|form|select|aside|dialog)\b|teamSearch|teamList|formationList|squadPanel|squadList|playerForm|drawingTools|shareLineup|comparisonLink|profil\.html|karsilastirma\.html|signOut|tabindex="0"/);
 });
