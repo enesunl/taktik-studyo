@@ -1,6 +1,6 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert');
 class Element{
- constructor(){this.children=[];this.dataset={};this.style={setProperty(){}};this.classList={add(){},remove(){},toggle(){}};this.value='';this.listeners={};this.nodes={};this.offsetHeight=84;}
+ constructor(){this.children=[];this.dataset={};this.style={setProperty(k,v){this[k]=v;}};this.classList={add(){},remove(){},toggle(){}};this.value='';this.listeners={};this.nodes={};this.offsetHeight=84;}
  append(...args){this.children.push(...args)}replaceChildren(...args){this.children=args}setAttribute(k,v){this[k]=v}removeAttribute(k){delete this[k]}addEventListener(k,fn){this.listeners[k]=fn}removeEventListener(k,fn){if(this.listeners[k]===fn)delete this.listeners[k]}querySelector(q){return this.nodes[q]??=new Element()}querySelectorAll(){return []}getBoundingClientRect(){return {left:0,top:0,width:400,height:520}}focus(){}getContext(){return this.ctx??={setTransform(){},clearRect(){},beginPath(){},arc(){},fill(){},moveTo(){},lineTo(){},stroke(){}}}setPointerCapture(){}showModal(){this.open=true}close(){this.open=false}before(node){this.placeholder=node;node.origin=this}replaceWith(node){this.replacement=node}cloneNode(){return new Element()}remove(){this.removed=true}
 }
 const document={body:{dataset:{page:'comparison'},style:{overflow:''},append(){}},createElement:()=>new Element(),createComment:()=>new Element(),documentElement:new Element(),querySelectorAll:()=>[],addEventListener(){}};
@@ -10,8 +10,23 @@ if(process.env.LIVE_CATALOGUE_FILE){const live=JSON.parse(fs.readFileSync(proces
 vm.runInContext(fs.readFileSync(dir+'app.js','utf8'),context);
 const leftRoot=new Element(),rightRoot=new Element();const left=context.window.createTacticsBoard(leftRoot,{team:'Galatasaray'}),right=context.window.createTacticsBoard(rightRoot,{team:'Fenerbahçe'});
 const control=(root,id)=>root.querySelector('[data-control="'+id+'"]');
+function assertJerseys(board,root){
+ const state=board.getState();
+ assert.equal(root.style['--team'],state.team.color);assert.equal(root.style['--team2'],state.team.color2);
+ assert.equal(root.style['--jersey-number'],context.jerseyNumberColor(state.team.color));
+ control(root,'players').children.forEach((marker,i)=>{
+  assert.deepEqual(marker.children.map(n=>n.className),['player-jersey','player-name','player-role']);
+  assert.equal(marker.children[0].children[0].textContent,state.players[i].number??'–');
+  assert.equal(marker.querySelector('.player-name').textContent,state.players[i].name);
+  assert.equal(marker.querySelector('.player-role').textContent,state.players[i].role);
+  assert.equal(marker.title,state.players[i].name);
+  assert.match(marker.children[0].innerHTML,/aria-hidden="true"/);assert.doesNotMatch(marker.children[0].innerHTML,/<img/);
+ });
+}
+assertJerseys(left,leftRoot);assertJerseys(right,rightRoot);
 const originalRight=JSON.stringify(right.getState());left.selectTeam('Beşiktaş');left.applyFormation('3-5-2');assert.equal(JSON.stringify(right.getState()),originalRight);
 const originalLeft=JSON.stringify(left.getState());right.selectTeam('Trabzonspor');right.applyFormation('4-2-3-1');assert.equal(JSON.stringify(left.getState()),originalLeft);
+assertJerseys(left,leftRoot);assertJerseys(right,rightRoot);
 control(leftRoot,'players').children[0].listeners.click();
 const initial=left.getState(),replacement=context.window.TAKTIK_ROSTERS.teams['Beşiktaş'].players.find(a=>!initial.players.some(p=>p.athleteId===a.id));
 control(leftRoot,'rosterSelect').onchange({target:{value:replacement.id}});assert.equal(left.getState().players[0].athleteId,replacement.id);assert.equal(new Set(left.getState().players.map(p=>p.athleteId)).size,11);
@@ -91,6 +106,8 @@ console.log('PASS: bench drop substitutes at target slot, invalid drops do nothi
   assert.equal(control(root,'squadTitle').textContent,'Yedek Oyuncular');
  }
  assertReserves(benchBoard,benchRoot);
+ assertJerseys(benchBoard,benchRoot);
+ for(const item of control(benchRoot,'squadList').children){assert.equal(item.children[0].className,'player-jersey');assert.match(item['aria-label'],/numara/);}
  const starter=benchBoard.getState().players[0];
  control(benchRoot,'players').children[0].listeners.click();
  assert.equal(control(benchRoot,'playerName').value,starter.name);
@@ -104,6 +121,7 @@ console.log('PASS: bench drop substitutes at target slot, invalid drops do nothi
  assert.equal(benchBoard.getState().players[0].name,'Edited starter');assertReserves(benchBoard,benchRoot);
  flush();const restoredBenchRoot=new Element(),restoredBench=context.window.createTacticsBoard(restoredBenchRoot,{benchOnly:true,storageKey:'test:bench'});
  assert.equal(JSON.stringify(restoredBench.getState()),JSON.stringify(benchBoard.getState()));assertReserves(restoredBench,restoredBenchRoot);
+ assertJerseys(restoredBench,restoredBenchRoot);
  benchBoard.selectTeam('Fenerbahçe');assertReserves(benchBoard,benchRoot);
  assert.equal(JSON.stringify(context.window.TAKTIK_ROSTERS),rosterSnapshot);
  assert.equal(control(rightRoot,'squadList').children.length,context.window.TAKTIK_ROSTERS.teams[right.getState().team.name].players.length);
@@ -131,6 +149,7 @@ console.log('PASS: bench drop substitutes at target slot, invalid drops do nothi
  const original=JSON.stringify(snapshot),eventsBefore=windowEvents.get('pagehide')?.size||0;
  const publicBoard=context.window.createTacticsBoard(publicRoot,{mode:'readonly',initialState:snapshot,onChange(){changes++;}});
  assert.equal(publicBoard.mode,'readonly');assert.equal(JSON.stringify(publicBoard.getState()),original);
+ assertJerseys(publicBoard,publicRoot);
  assert.equal(publicBoard.selectTeam,undefined);assert.equal(publicBoard.applyFormation,undefined);
  assert.equal(publicRoot.listeners.keydown,undefined);
  const viewPlayer=control(publicRoot,'players').children[0],viewCanvas=control(publicRoot,'drawingCanvas');
