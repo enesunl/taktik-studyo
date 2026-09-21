@@ -3,14 +3,23 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
 const studio=readFileSync(new URL('../dist/studyo.html',import.meta.url),'utf8');
-test('Studio mounts a single squad panel beside the board, with player editing preserved',()=>{
+test('Studio right column contains a single bench followed by the compact player editor',()=>{
  const lineup=studio.split('<div class="studio-lineup">')[1].split('<footer>')[0];
  assert.match(lineup,/^<section id="boardPanel"/);
- assert.match(lineup,/<\/section><section class="squad-panel" id="squadPanel">/);
+ assert.match(lineup,/<\/section><div class="studio-controls"><section class="squad-panel" id="squadPanel">/);
+ assert.match(lineup,/<\/section><section class="panel player-panel">/);
  for(const id of ['squadPanel','squadList','squadCount','squadSource','playerForm','rosterSelect']){
   assert.equal(studio.split('id="'+id+'"').length-1,1,id+' must not be duplicated');
  }
- assert.doesNotMatch(lineup,/id="playerForm"/);
+ assert.match(lineup,/id="playerForm"/);
+ assert.doesNotMatch(studio,/class="studio-sidebar"/);
+});
+
+test('Studio drawing palette shares its trigger anchor and preserves accessible controls',()=>{
+ const actions=studio.split('<div class="board-actions">')[1].split('<details class="studio-formations">')[0];
+ assert.match(actions,/id="drawingToggle"[^>]*aria-expanded="false"/);
+ assert.match(actions,/id="drawingTools"[^>]*role="group"[^>]*hidden/);
+ for(const id of ['penTool','drawingColor','eraserTool','finishDrawing'])assert.match(actions,new RegExp('id="'+id+'"'));
 });
 
 test('Studio formation controls are inside the board header, before the pitch',()=>{

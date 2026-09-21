@@ -54,8 +54,8 @@ function replaceAthlete(athleteId,slotId=selected){
 }
 function renderSquad(){
  const roster=squadFor();$('squadPanel').hidden=!roster;if(!roster)return;
- const displayed=expanded?roster.players.filter(a=>!state.players.some(p=>p.athleteId===a.id)):roster.players;
- $('squadTitle').textContent=expanded?'Yedekler':'Takım kadrosu';$('squadCount').textContent=displayed.length+' futbolcu';
+ const displayed=expanded||options.benchOnly?roster.players.filter(a=>!state.players.some(p=>p.athleteId===a.id)):roster.players;
+ $('squadTitle').textContent=expanded?'Yedekler':options.benchOnly?'Yedek Oyuncular':'Takım kadrosu';$('squadCount').textContent=displayed.length+' futbolcu';
  const active=state.players.find(p=>p.id===selected);
  $('squadHint').textContent=active?active.name+' yerine seç veya sahadaki oyuncunun üzerine sürükle.':'Yedeği sahadaki oyuncunun üzerine sürükle. Dokunmatik ekranda ⠿ tutamacını kullan.';
  const list=$('squadList');list.replaceChildren();
@@ -264,7 +264,7 @@ window.TAKTIK_APP={
   const fragment=document.getElementById('studioTemplate').content.cloneNode(true);
   for(const element of fragment.querySelectorAll('[id]'))element.dataset.control=element.id;
   root.append(fragment);
-  const board=window.createTacticsBoard(root,{mode:'edit',draftContext:scope.context('main')});
+  const board=window.createTacticsBoard(root,{mode:'edit',benchOnly:true,draftContext:scope.context('main')});
   const link=document.getElementById('comparisonLink');
   const chooseTeam=()=>{link.href='karsilastirma.html?sol='+encodeURIComponent(board.getState().team.name);};
   link?.addEventListener('click',chooseTeam);

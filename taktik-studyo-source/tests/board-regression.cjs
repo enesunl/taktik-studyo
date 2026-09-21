@@ -81,6 +81,34 @@ console.log('PASS: bench drop substitutes at target slot, invalid drops do nothi
  assert.equal(unusualBoard.getState().team.name,'__proto__');
  console.log('PASS: real board state saves and reloads formation, player movement and drawings; comparison drafts remain independent.');
 
+ // Studio derives reserves from the live XI; roster and Comparison remain complete.
+ const benchRoot=new Element(),benchBoard=context.window.createTacticsBoard(benchRoot,{benchOnly:true,storageKey:'test:bench'});
+ const rosterSnapshot=JSON.stringify(context.window.TAKTIK_ROSTERS);
+ function assertReserves(board,root){
+  const state=board.getState(),roster=context.window.TAKTIK_ROSTERS.teams[state.team.name].players;
+  const expected=roster.filter(a=>!state.players.some(p=>p.athleteId===a.id)).map(a=>a.id);
+  assert.equal(JSON.stringify(control(root,'squadList').children.map(b=>b.dataset.athleteId)),JSON.stringify(expected));
+  assert.equal(control(root,'squadTitle').textContent,'Yedek Oyuncular');
+ }
+ assertReserves(benchBoard,benchRoot);
+ const starter=benchBoard.getState().players[0];
+ control(benchRoot,'players').children[0].listeners.click();
+ assert.equal(control(benchRoot,'playerName').value,starter.name);
+ const reserveButton=control(benchRoot,'squadList').children[0],reserveId=reserveButton.dataset.athleteId;
+ reserveButton.onclick();assert.equal(benchBoard.getState().players[0].athleteId,reserveId);assertReserves(benchBoard,benchRoot);
+ assert(control(benchRoot,'squadList').children.some(b=>b.dataset.athleteId===starter.athleteId));
+ control(benchRoot,'undo').onclick();assert.equal(benchBoard.getState().players[0].athleteId,starter.athleteId);assertReserves(benchBoard,benchRoot);
+ benchBoard.applyFormation('3-5-2');assertReserves(benchBoard,benchRoot);
+ control(benchRoot,'rosterSelect').onchange({target:{value:reserveId}});assertReserves(benchBoard,benchRoot);
+ control(benchRoot,'playerName').value='Edited starter';control(benchRoot,'playerForm').onsubmit({preventDefault(){}});
+ assert.equal(benchBoard.getState().players[0].name,'Edited starter');assertReserves(benchBoard,benchRoot);
+ flush();const restoredBenchRoot=new Element(),restoredBench=context.window.createTacticsBoard(restoredBenchRoot,{benchOnly:true,storageKey:'test:bench'});
+ assert.equal(JSON.stringify(restoredBench.getState()),JSON.stringify(benchBoard.getState()));assertReserves(restoredBench,restoredBenchRoot);
+ benchBoard.selectTeam('Fenerbahçe');assertReserves(benchBoard,benchRoot);
+ assert.equal(JSON.stringify(context.window.TAKTIK_ROSTERS),rosterSnapshot);
+ assert.equal(control(rightRoot,'squadList').children.length,context.window.TAKTIK_ROSTERS.teams[right.getState().team.name].players.length);
+ console.log('PASS: Studio reserves follow XI swaps, roster replacement, edits, formation, team, undo and draft restore without changing Comparison or roster data.');
+
  const {createUserDraftScope,userDraftKey}=await import('../src/lib/draft-scope.js');
  const userA='11111111-1111-4111-8111-111111111111',userB='22222222-2222-4222-8222-222222222222';
  const windowEvents=new Map();
@@ -170,13 +198,14 @@ console.log('PASS: bench drop substitutes at target slot, invalid drops do nothi
  console.log('PASS: scoped real boards isolate accounts/slots and dispose timers, pagehide, root/resize listeners, gestures and expanded UI.');
 
  // Exercise the actual new route mount APIs with the real board engine.
- const createBoard=context.window.createTacticsBoard,editorModes=[];
- context.window.createTacticsBoard=(root,options)=>{editorModes.push(options.mode);return createBoard(root,options);};
+ const createBoard=context.window.createTacticsBoard,editorModes=[],benchModes=[];
+ context.window.createTacticsBoard=(root,options)=>{editorModes.push(options.mode);benchModes.push(!!options.benchOnly);return createBoard(root,options);};
  const nodes=new Map();document.getElementById=id=>{if(!nodes.has(id))nodes.set(id,new Element());return nodes.get(id);};
  document.getElementById('studioTemplate').content=new Element();
  const routedRoot=new Element(),routedScope=createUserDraftScope({userId:userA,storage});
  const stopStudio=context.window.TAKTIK_APP.mountStudio(routedRoot,{context:slot=>scopedContext(routedScope,slot)});
  assert.deepEqual(editorModes,['edit']);
+ assert.deepEqual(benchModes,[true]);
  assert.equal(control(routedRoot,'activeTeam').textContent,readDraft(storage,userDraftKey(userA,'main')).team.name);
  document.getElementById('comparisonLink').listeners.click();assert.match(document.getElementById('comparisonLink').href,/^karsilastirma.html\?sol=/);
  control(routedRoot,'resetPositions').onclick?.();
@@ -188,6 +217,7 @@ console.log('PASS: bench drop substitutes at target slot, invalid drops do nothi
  const comparisonScope=createUserDraftScope({userId:userB,storage});
  const stopComparison=context.window.TAKTIK_COMPARISON.mount({context:slot=>scopedContext(comparisonScope,slot)});
  assert.deepEqual(editorModes,['edit','edit','edit']);context.window.createTacticsBoard=createBoard;
+ assert.deepEqual(benchModes,[true,false,false]);
  assert.equal(document.getElementById('leftFormation').value,'3-4-3');assert.equal(document.getElementById('rightFormation').value,'4-2-3-1');
  document.getElementById('leftFormation').value='4-4-2';document.getElementById('leftFormation').listeners.change();flush();
  assert.equal(readDraft(storage,userDraftKey(userB,'left')).formation,'4-4-2');assert.equal(readDraft(storage,userDraftKey(userB,'right')).formation,'4-2-3-1');

@@ -35,30 +35,55 @@
 .share-lineup-button{border:1px solid #56643f;border-radius:6px;background:#263921;color:#d6f4b4;padding:8px 10px;cursor:pointer;font:inherit;font-size:12px;white-space:nowrap}.board-toolbar .drag-tip{margin-left:10px;margin-right:auto}.share-dialog{width:min(440px,calc(100vw - 32px));box-sizing:border-box;padding:26px;border:1px solid #3d4f43;border-radius:16px;color:#edf2ed;background:#19241e}.share-dialog::backdrop{background:#08120dbb;backdrop-filter:blur(7px)}.share-dialog .dialog-heading{gap:16px}.share-description,.share-notice{font-size:13px;line-height:1.6;color:#adbdaf}.share-team{font-size:15px;font-weight:600;color:#daf4bf}.share-verification{margin:18px 0}.share-result{display:grid;gap:14px}.share-result[hidden]{display:none}.share-result input{box-sizing:border-box;width:100%;font-size:12px}.share-result a{color:#c7f36b}.share-result small{font-size:11px;line-height:1.5;color:#a9b6aa}.share-dialog button:disabled{opacity:.45;cursor:default}@media(max-width:1100px){.board-toolbar .drag-tip{display:none}.share-lineup-button{margin-right:auto}}@media(max-width:480px){.share-lineup-button{font-size:11px;padding:7px}.board-toolbar{gap:5px}}
 .shared-main{width:100%;max-width:1000px;margin:0 auto;padding:24px 20px 40px}.shared-title{font-size:24px;margin:0 0 18px}.shared-status{padding:20px 0;line-height:1.6}.shared-board{width:100%;max-width:800px;margin:0 auto}.shared-board .pitch{max-height:none;min-height:0;aspect-ratio:680/880}.readonly-board .player,.readonly-board .player:active{cursor:default;touch-action:auto}.readonly-board .player:hover .player-disc{box-shadow:0 3px 6px #00170665}.readonly-board .drawing-canvas{touch-action:auto;pointer-events:none}@media(max-width:620px){.shared-main{padding:18px 10px 28px}.shared-title{font-size:21px}.shared-board .pitch-wrap{padding:0 8px}}
 
-/* Studio composition only; the same board and squad nodes move into expanded view. */
-.studio-workspace{grid-template-columns:210px minmax(0,1fr);gap:20px}
-.studio-sidebar{display:grid;gap:18px;min-width:0}
-.studio-sidebar .team-list{max-height:300px}
-.studio-lineup{display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:18px;align-items:stretch;min-width:0}
+/* Studio composition: pitch sets desktop height; each side list scrolls independently. */
+.studio-workspace{grid-template-columns:200px minmax(0,1fr);gap:18px;align-items:stretch}
+.studio-workspace>.teams-panel{contain:size;min-height:0;display:flex;flex-direction:column}
+.studio-workspace>.teams-panel .team-list{flex:1;min-height:0;max-height:none;overflow-y:auto;overflow-x:hidden}
+.studio-workspace>.teams-panel>:not(.team-list){flex:none}
+.studio-lineup{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:18px;align-items:stretch;min-width:0}
 .studio-lineup>.board-panel{min-width:0;align-self:start}
-.studio-lineup>.squad-panel{contain:size;min-height:0;min-width:0;display:flex;flex-direction:column;margin:0;border:1px solid #33482c;border-radius:12px;background:#193226;padding:18px 12px}
-.studio-lineup>.squad-panel[hidden]{display:none}
-.studio-lineup:has(>.squad-panel[hidden]){grid-template-columns:minmax(0,1fr)}
-.studio-lineup>.squad-panel .squad-list{grid-template-columns:1fr;flex:1;min-height:0;max-height:none;overflow-y:auto;overflow-x:hidden}
-.studio-lineup>.squad-panel .squad-player{min-height:56px;padding:8px 6px}
-.studio-lineup>.squad-panel .squad-heading,.studio-lineup>.squad-panel .squad-source{flex:none}
-.studio-lineup>.squad-panel .squad-heading{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
-.studio-lineup>.squad-panel .squad-heading>div{display:contents}
-.studio-lineup>.squad-panel .squad-heading p{grid-column:1/-1;grid-row:2;min-height:0;margin:0}
-.studio-lineup>.squad-panel .squad-heading>span{grid-column:2;grid-row:1}
+.studio-controls{contain:size;display:flex;flex-direction:column;gap:12px;min-height:0;min-width:0}
+.studio-controls>.squad-panel{flex:1;min-height:0;min-width:0;display:flex;flex-direction:column;margin:0;border:1px solid #33482c;border-radius:12px;background:#193226;padding:14px 12px}
+.studio-controls>.squad-panel[hidden]{display:none}
+.studio-controls .squad-list{grid-template-columns:1fr;flex:1;min-height:0;max-height:none;overflow-y:auto;overflow-x:hidden}
+.studio-controls .squad-player{min-height:56px;padding:8px 6px}
+.studio-controls .squad-heading,.studio-controls .squad-source{flex:none}
+.studio-controls .squad-heading{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+.studio-controls .squad-heading>div{display:contents}
+.studio-controls .squad-heading h2{font-size:15px}
+.studio-controls .squad-heading p{grid-column:1/-1;grid-row:2;min-height:0;margin:0;font-size:11px}
+.studio-controls .squad-heading>span{grid-column:2;grid-row:1}
+.studio-controls .squad-source{margin-bottom:0;font-size:10px;line-height:1.5}
+.studio-controls>.player-panel{flex:none;min-width:0;width:100%}
+.studio-controls .player-panel .panel-heading{padding:12px}
+.studio-controls .player-panel h2{font-size:14px}
+.studio-controls .player-panel .step{display:none}
+.studio-controls .no-player{padding:0 12px 12px;display:flex;align-items:center;gap:8px;text-align:left}
+.studio-controls .no-player p{margin:0;font-size:12px}
+.studio-controls .no-player small{display:none}
+.studio-controls .select-player-icon{font-size:20px;margin:0}
+.studio-controls #playerForm{display:grid;grid-template-columns:minmax(0,1fr) 52px 66px;gap:8px;padding:0 12px 12px}
+.studio-controls #playerForm[hidden],.studio-controls .no-player[hidden]{display:none}
+.studio-controls #playerForm label{min-width:0;margin:0;font-size:11px}
+.studio-controls #playerForm input,.studio-controls #playerForm select{width:100%;min-width:0;margin-top:4px;padding:6px;font-size:12px;height:32px}
+.studio-controls #rosterSelectLabel,.studio-controls .player-form-heading,.studio-controls .apply-button,.studio-controls .keyboard-tip{grid-column:1/-1}
+.studio-controls #rosterSelectLabel[hidden]{display:none}
+.studio-controls .player-form-heading{margin:0;font-size:11px;gap:6px}
+.studio-controls .player-form-heading span{font-size:11px;padding:2px 5px}
+.studio-controls .two-fields{display:contents}
+.studio-controls .apply-button{padding:8px;margin:0;font-size:12px}
+.studio-controls .keyboard-tip{margin:0;font-size:10px;line-height:1.4}
 .studio-lineup>.board-panel .board-top{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;padding:14px 18px}
 .studio-lineup .board-team{grid-column:1;grid-row:1;min-width:0}
 .studio-lineup .board-team h2{overflow:hidden;text-overflow:ellipsis}
-.studio-lineup .board-actions{grid-column:2;grid-row:1}
+.studio-lineup .board-top:has(.drawing-tools:not([hidden])) .board-team>.badge{display:grid}
+.studio-lineup .board-top:has(.drawing-tools:not([hidden])) .board-team div>span:last-child{display:inline}
+.studio-lineup .board-actions{grid-column:2;grid-row:1;position:relative}
 .studio-lineup .live-count{display:none}
-.studio-lineup .drawing-tools{grid-column:1/-1;grid-row:2;justify-self:end}
+/* Palette is anchored to its trigger, above the pitch rather than in a new grid row. */
+.studio-lineup .board-actions .drawing-tools{position:absolute;inset:auto;right:calc(100% + 8px);top:50%;transform:translateY(-50%);z-index:10;width:max-content;box-shadow:0 3px 12px #0004}
 .studio-formations{grid-column:3;grid-row:1;min-width:0;text-align:right}
-.studio-formations[open]{grid-column:1/-1;grid-row:3}
+.studio-formations[open]{grid-column:1/-1;grid-row:2}
 .expanded-dialog .studio-formations{display:none}
 .studio-formations summary{display:list-item;list-style-position:inside;width:fit-content;margin-left:auto;cursor:pointer;border:1px solid #526b50;border-radius:6px;padding:8px 10px;color:#d8edc7;font-size:13px}
 .studio-formations summary:focus-visible{outline:3px solid var(--lime);outline-offset:3px}
@@ -67,5 +92,6 @@
 .studio-formations .formation-grid{grid-template-columns:repeat(3,minmax(0,1fr));max-height:260px;overflow:auto}
 .studio-formations .panel-heading{padding:12px 16px}
 .studio-formations .formation-detail{padding-bottom:12px}
-@media(min-width:900px) and (max-width:1100px){.studio-workspace{grid-template-columns:180px minmax(0,1fr);gap:14px}.studio-lineup{grid-template-columns:minmax(0,1fr) 200px;gap:12px}.studio-sidebar .panel-heading{padding:16px 12px}.studio-sidebar .league{margin-inline:10px}}
-@media(max-width:899px){.studio-workspace{display:flex;flex-direction:column;gap:18px}.studio-sidebar{display:contents}.studio-workspace .teams-panel{order:0;width:100%}.studio-lineup{order:1;width:100%;grid-template-columns:minmax(0,1fr)}.studio-sidebar .player-panel{order:2;width:100%}.studio-sidebar .free-position{order:3}.studio-sidebar .team-list{max-height:165px}.studio-lineup>.squad-panel{contain:none}.studio-lineup>.squad-panel .squad-list{flex:auto;max-height:360px}.studio-lineup>.board-panel .board-top{padding:12px}.studio-formations .formation-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(min-width:900px) and (max-width:1100px){.studio-workspace{grid-template-columns:170px minmax(0,1fr);gap:12px}.studio-lineup{grid-template-columns:minmax(0,1fr) 260px;gap:12px}.studio-workspace>.teams-panel .panel-heading{padding:16px 12px}.studio-workspace>.teams-panel .league{margin-inline:10px}}
+@media(max-width:899px){.studio-workspace{display:flex;flex-direction:column;gap:18px}.studio-workspace>.teams-panel{contain:none;display:block;width:100%}.studio-workspace>.teams-panel .team-list{max-height:165px}.studio-lineup{width:100%;grid-template-columns:minmax(0,1fr)}.studio-controls{contain:none}.studio-controls .squad-list{flex:auto;max-height:360px}.studio-lineup>.board-panel .board-top{padding:12px}.studio-formations .formation-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:599px){.studio-lineup .board-actions .drawing-tools{right:0;top:calc(100% + 8px);transform:none}}
