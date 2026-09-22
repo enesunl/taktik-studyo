@@ -17,5 +17,6 @@ const browserOnlyKeys={name:'publishable-only-browser-client',setup(builder){bui
   if(source.split(generic).length!==2)throw new Error('Review SDK key recognition before upgrading.');
   return {contents:source.replace(generic,'key.startsWith("sb_publishable_")'),loader:'js'};
 });}};
-await build({entryPoints:['src/backend-entry.js'],bundle:true,minify:true,format:'iife',target:'es2022',outfile:'dist/backend.js',plugins:[browserOnlyKeys],define:{__SUPABASE_URL__:JSON.stringify(url),__SUPABASE_PUBLISHABLE_KEY__:JSON.stringify(key),__TURNSTILE_SITE_KEY__:JSON.stringify(siteKey),__AUTH_TURNSTILE_SITE_KEY__:JSON.stringify(authSiteKey)},legalComments:'eof'});
+// Escape SDK multiline strings through the compiler so generated output has no trailing whitespace.
+await build({entryPoints:['src/backend-entry.js'],bundle:true,minify:true,format:'iife',target:'es2022',supported:{'template-literal':false},outfile:'dist/backend.js',plugins:[browserOnlyKeys],define:{__SUPABASE_URL__:JSON.stringify(url),__SUPABASE_PUBLISHABLE_KEY__:JSON.stringify(key),__TURNSTILE_SITE_KEY__:JSON.stringify(siteKey),__AUTH_TURNSTILE_SITE_KEY__:JSON.stringify(authSiteKey)},legalComments:'eof'});
 console.log('Backend adapter built: '+(url?'configured':'offline catalogue; Supabase target not selected'));

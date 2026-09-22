@@ -3,6 +3,8 @@ import {createProtectedPage} from './protected-page.js';
 import {mountLanding} from './landing-ui.js';
 import {createProfileApi} from './profile-api.js';
 import {mountProfile} from './profile-ui.js';
+import {createMatchesApi} from './matches.js';
+import {mountMatches} from './matches-ui.js';
 
 export function startPage({auth,document,window,backend,client}) {
   const route = resolvePage(window.location);
@@ -20,10 +22,11 @@ export function startPage({auth,document,window,backend,client}) {
   const retry = document.getElementById('guardRetry'), login = document.getElementById('guardLogin');
   const logout = document.getElementById('signOut');
   let storage;
-  if (route.page !== 'profile') {
+  const drafts = route.page === 'studio' || route.page === 'comparison';
+  if (drafts) {
     try {storage = window.localStorage;} catch {storage = {getItem(){return null;},setItem(){throw Error('Storage unavailable');}};}
   }
-  const guard = createProtectedPage({auth,storage,drafts:route.page !== 'profile',path:route.path,navigate:url => window.location.replace(url),
+  const guard = createProtectedPage({auth,storage,drafts,path:route.path,navigate:url => window.location.replace(url),
     show(state) {
       const ready = state === 'ready';
       content.hidden = !ready; content.inert = !ready; status.hidden = ready;
@@ -33,6 +36,9 @@ export function startPage({auth,document,window,backend,client}) {
         : 'Oturum şu anda doğrulanamadı. Biraz sonra tekrar dene.';
     },
     async mount(scope,current,validatedUser) {
+      if (route.page === 'matches') {
+        return mountMatches({document,window,current,api:createMatchesApi({client,current,location:window.location})}).dispose;
+      }
       if (route.page === 'profile') {
         const api = createProfileApi({client,validatedUser,current});
         return mountProfile({document,api,validatedUser,current}).dispose;

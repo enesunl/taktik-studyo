@@ -7,3 +7,8 @@ enabled = false
 # No user sessions. The function validates the publishable apikey header itself.
 verify_jwt = false
 entrypoint = "./functions/lineups/index.ts"
+
+[functions.matches]
+# Signed-in user JWT plus handler-side getUser and confirmed-email validation.
+verify_jwt = true
+entrypoint = "./functions/matches/index.ts"
