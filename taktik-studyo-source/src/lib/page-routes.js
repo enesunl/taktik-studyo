@@ -13,7 +13,7 @@ export function resolvePage(location) {
   }
   // Static hosts can serve/rewrite links to extensionless HTML paths. Keep the
   // aliases exact and retain canonical .html paths for the safe-next allowlist.
-  const canonicalPath = {'/studyo':'/studyo.html','/karsilastirma':'/karsilastirma.html','/profil':'/profil.html','/maclar':'/maclar.html'}[path] || path;
-  const protectedPages = {'/studyo.html':'studio','/karsilastirma.html':'comparison','/profil.html':'profile','/maclar.html':'matches'};
+  const canonicalPath = {'/studyo':'/studyo.html','/karsilastirma':'/karsilastirma.html','/profil':'/profil.html','/maclar':'/maclar.html','/mac':'/mac.html'}[path] || path;
+  const protectedPages = {'/studyo.html':'studio','/karsilastirma.html':'comparison','/profil.html':'profile','/maclar.html':'matches','/mac.html':'match'};
   return protectedPages[canonicalPath] ? {kind:'protected',page:protectedPages[canonicalPath],path:canonicalPath} : {kind:'auth'};
 }

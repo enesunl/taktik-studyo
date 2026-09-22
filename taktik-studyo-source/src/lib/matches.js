@@ -1,6 +1,7 @@
 import {requestMatches} from './matches-transport.js';
 
 export const ROUNDS = Object.freeze(Array.from({length:34},(_,i) => i+1));
+export const MATCH_STATUS_LABELS = Object.freeze({finished:'MS',live:'Canlı',postponed:'Ertelendi',cancelled:'İptal',unknown:'Durum bekleniyor',upcoming:'Maç öncesi'});
 export function requestedRound(search = '') {
   const params = new URLSearchParams(search), values = params.getAll('hafta');
   return values.length === 1 && /^(?:[1-9]|[12]\d|3[0-4])$/.test(values[0]) ? Number(values[0]) : null;

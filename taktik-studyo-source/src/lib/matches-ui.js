@@ -1,4 +1,4 @@
-import {ROUNDS,requestedRound,adjacentRound,defaultRound,matchDate} from './matches.js';
+import {ROUNDS,requestedRound,adjacentRound,defaultRound,matchDate,MATCH_STATUS_LABELS} from './matches.js';
 
 export function mountMatches({document,window,api,current,now = Date.now}) {
   const root = document.getElementById('matchesContent');
@@ -32,7 +32,9 @@ export function mountMatches({document,window,api,current,now = Date.now}) {
     for (const match of fixtures) {
       const date = matchDate(match.kickoff);
       if (date.key !== day) {day = date.key; group = node('section',undefined,'match-day'); group.append(node('h3',date.date)); list.append(group);}
-      const card = node('article',undefined,'match-card'); card.dataset.matchId = match.id;
+      const card = node('a',undefined,'match-card'); card.dataset.matchId = match.id;
+      card.href = '/mac?id='+match.id+'&hafta='+selected;
+      card.setAttribute('aria-label',match.home.name+' - '+match.away.name+' maç detayını aç');
       const teams = node('div',undefined,'match-teams'), scores = node('div',undefined,'match-scores');
       for (const side of ['home','away']) {
         const team = match[side], line = node('div',undefined,'match-team'), marker = node('span',undefined,'team-marker');
@@ -40,10 +42,9 @@ export function mountMatches({document,window,api,current,now = Date.now}) {
         line.append(marker,node('span',team.name)); teams.append(line);
         if (match.status === 'finished' || match.status === 'live') scores.append(node('span',match.score[side] === null ? '—' : String(match.score[side])));
       }
-      const labels = {finished:'MS',live:'Canlı',postponed:'Ertelendi',cancelled:'İptal',unknown:'Durum bekleniyor'};
       const state = node('div',undefined,'match-state');
       if (match.status === 'upcoming') {const time = node('time',date.time); time.setAttribute('datetime',match.kickoff); state.append(time);}
-      else state.append(node('span',labels[match.status]));
+      else state.append(node('span',MATCH_STATUS_LABELS[match.status]));
       card.append(teams,scores,state); group.append(card);
     }
   }

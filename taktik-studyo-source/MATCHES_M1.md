@@ -1,5 +1,9 @@
 # Süper Lig maçlar — M1
 
+M2 subsequently adds clickable cards and protected match detail. See
+[MATCHES_M2.md](MATCHES_M2.md) for the current detail/query contract and validation;
+the original M1 implementation notes below describe the M1 baseline.
+
 ## Release condition
 
 - Provider: BSD Sports Data.

@@ -5,6 +5,8 @@ import {createProfileApi} from './profile-api.js';
 import {mountProfile} from './profile-ui.js';
 import {createMatchesApi} from './matches.js';
 import {mountMatches} from './matches-ui.js';
+import {createMatchDetailApi} from './match-detail.js';
+import {mountMatchDetail} from './match-detail-ui.js';
 
 export function startPage({auth,document,window,backend,client}) {
   const route = resolvePage(window.location);
@@ -36,6 +38,9 @@ export function startPage({auth,document,window,backend,client}) {
         : 'Oturum şu anda doğrulanamadı. Biraz sonra tekrar dene.';
     },
     async mount(scope,current,validatedUser) {
+      if (route.page === 'match') {
+        return mountMatchDetail({document,window,current,api:createMatchDetailApi({client,current,location:window.location})}).dispose;
+      }
       if (route.page === 'matches') {
         return mountMatches({document,window,current,api:createMatchesApi({client,current,location:window.location})}).dispose;
       }

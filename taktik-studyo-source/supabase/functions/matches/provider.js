@@ -1,4 +1,6 @@
 import {mapTeam} from './teams.js';
+import {isMatchId} from '../../../src/lib/match-id.js';
+import {normalizeDetail} from './detail.js';
 
 export const LEAGUE_ID = 11, SEASON_ID = 1539, SEASON = '2026-2027';
 const endpoint = 'https://sports.bzzoiro.com/api/v2/events/';
@@ -68,4 +70,32 @@ export async function fetchSeason({token,fetchImpl = fetch,timeoutMs = 12000}) {
   } catch (error) {
     throw Error(error?.message === 'provider_limited' ? 'provider_limited' : 'matches_unavailable');
   } finally {clearTimeout(timer);}
+}
+
+export async function fetchDetail({id,token,fetchImpl = fetch,timeoutMs = 18000}) {
+  if (!isMatchId(id)) throw Error('INVALID_MATCH_ID');
+  if (!token) throw Error('PROVIDER_UNAVAILABLE');
+  const controller = new AbortController(), timer = setTimeout(() => controller.abort(),timeoutMs);
+  const signal = controller.signal;
+  async function read(suffix = '',optional = false) {
+    const response = await fetchImpl(endpoint+id+'/'+suffix,{headers:{Authorization:'Token '+token},redirect:'error',signal});
+    if (response.status === 404) {if (optional) return null; throw Error('MATCH_NOT_FOUND');}
+    if (response.status === 204 && optional) return null;
+    if (!response.ok) throw Error('PROVIDER_UNAVAILABLE');
+    const body = await response.text();
+    if (body.length > 2_000_000) throw Error('PROVIDER_UNAVAILABLE');
+    return JSON.parse(body);
+  }
+  try {
+    const raw = await read();
+    if (!raw || String(raw.id) !== id || raw.league_id !== LEAGUE_ID || raw.season_id !== SEASON_ID) throw Error('MATCH_NOT_FOUND');
+    const match = normalizeEvent(raw);
+    if (!match) throw Error('PROVIDER_UNAVAILABLE');
+    // Never request optional endpoints for an out-of-scope match.
+    const names = ['lineups','incidents','stats'];
+    const results = await Promise.allSettled(names.map(name => read(name+'/',true)));
+    const resources = Object.fromEntries(names.map((name,i) => [name,{value:results[i].status === 'fulfilled' ? results[i].value : null,failed:results[i].status === 'rejected'}]));
+    return normalizeDetail(match,raw,resources);
+  } catch (error) {throw Error(error?.message === 'MATCH_NOT_FOUND' ? 'MATCH_NOT_FOUND' : 'PROVIDER_UNAVAILABLE');}
+  finally {clearTimeout(timer);}
 }

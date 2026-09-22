@@ -56,10 +56,10 @@ test('loading, generic error, retry, double-submit and empty states are controll
   assert.match(textOf(root),/Lütfen biraz sonra/);assert.doesNotMatch(textOf(root),/sensitive/);assert.equal(root.children[1].hidden,false);
   await root.children[1].emit('click');assert.match(textOf(root),/Bu hafta için maç bulunamadı/);page.dispose();
 });
-test('safe text nodes, no media, non-navigating match IDs; stale account results cannot render',async()=>{
+test('safe text nodes, no media, linked match IDs; stale account results cannot render',async()=>{
   const evil=match({home_team_id:999,home_team:'<img src="https://sports.bzzoiro.com/evil" onerror="alert(1)">'});
   const f=ui([evil]),page=mountMatches(f.options);await page.ready;const nodes=allNodes(f.nodes.matchesContent);
-  assert.ok(nodes.some(n=>n.textContent===evil.home.name));assert.ok(!nodes.some(n=>['img','iframe','a','video'].includes(n.tagName)));
+  assert.ok(nodes.some(n=>n.textContent===evil.home.name));assert.ok(!nodes.some(n=>['img','iframe','video'].includes(n.tagName)));
   assert.equal(nodes.find(n=>n.className==='match-card').dataset.matchId,evil.id);page.dispose();
   const g=ui(),wait=deferred();g.options.api.load=()=>wait.promise;const pending=mountMatches(g.options);g.invalidate();pending.dispose();
   wait.resolve({ok:true,matches:season});await pending.ready;assert.equal(g.nodes.matchesContent.children.length,0);
