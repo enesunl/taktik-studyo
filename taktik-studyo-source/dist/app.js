@@ -7,6 +7,23 @@ function jerseyNumberColor(color){
  return (luminance+.05)/.05>=1.05/(luminance+.05)?'#000000':'#ffffff';
 }
 
+function clamp(value,min,max){return Math.min(max,Math.max(min,value));}
+function dragCoordinates(start,event,rect,bounds){
+ return {x:clamp(start.px+(event.clientX-start.x)/rect.width*100,bounds.minX,bounds.maxX),y:clamp(start.py+(event.clientY-start.y)/rect.height*100,bounds.minY,bounds.maxY)};
+}
+function listenForDrag(target,move,end){
+ target.addEventListener('pointermove',move);
+ for(const type of ['pointerup','pointercancel','lostpointercapture'])target.addEventListener(type,end);
+ return ()=>{target.removeEventListener('pointermove',move);for(const type of ['pointerup','pointercancel','lostpointercapture'])target.removeEventListener(type,end);};
+}
+// Fixed decorative SVG only; player data is always assigned with textContent.
+function createJersey(number){
+ const jersey=document.createElement('span');jersey.className='player-jersey';
+ jersey.innerHTML='<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false"><path class="jersey-body" d="M22 5 10 10 2 24 12 30 17 22 17 59 47 59 47 22 52 30 62 24 54 10 42 5 38 10 26 10Z"/><path class="jersey-accent" d="m2 24 10 6 3-5-10-6Zm50 6 10-6-3-5-10 6ZM22 5l4 5h12l4-5-3 10H25Z"/></svg>';
+ const label=document.createElement('b');label.className='shirt-number';label.textContent=number??'–';jersey.append(label);return jersey;
+}
+window.TAKTIK_BOARD_UTILS=Object.freeze({createJersey,jerseyNumberColor,clamp,dragCoordinates,listenForDrag});
+
 window.createTacticsBoard=function(root=document,options={}){
 const mode=options.mode??'edit',readonly=mode==='readonly';
 if(!['edit','readonly'].includes(mode)||readonly&&!options.initialState)throw new Error('Invalid board mode or snapshot');
@@ -85,17 +102,10 @@ function renderTeams(){const term=$('teamSearch').value.toLocaleLowerCase('tr');
 function selectTeam(team){snapshot();state.team={...team};state.players=teamPlayers(team,state.formation);state.drawings=[];state.customized=false;selected=null;render();announce(team.name+' kadrosu seçildi.');}
 function renderFormations(){$('formationCount').textContent=shapes.length;$('formationList').replaceChildren();const list=filter==='popular'?shapes.slice(0,6):shapes;list.forEach(shape=>{const b=document.createElement('button');b.className='formation-card'+(shape===state.formation?' active':'');b.setAttribute('aria-label',shape+' dizilişi');b.setAttribute('aria-pressed',shape===state.formation);const mini=document.createElement('span');mini.className='mini-pitch';mini.setAttribute('aria-hidden','true');coordinates(shape).forEach(p=>{const dot=document.createElement('i');dot.className='mini-player';dot.style.left=p.x+'%';dot.style.top=p.y+'%';mini.append(dot);});const label=document.createElement('span');label.textContent=shape;b.append(mini,label);b.onclick=()=>applyFormation(shape);$('formationList').append(b);});}
 function applyFormation(shape){snapshot();const coords=coordinates(shape);state.players=state.players.map((p,i)=>({...p,...coords[i],name:p.athleteId||p.renamed?p.name:roleNames[coords[i].role]}));state.formation=shape;state.customized=false;render();announce(shape+' dizilişi uygulandı.');}
-// Fixed decorative SVG only; player data is always assigned with textContent.
-function createJersey(number){
- const jersey=document.createElement('span');jersey.className='player-jersey';
- jersey.innerHTML='<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false"><path class="jersey-body" d="M22 5 10 10 2 24 12 30 17 22 17 59 47 59 47 22 52 30 62 24 54 10 42 5 38 10 26 10Z"/><path class="jersey-accent" d="m2 24 10 6 3-5-10-6Zm50 6 10-6-3-5-10 6ZM22 5l4 5h12l4-5-3 10H25Z"/></svg>';
- const label=document.createElement('b');label.className='shirt-number';label.textContent=number??'–';jersey.append(label);return jersey;
-}
 function updatePlayerElement(button,p){button.style.left=p.x+'%';button.style.top=p.y+'%';button.setAttribute('aria-label',`${p.number} numara ${p.name}, ${p.role}. Düzenlemek için seç, hareket için ok tuşlarını kullan.`);button.setAttribute('aria-pressed',p.id===selected);button.className='player'+(p.id===selected?' selected':'')+(p.role==='KL'?' goalkeeper':'');button.querySelector('b').textContent=p.number??'–';button.querySelector('.player-name').textContent=p.name;button.querySelector('.player-role').textContent=p.role;button.title=p.name;}
 function renderPlayers(){$('players').replaceChildren();state.players.forEach(p=>{const b=document.createElement(readonly?'div':'button');if(!readonly)b.type='button';b.dataset.id=p.id;b.append(createJersey(p.number));const name=document.createElement('span');name.className='player-name';const role=document.createElement('span');role.className='player-role';b.append(name,role);updatePlayerElement(b,p);if(readonly){b.removeAttribute('aria-pressed');b.setAttribute('aria-label',`${p.number??'–'} numara ${p.name}, ${p.role}`);}else{b.addEventListener('pointerdown',onPointerDown);b.addEventListener('keydown',onPlayerKey);b.addEventListener('click',()=>selectPlayer(p.id));}$('players').append(b);});}
 function selectPlayer(id){selected=id;root.querySelectorAll('.player').forEach(b=>{b.classList.toggle('selected',Number(b.dataset.id)===id);b.setAttribute('aria-pressed',Number(b.dataset.id)===id);});renderEditor();renderSquad();}
 function renderEditor(){const p=state.players.find(p=>p.id===selected);$('noPlayer').hidden=!!p;$('playerForm').hidden=!p;if(!p)return;$('selectedNumber').textContent=p.number;$('selectedRole').textContent=roleNames[p.role];$('playerName').value=p.name;$('playerNumber').value=p.number;$('playerRole').value=p.role;renderRosterSelect(p);}
-function clamp(value,min,max){return Math.min(max,Math.max(min,value));}
 function onPointerDown(e){
  if(e.button!==0||drawingMode!=='move'||activeGesture!==null)return;
  const b=e.currentTarget,id=Number(b.dataset.id);selectPlayer(id);
@@ -107,21 +117,21 @@ function onPointerDown(e){
   if(ev.pointerId!==undefined&&ev.pointerId!==e.pointerId)return;
   const dx=ev.clientX-start.x,dy=ev.clientY-start.y;if(!moved&&Math.hypot(dx,dy)<3)return;
   if(!moved){snapshot();undoEntry=history[history.length-1];moved=true;}
-  p.x=clamp(start.px+dx/rect.width*100,9,91);const padY=Math.max(9,(b.offsetHeight/2+3)/rect.height*100);p.y=clamp(start.py+dy/rect.height*100,padY,Math.min(92,100-padY));
+  const padY=Math.max(9,(b.offsetHeight/2+3)/rect.height*100);Object.assign(p,dragCoordinates(start,ev,rect,{minX:9,maxX:91,minY:padY,maxY:Math.min(92,100-padY)}));
   state.customized=true;updatePlayerElement(b,p);b.classList.add('dragging');const target=findTarget();
   root.querySelectorAll('.player').forEach(el=>el.classList.toggle('swap-target',Number(el.dataset.id)===target?.id));
   $('boardFormation').textContent=state.formation+' · Özel';
  };
  const end=ev=>{
   if(finished)return;if(ev?.type==='pointerup'&&Number.isFinite(ev.clientX)&&Number.isFinite(ev.clientY))move(ev);finished=true;
-  b.removeEventListener('pointermove',move);b.removeEventListener('pointerup',end);b.removeEventListener('pointercancel',end);b.removeEventListener('lostpointercapture',end);activeGesture=null;cancelGesture=null;
+  stopListening();activeGesture=null;cancelGesture=null;
   const cancelled=ev?.type!=='pointerup';
   if(moved&&cancelled){state=JSON.parse(JSON.stringify(undoEntry));if(history[history.length-1]===undoEntry)history.pop();}
   else if(moved){const target=findTarget();if(target){const destination={x:target.x,y:target.y,role:target.role};Object.assign(target,{x:start.px,y:start.py,role:start.role});Object.assign(p,destination);announce(p.name+' ile '+target.name+' yer değiştirdi.');}}
   if(moved)render();else b.classList.remove('dragging');
  };
  cancelGesture=()=>end({type:'pointercancel'});
- b.addEventListener('pointermove',move);b.addEventListener('pointerup',end);b.addEventListener('pointercancel',end);b.addEventListener('lostpointercapture',end);
+ const stopListening=listenForDrag(b,move,end);
 }
 function onPlayerKey(e){if(drawingMode!=='move'||activeGesture!==null)return;const delta={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];if(!delta)return;e.preventDefault();const id=Number(e.currentTarget.dataset.id),p=state.players.find(p=>p.id===id);selectPlayer(id);if(!e.repeat)snapshot();const step=e.shiftKey?3:1;p.x=clamp(p.x+delta[0]*step,9,91);const padY=Math.max(9,(e.currentTarget.offsetHeight/2+3)/pitch.getBoundingClientRect().height*100);p.y=clamp(p.y+delta[1]*step,padY,Math.min(92,100-padY));state.customized=true;updatePlayerElement(e.currentTarget,p);$('boardFormation').textContent=state.formation+' · Özel';persistDraft();}
 function render(){if(disposed)return;(root===document?document.documentElement:root).style.setProperty('--team',state.team.color);(root===document?document.documentElement:root).style.setProperty('--team2',state.team.color2);(root===document?document.documentElement:root).style.setProperty('--jersey-number',jerseyNumberColor(state.team.color));$('activeTeam').textContent=state.team.name;badge($('activeBadge'),state.team);$('boardFormation').textContent=state.formation+(state.customized?' · Özel':'');const d=descriptions[state.formation]||['Esnek','Oyuncuların konumlarını oyun planına göre serbestçe düzenle.'];$('formationTitle').textContent=state.formation;$('formationTag').textContent=d[0];$('formationDescription').textContent=d[1];$('undo').disabled=history.length===0;renderTeams();renderFormations();renderPlayers();renderEditor();renderSquad();renderDrawing();renderExpandedIdentity();options.onChange?.({team:state.team.name,formation:state.formation,customized:state.customized});persistDraft();}

@@ -35,7 +35,7 @@
 .jersey-body{fill:var(--team);stroke:#ffffffb3;stroke-width:1.4;stroke-linejoin:round}
 .jersey-accent{fill:var(--team2)}
 .player-jersey .shirt-number{position:absolute;left:50%;top:53%;transform:translate(-50%,-50%);color:var(--jersey-number,#fff);font:800 16px/1 'DM Sans',Arial,sans-serif;font-variant-numeric:tabular-nums}
-.player.selected .player-jersey{filter:drop-shadow(0 0 2px var(--lime)) drop-shadow(0 0 3px var(--lime))}
+.player.selected .player-jersey,.match-player.selected .player-jersey{filter:drop-shadow(0 0 2px var(--lime)) drop-shadow(0 0 3px var(--lime))}
 .player:hover .player-jersey{filter:drop-shadow(0 0 3px #c7f36b)}
 .player.swap-target .player-jersey{outline:3px dashed #dcff9c;outline-offset:3px;border-radius:4px}
 .readonly-board .player:hover .player-jersey{filter:drop-shadow(0 2px 2px #00170680)}

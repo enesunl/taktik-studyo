@@ -1,4 +1,4 @@
-const routes = new Set(['/studyo.html', '/karsilastirma.html', '/profil.html', '/maclar.html', '/mac.html']);
+const routes = new Set(['/studyo.html', '/karsilastirma.html', '/profil.html', '/maclar.html', '/mac.html', '/mac-studyosu.html']);
 
 // Return a root-relative allowlisted route or null. No navigation side effects.
 // Queries/fragments are intentionally unsupported until their own allowlist exists.

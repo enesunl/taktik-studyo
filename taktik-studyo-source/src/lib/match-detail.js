@@ -12,6 +12,7 @@ const personValid = value => value && (value.id === null || isMatchId(value.id))
 function incidentValid(e) {
   return e && Number.isInteger(e.minute) && e.minute >= 0 && e.minute <= 150 && Number.isInteger(e.added) && e.added >= 0 && e.added <= 60
     && Object.hasOwn(INCIDENT_LABELS,e.type) && ['home','away',null].includes(e.side) && personValid(e.player)
+    && (e.goalKind === undefined || [null,'regular','penalty','own','unknown'].includes(e.goalKind))
     && (e.incoming === null || personValid(e.incoming)) && (e.outgoing === null || personValid(e.outgoing));
 }
 export function detailValid(data,id) {

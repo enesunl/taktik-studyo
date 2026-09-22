@@ -1,5 +1,7 @@
 import {requestedMatchId,backToMatches,POSITION_LABELS,STAT_LABELS,INCIDENT_LABELS,incidentMinute} from './match-detail.js';
 import {matchDate,MATCH_STATUS_LABELS} from './matches.js';
+import {matchStudioAvailable,matchPageUrl} from './match-layout.js';
+import {matchGoals,appendScorers} from './match-goals.js';
 
 export function mountMatchDetail({document,window,api,current}) {
   const root = document.getElementById('matchDetailContent');
@@ -19,12 +21,19 @@ export function mountMatchDetail({document,window,api,current}) {
     header.setAttribute('aria-label','Maç özeti');header.append(node('p','SÜPER LİG · '+match.round+'. HAFTA','eyebrow'));
     const teams=node('div',undefined,'center-scoreboard');
     const score=['finished','live'].includes(match.status)?[match.score.home??'—',match.score.away??'—'].join(' — '):match.status==='upcoming'?date.time:'—';
-    teams.append(teamName(match.home),node('strong',score,'center-score'),teamName(match.away));header.append(teams);
+    const goals=matchGoals(match),home=node('div'),away=node('div');home.append(teamName(match.home));away.append(teamName(match.away));
+    appendScorers(document,home,goals.rows.home);appendScorers(document,away,goals.rows.away);
+    teams.append(home,node('strong',score,'center-score'),away);header.append(teams);
     const stamp=node('time',new Intl.DateTimeFormat('tr-TR',{day:'numeric',month:'long',year:'numeric',weekday:'long'}).format(new Date(match.kickoff))+' · '+date.time);
     stamp.setAttribute('datetime',match.kickoff);header.append(node('p',MATCH_STATUS_LABELS[match.status],'center-status'),stamp);
     if(match.venue)header.append(node('p',match.venue,'center-venue'));
-    const future=node('div',undefined,'match-studio-soon'),button=node('button','Maçı Stüdyoda Aç');button.type='button';button.disabled=true;button.setAttribute('aria-describedby','matchStudioSoon');
-    const soon=node('span','Yakında');soon.id='matchStudioSoon';future.append(button,soon);header.append(future);content.append(header);
+    const entry=node('div',undefined,'match-studio-entry'),available=matchStudioAvailable(match);
+    const button=node(available?'a':'button','Maçı Stüdyoda Aç');
+    if(available)button.href=matchPageUrl('/mac-studyosu',window.location.search);
+    else{button.type='button';button.disabled=true;button.setAttribute('aria-describedby','matchStudioUnavailable');}
+    entry.append(button);
+    if(!available){const note=node('span','Kadrolar açıklandığında kullanılabilir');note.id='matchStudioUnavailable';entry.append(note);}
+    header.append(entry);content.append(header);
 
     const stats=section('İstatistikler');
     const legend=node('div',undefined,'stats-teams');legend.append(node('span',match.home.name),node('span',match.away.name));stats.append(legend);

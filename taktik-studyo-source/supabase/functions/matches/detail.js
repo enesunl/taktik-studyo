@@ -7,6 +7,7 @@ const positions = new Map([['G','goalkeeper'],['D','defender'],['M','midfielder'
 const metrics = {possession:'ball_possession',shots:'total_shots',shotsOnTarget:'shots_on_target',corners:'corner_kicks',fouls:'fouls',offsides:'offsides',yellowCards:'yellow_cards',redCards:'red_cards'};
 const cardTypes = new Map([['yellow','yellow'],['red','red'],['yellowRed','yellowRed']]);
 const incidentTypes = new Map([['goal','goal'],['substitution','substitution'],['period','period'],['injuryTime','addedTime'],['varDecision','var']]);
+const goalTypes = new Map([['regular','regular'],['penalty','penalty'],['owngoal','own'],['own_goal','own'],['ownGoal','own'],['own','own']]);
 
 export function normalizeStatistics(raw,match) {
   if (!belongs(raw,match) || !raw.stats || typeof raw.stats !== 'object') return null;
@@ -44,6 +45,9 @@ export function normalizeLineups(raw,match) {
     if (!team || String(team.team_id) !== match[side].providerId) {result[side] = null; continue;}
     result[side] = {formation:typeof team.formation === 'string' && /^\d{1,2}(?:-\d{1,2}){1,5}$/.test(team.formation) ? team.formation : null,
       starters:players(team.players,seen),substitutes:players(team.substitutes,seen)};
+    // Preserve raw XI integrity: trimming/deduplication must not turn 12 rows
+    // into an apparently valid 11-player Match Studio input.
+    result[side].startersValid = Array.isArray(team.players) && team.players.length === 11 && result[side].starters.length === 11;
   }
   return ['home','away'].some(side => result[side] && (result[side].starters.length || result[side].substitutes.length)) ? result : null;
 }
@@ -54,6 +58,7 @@ export function normalizeIncidents(raw,match) {
     const added = Number.isInteger(row.added_time) && row.added_time >= 0 && row.added_time <= 60 ? row.added_time : 0;
     const type = row.type === 'card' ? cardTypes.get(row.card_type) || 'unknown' : incidentTypes.get(row.type) || 'unknown';
     return [{sequence,minute:row.minute,added,type,side:row.is_home === true ? 'home' : row.is_home === false ? 'away' : null,
+      goalKind:type === 'goal' ? (goalTypes.get(row.goal_type) || 'unknown') : null,
       player:{id:id(row.player_id),name:text(row.player)},
       incoming:type === 'substitution' ? {id:id(row.player_in_id),name:text(row.player_in)} : null,
       outgoing:type === 'substitution' ? {id:id(row.player_out_id),name:text(row.player_out)} : null,

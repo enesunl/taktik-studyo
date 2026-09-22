@@ -3,7 +3,7 @@ import {normalizeDetail} from '../../supabase/functions/matches/detail.js';
 
 // Sanitized representative shapes for 215997; never imported by production.
 const squad = (teamId,base,formation) => ({team_id:teamId,formation,
-  players:Array.from({length:11},(_,i) => ({id:base+i,name:'Oyuncu '+(i+1),jersey_number:i+1,position:['G','D','M','F'][Math.min(3,Math.floor(i/3))],photo:'https://media.invalid/player.png'})),
+  players:Array.from({length:11},(_,i) => ({id:base+i,name:'Oyuncu '+(i+1),jersey_number:i+1,position:i===0?'G':i<=4?'D':i<=9?'M':'F',photo:'https://media.invalid/player.png'})),
   substitutes:Array.from({length:10},(_,i) => ({id:base+11+i,name:'Yedek '+(i+1),jersey_number:i+12,position:'M'}))});
 export function resources() {
   return {

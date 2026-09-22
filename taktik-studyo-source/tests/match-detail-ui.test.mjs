@@ -22,11 +22,11 @@ function ui(value=detail(),path='/mac?id=215997&hafta=6'){
   const options={document:dom.document,window:win.window,current:()=>active,api:{load:async()=>{calls++;return{ok:true,match:value};}}};
   return{...dom,...win,options,calls:()=>calls,stop:()=>{active=false;}};
 }
-test('completed match renders header, 42 players, formations, stats, timeline and disabled future studio',async()=>{
+test('completed match renders header, 42 players, formations, stats, timeline and available match studio',async()=>{
   const f=ui(),page=mountMatchDetail(f.options);await page.ready;const root=f.nodes.matchDetailContent,all=allNodes(root),text=textOf(root);
-  for(const expected of ['Amedspor','Beşiktaş','3 — 2','MS','4-2-3-1','4-1-4-1','2,13','İstatistikler','Kadrolar','Oyuncu değişiklikleri','Maç olayları','Yakında','İkinci sarıdan kırmızı kart'])assert.ok(text.includes(expected),expected);
+  for(const expected of ['Amedspor','Beşiktaş','3 — 2','MS','4-2-3-1','4-1-4-1','2,13','İstatistikler','Kadrolar','Oyuncu değişiklikleri','Maç olayları','İkinci sarıdan kırmızı kart'])assert.ok(text.includes(expected),expected);
   assert.equal(all.filter(n=>n.className==='lineup-player').length,42);assert.equal(f.calls(),1);assert.equal(root.children[0].href,'/maclar?hafta=6');
-  assert.ok(all.some(n=>n.textContent==='Maçı Stüdyoda Aç'&&n.disabled));assert.ok(!all.some(n=>['img','video','iframe'].includes(n.tagName)));
+  assert.ok(all.some(n=>n.textContent==='Maçı Stüdyoda Aç'&&n.href==='/mac-studyosu?id=215997&hafta=6'));assert.ok(!all.some(n=>['img','video','iframe'].includes(n.tagName)));
   assert.doesNotMatch(text,/3071|undefined|NaN|\bnull\b|2,15/);assert.deepEqual(POSITION_LABELS,{goalkeeper:'KL',defender:'DEF',midfielder:'ORT',forward:'FOR',unknown:'—'});
   assert.equal(incidentMinute({minute:90,added:3}),'90+3′');page.dispose();assert.equal(root.children.length,0);
 });
