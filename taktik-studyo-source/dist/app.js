@@ -8,6 +8,7 @@ function jerseyNumberColor(color){
 }
 
 function clamp(value,min,max){return Math.min(max,Math.max(min,value));}
+function pitchPoint(event,rect){return {x:clamp((event.clientX-rect.left)/rect.width,0,1),y:clamp((event.clientY-rect.top)/rect.height,0,1)};}
 function dragCoordinates(start,event,rect,bounds){
  return {x:clamp(start.px+(event.clientX-start.x)/rect.width*100,bounds.minX,bounds.maxX),y:clamp(start.py+(event.clientY-start.y)/rect.height*100,bounds.minY,bounds.maxY)};
 }
@@ -22,7 +23,16 @@ function createJersey(number){
  jersey.innerHTML='<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false"><path class="jersey-body" d="M22 5 10 10 2 24 12 30 17 22 17 59 47 59 47 22 52 30 62 24 54 10 42 5 38 10 26 10Z"/><path class="jersey-accent" d="m2 24 10 6 3-5-10-6Zm50 6 10-6-3-5-10 6ZM22 5l4 5h12l4-5-3 10H25Z"/></svg>';
  const label=document.createElement('b');label.className='shirt-number';label.textContent=number??'–';jersey.append(label);return jersey;
 }
-window.TAKTIK_BOARD_UTILS=Object.freeze({createJersey,jerseyNumberColor,clamp,dragCoordinates,listenForDrag});
+const localTeams=window.TAKTIK_TEAMS || [
+['Galatasaray','GS','#a51935','#efb62a'],['Fenerbahçe','FB','#19294d','#f3d233'],['Beşiktaş','BJK','#222222','#eeeeee'],['Trabzonspor','TS','#702039','#8cc1dc'],['Samsunspor','SAM','#ca303a','#eeeeee'],['Başakşehir','İBF','#ed7835','#213a63'],['Göztepe','GÖZ','#bb2039','#edc932'],['Çaykur Rizespor','RİZ','#198c55','#276dad'],['Kasımpaşa','KAS','#173c74','#ffffff'],['Konyaspor','KON','#23855c','#ffffff'],['Alanyaspor','ALA','#ef802b','#228756'],['Gaziantep FK','GFK','#c3313c','#252b2b'],['Eyüpspor','EYP','#713576','#e6be42'],['Kocaelispor','KOC','#148255','#242b28'],['Gençlerbirliği','GEN','#b72637','#262725'],['Erzurumspor FK','ERZ','#2c65ad','#ffffff'],['Amedspor','AMD','#168553','#c5353d'],['Çorum FK','ÇOR','#c1303b','#242a28']].map(([name,short,color,color2])=>({name,short,color,color2}));
+function coordinates(shape){const rows=shape.split('-').map(Number),result=[{x:50,y:89,role:'KL'}];rows.forEach((n,row)=>{const y=rows.length===2?65-row*42:73-row*(56/(rows.length-1));for(let i=0;i<n;i++){let role=row===0?(i===0&&n===4?'SLB':i===n-1&&n===4?'SĞB':'STP'):row===rows.length-1?(n>=3?(i===0?'SLK':i===n-1?'SĞK':'SF'):'SF'):rows.length>=4&&row===1?'ÖL':row===rows.length-2&&rows.length>=4?'OO':'MO';result.push({x:n===1?50:n===2?34+i*32:16+i*(68/(n-1)),y,role});}});return result;}
+
+// Shared local roster selection; the classic board retains its existing slot fallback.
+function selectRosterXI(squad,shape='4-3-3'){
+ const available=[...(squad?.players||[])].sort((a,b)=>(Number(!!b.photo)-Number(!!a.photo))||((b.starts??0)-(a.starts??0))||((b.value??0)-(a.value??0)));
+ return coordinates(shape).map(slot=>{const group=slot.role==='KL'?'G':['SLB','SĞB','STP'].includes(slot.role)?'D':['SLK','SĞK','SF'].includes(slot.role)?'F':'M';let ix=available.findIndex(p=>p.roles?.includes(slot.role));if(ix<0)ix=available.findIndex(p=>p.position===group);if(ix<0)ix=available.findIndex(p=>p.position!=='G');if(ix<0)ix=0;return available.splice(ix,1)[0]||null;});
+}
+window.TAKTIK_BOARD_UTILS=Object.freeze({selectRosterXI,getLocalTeams:()=>window.TAKTIK_TEAMS || localTeams,createJersey,jerseyNumberColor,clamp,pitchPoint,dragCoordinates,listenForDrag});
 
 window.createTacticsBoard=function(root=document,options={}){
 const mode=options.mode??'edit',readonly=mode==='readonly';
@@ -31,15 +41,14 @@ const scoped=Object.hasOwn(options,'draftContext'),draftContext=options.draftCon
 if(readonly&&scoped)throw new Error('Readonly boards cannot own draft contexts');
 if(scoped&&(root===document||options.storageKey!==undefined||!draftContext?.isActive()))throw new Error('Invalid scoped board context');
 let disposed=false,cancelGesture=null,resizeObserver=null,offDraftScope=()=>{},disposeSharing=()=>{};
-const teams=window.TAKTIK_TEAMS || [
-['Galatasaray','GS','#a51935','#efb62a'],['Fenerbahçe','FB','#19294d','#f3d233'],['Beşiktaş','BJK','#222222','#eeeeee'],['Trabzonspor','TS','#702039','#8cc1dc'],['Samsunspor','SAM','#ca303a','#eeeeee'],['Başakşehir','İBF','#ed7835','#213a63'],['Göztepe','GÖZ','#bb2039','#edc932'],['Çaykur Rizespor','RİZ','#198c55','#276dad'],['Kasımpaşa','KAS','#173c74','#ffffff'],['Konyaspor','KON','#23855c','#ffffff'],['Alanyaspor','ALA','#ef802b','#228756'],['Gaziantep FK','GFK','#c3313c','#252b2b'],['Eyüpspor','EYP','#713576','#e6be42'],['Kocaelispor','KOC','#148255','#242b28'],['Gençlerbirliği','GEN','#b72637','#262725'],['Erzurumspor FK','ERZ','#2c65ad','#ffffff'],['Amedspor','AMD','#168553','#c5353d'],['Çorum FK','ÇOR','#c1303b','#242a28']].map(([name,short,color,color2])=>({name,short,color,color2}));
+const teams=window.TAKTIK_TEAMS || localTeams;
 const shapes=['4-3-3','4-2-3-1','4-4-2','3-5-2','3-4-3','5-3-2','4-1-4-1','4-4-1-1','4-1-2-1-2','4-3-1-2','4-2-2-2','4-2-4','4-5-1','3-4-2-1','3-4-1-2','3-3-3-1','3-3-1-3','3-2-4-1','3-6-1','5-4-1','5-2-3','5-2-1-2','5-2-2-1','2-3-5'];
 const descriptions={'4-3-3':['Dengeli','Kanatları geniş kullan. Üçlü orta sahayla oyunun kontrolünü elinde tut.'],'4-2-3-1':['Kontrollü','İki ön liberoyla savunmayı koru, forvet arkasındaki üçlüyle pozisyon üret.'],'4-4-2':['Klasik','İki kompakt hat ve çift forvet. Savunma ile hücum arasında sağlam bir denge.'],'3-5-2':['Merkez odaklı','Orta sahada sayısal üstünlük kur. Kanat beklerinle oyuna genişlik kat.'],'3-4-3':['Hücumcu','Üç hücumcuyla önde baskı kur, kanat oyuncularını hücuma dahil et.'],'5-3-2':['Savunmacı','Beşli savunmayla alanları kapat, iki forvetle hızlı çıkışlar yap.']};
 const $=id=>root===document?document.getElementById(id):root.querySelector('[data-control="'+id+'"]'),pitch=$('pitch');let selected=null,filter='popular',dialogMode='team',history=[],toastTimer;
 let drawingMode='move',drawingColor='#ffffff',activeGesture=null;
 let expanded=false,boardHome=null,benchHome=null,previousOverflow='',suppressSquadClickUntil=0;
 let state={team:{...(teams.find(t=>t.name===options.team)||teams[0])},formation:'4-3-3',customized:false,players:[],drawings:[]};
-function coordinates(shape){const rows=shape.split('-').map(Number),result=[{x:50,y:89,role:'KL'}];rows.forEach((n,row)=>{const y=rows.length===2?65-row*42:73-row*(56/(rows.length-1));for(let i=0;i<n;i++){let role=row===0?(i===0&&n===4?'SLB':i===n-1&&n===4?'SĞB':'STP'):row===rows.length-1?(n>=3?(i===0?'SLK':i===n-1?'SĞK':'SF'):'SF'):rows.length>=4&&row===1?'ÖL':row===rows.length-2&&rows.length>=4?'OO':'MO';result.push({x:n===1?50:n===2?34+i*32:16+i*(68/(n-1)),y,role});}});return result;}
+
 const roleNames={KL:'Kaleci',STP:'Stoper',SLB:'Sol bek',SĞB:'Sağ bek',ÖL:'Ön libero',MO:'Orta saha',OO:'Oyun kurucu',SLK:'Sol kanat',SĞK:'Sağ kanat',SF:'Forvet'};
 function initialPlayers(shape){return coordinates(shape).map((p,i)=>({...p,id:i,number:i===0?1:[3,4,5,2,8,6,10,7,9,11][i-1],name:roleNames[p.role],renamed:false}));}
 if(!readonly)state.players=teamPlayers(state.team,state.formation);
@@ -58,8 +67,8 @@ if(!readonly&&!scoped)window.addEventListener('pagehide',saveOnPagehide);
 function squadFor(team=state.team){const rosters=window.TAKTIK_ROSTERS?.teams;return rosters&&Object.hasOwn(rosters,team.name)?rosters[team.name]:null;}
 function teamPlayers(team,shape){
  const squad=squadFor(team);if(!squad?.players?.length)return initialPlayers(shape);
- const available=[...squad.players].sort((a,b)=>(Number(!!b.photo)-Number(!!a.photo))||((b.starts??0)-(a.starts??0))||((b.value??0)-(a.value??0)));
- return coordinates(shape).map((slot,i)=>{const group=slot.role==='KL'?'G':['SLB','SĞB','STP'].includes(slot.role)?'D':['SLK','SĞK','SF'].includes(slot.role)?'F':'M';let ix=available.findIndex(p=>p.roles?.includes(slot.role));if(ix<0)ix=available.findIndex(p=>p.position===group);if(ix<0)ix=available.findIndex(p=>p.position!=='G');if(ix<0)ix=0;const athlete=available.splice(ix,1)[0];return {...slot,id:i,name:athlete.name,number:athlete.number,athleteId:athlete.id,photo:athlete.photo,renamed:false};});
+ const chosen=selectRosterXI(squad,shape);
+ return coordinates(shape).map((slot,i)=>{const athlete=chosen[i];return athlete?{...slot,id:i,name:athlete.name,number:athlete.number,athleteId:athlete.id,photo:athlete.photo,renamed:false}:initialPlayers(shape)[i];});
 }
 function renderRosterSelect(p){
  const roster=squadFor();$('rosterSelectLabel').hidden=!roster;
@@ -163,7 +172,7 @@ function onDrawingStart(e){
  if(e.button!==0||drawingMode==='move'||activeGesture!==null)return;
  if(drawingMode==='eraser'&&!state.drawings.some(s=>s.tool==='pen'))return;
  e.preventDefault();const rect=pitch.getBoundingClientRect();
- const point=ev=>({x:clamp((ev.clientX-rect.left)/rect.width,0,1),y:clamp((ev.clientY-rect.top)/rect.height,0,1)});
+ const point=ev=>pitchPoint(ev,rect);
  snapshot();const undoEntry=history[history.length-1];const stroke={tool:drawingMode,color:drawingColor,width:drawingMode==='eraser'?24:4,points:[point(e)]};state.drawings.push(stroke);
  activeGesture=e.pointerId;drawingCanvas.setPointerCapture(e.pointerId);drawingCanvas.focus({preventScroll:true});renderDrawing();let finished=false;
  const move=ev=>{if(ev.pointerId!==undefined&&ev.pointerId!==e.pointerId)return;const p=point(ev),last=stroke.points[stroke.points.length-1];if(Math.hypot((p.x-last.x)*rect.width,(p.y-last.y)*rect.height)<1.5)return;stroke.points.push(p);renderDrawing();};

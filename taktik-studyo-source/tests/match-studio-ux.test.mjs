@@ -38,12 +38,15 @@ test('goal facts group minutes, retain penalties, credit own goals correctly and
   assert.deepEqual(matchGoals({...f,incidents:[]}).rows,{home:[],away:[]});
   const raw=normalizeIncidents({event_id:215997,incidents:[{type:'goal',minute:1,goal_type:'constructor'}]},f);assert.equal(raw[0].goalKind,'unknown');
 });
-test('both scoreboards share safely rendered scorers and absent data has no empty list',async()=>{
+test('Match Center retains scorers while Match Studio keeps player goal markers without a scoreboard',async()=>{
   for(const mount of [mountMatchDetail,mountMatchStudio]){
     const f=matchBoardDocument(),full=withGoals();full.incidents[0].player.name='<img src=x onerror=bad()>';
     const page=mount({document:f.document,window:f.window,current:()=>true,api:{load:async()=>({ok:true,match:full})}});await page.ready;
     const root=mount===mountMatchDetail?f.nodes.matchDetailContent:f.nodes.matchStudioContent;
-    const lists=allNodes(root).filter(n=>n.className==='match-scorers');assert.equal(lists.length,2);assert.match(textOf(lists[0]),/18′ \(P\), 64′/);assert.match(textOf(lists[1]),/90\+8′/);assert.ok(!allNodes(root).some(n=>n.tagName==='img'));page.dispose();
+    const lists=allNodes(root).filter(n=>n.className==='match-scorers');
+    if(mount===mountMatchDetail){assert.equal(lists.length,2);assert.match(textOf(lists[0]),/18′ \(P\), 64′/);assert.match(textOf(lists[1]),/90\+8′/);}
+    else{assert.equal(lists.length,0);assert.ok(allNodes(root).some(n=>n.className==='match-player-goals'));assert.ok(allNodes(root).some(n=>n.className==='match-studio-topbar'));}
+    assert.ok(!allNodes(root).some(n=>n.tagName==='img'));page.dispose();
   }
   const f=matchBoardDocument(),full=withGoals();full.incidents=[];const p=mountMatchDetail({document:f.document,window:f.window,current:()=>true,api:{load:async()=>({ok:true,match:full})}});await p.ready;assert.equal(allNodes(f.nodes.matchDetailContent).filter(n=>n.className==='match-scorers').length,0);p.dispose();
 });

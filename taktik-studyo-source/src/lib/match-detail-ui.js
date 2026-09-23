@@ -1,6 +1,7 @@
+import {LINEUP_LABELS} from './studio-lineups.js';
 import {requestedMatchId,backToMatches,POSITION_LABELS,STAT_LABELS,INCIDENT_LABELS,incidentMinute} from './match-detail.js';
 import {matchDate,MATCH_STATUS_LABELS} from './matches.js';
-import {matchStudioAvailable,matchPageUrl} from './match-layout.js';
+import {matchStudioAvailable,matchPageUrl,createLocalCatalogue,resolveStudioLineups} from './match-layout.js';
 import {matchGoals,appendScorers} from './match-goals.js';
 
 export function mountMatchDetail({document,window,api,current}) {
@@ -17,22 +18,24 @@ export function mountMatchDetail({document,window,api,current}) {
   function section(title){const el=node('section',undefined,'center-section');el.append(node('h2',title));content.append(el);return el;}
   const placeholder=(el,text)=>el.append(node('p',text,'section-empty'));
   function render(match){
+    const local=createLocalCatalogue(window),resolved=resolveStudioLineups(match,local);
     const date=matchDate(match.kickoff),header=node('section',undefined,'match-summary');
     header.setAttribute('aria-label','Maç özeti');header.append(node('p','SÜPER LİG · '+match.round+'. HAFTA','eyebrow'));
     const teams=node('div',undefined,'center-scoreboard');
     const score=['finished','live'].includes(match.status)?[match.score.home??'—',match.score.away??'—'].join(' — '):match.status==='upcoming'?date.time:'—';
     const goals=matchGoals(match),home=node('div'),away=node('div');home.append(teamName(match.home));away.append(teamName(match.away));
-    appendScorers(document,home,goals.rows.home);appendScorers(document,away,goals.rows.away);
+    if(match.status!=='upcoming'){appendScorers(document,home,goals.rows.home);appendScorers(document,away,goals.rows.away);}
     teams.append(home,node('strong',score,'center-score'),away);header.append(teams);
     const stamp=node('time',new Intl.DateTimeFormat('tr-TR',{day:'numeric',month:'long',year:'numeric',weekday:'long'}).format(new Date(match.kickoff))+' · '+date.time);
     stamp.setAttribute('datetime',match.kickoff);header.append(node('p',MATCH_STATUS_LABELS[match.status],'center-status'),stamp);
     if(match.venue)header.append(node('p',match.venue,'center-venue'));
-    const entry=node('div',undefined,'match-studio-entry'),available=matchStudioAvailable(match);
+    const entry=node('div',undefined,'match-studio-entry'),available=matchStudioAvailable(match,local);
     const button=node(available?'a':'button','Maçı Stüdyoda Aç');
     if(available)button.href=matchPageUrl('/mac-studyosu',window.location.search);
     else{button.type='button';button.disabled=true;button.setAttribute('aria-describedby','matchStudioUnavailable');}
     entry.append(button);
     if(!available){const note=node('span','Kadrolar açıklandığında kullanılabilir');note.id='matchStudioUnavailable';entry.append(note);}
+    if(match.status==='upcoming'&&Object.values(resolved).some(t=>t&&t.lineupKind!=='confirmed'))header.append(node('p','Muhtemel 11','center-status'));
     header.append(entry);content.append(header);
 
     const stats=section('İstatistikler');
@@ -50,17 +53,19 @@ export function mountMatchDetail({document,window,api,current}) {
       }
       stats.append(row);
     }
+    const displayLineups=match.status==='upcoming'&&Object.values(resolved).some(Boolean)?resolved:match.lineups;
     const lineups=section('Kadrolar');
-    if(!match.lineups)placeholder(lineups,match.availability.lineups==='error'?'Kadrolar şu anda alınamıyor.':'Kadrolar henüz açıklanmadı.');
+    if(!displayLineups)placeholder(lineups,match.availability.lineups==='error'?'Kadrolar şu anda alınamıyor.':'Kadrolar henüz açıklanmadı.');
     else {
-      lineups.append(node('p',match.lineups.status==='confirmed'?'Onaylanmış kadrolar':match.lineups.status==='predicted'?'Tahmini kadrolar · Henüz onaylanmadı':'Kadro onayı belirtilmedi','section-note'));
+      lineups.append(node('p',match.lineups?.status==='confirmed'?'Onaylanmış kadrolar':match.lineups?.status==='predicted'?'Tahmini kadrolar · Henüz onaylanmadı':'Kadro onayı belirtilmedi','section-note'));
       const columns=node('div',undefined,'center-columns');
       for(const side of ['home','away']){
-        const team=match[side],data=match.lineups[side],column=node('section',undefined,'lineup-column');colors(column,team);
+        const team=match[side],data=displayLineups[side],column=node('section',undefined,'lineup-column');colors(column,team);
         column.append(node('h3',team.name),node('p',data?.formation||'—','center-formation'));
+        if(data?.lineupKind)column.append(node('p',LINEUP_LABELS[data.lineupKind],'section-note'));
         if(!data)placeholder(column,'Kadrolar henüz açıklanmadı.');
         else for(const [key,label] of [['starters','İlk 11'],['substitutes','Yedekler']]){
-          column.append(node('h4',label));const list=node('ul',undefined,'lineup-list');
+          column.append(node('h4',key==='starters'&&data.lineupKind&&data.lineupKind!=='confirmed'?'Muhtemel 11':label));const list=node('ul',undefined,'lineup-list');
           for(const player of data[key]){const row=node('li',undefined,'lineup-player');row.dataset.playerId=player.id;
             row.append(node('span',player.number===null?'—':String(player.number),'lineup-number'),node('span',player.name),node('span',POSITION_LABELS[player.position],'lineup-position'));list.append(row);}
           if(!data[key].length)placeholder(column,'Oyuncu bilgisi mevcut değil.');else column.append(list);

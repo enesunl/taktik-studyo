@@ -98,5 +98,7 @@ test('shared HTML contains a pitch-only shell with no editor or account controls
  assert.match(viewer,/id="sharedBoard"/);assert.match(viewer,/data-control="pitch"/);
  assert.match(viewer,/data-control="drawingCanvas"/);
  assert.match(viewer,/>Paylaşılan kadro<\/h1>/);assert.match(viewer,/Kadro yükleniyor…/);
- assert.doesNotMatch(viewer,/<(?:button|form|select|aside|dialog)\b|teamSearch|teamList|formationList|squadPanel|squadList|playerForm|drawingTools|shareLineup|comparisonLink|profil\.html|karsilastirma\.html|signOut|tabindex="0"/);
+ const themeButton=/<button type="button" class="theme-toggle" data-theme-toggle[^>]*>Tema<\/button>/g;
+ assert.equal([...viewer.matchAll(themeButton)].length,1);
+ assert.doesNotMatch(viewer.replace(themeButton,''),/<(?:button|form|select|aside|dialog)\b|teamSearch|teamList|formationList|squadPanel|squadList|playerForm|drawingTools|shareLineup|comparisonLink|profil\.html|karsilastirma\.html|signOut|tabindex="0"/);
 });

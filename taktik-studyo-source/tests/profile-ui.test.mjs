@@ -109,7 +109,7 @@ test('profile markup has accessible labels, status, keyboard submit and no extra
   const html=readFileSync(new URL('../dist/profil.html',import.meta.url),'utf8');
   for(const id of ['profileUsername','profileDisplayName'])assert.match(html,new RegExp('label for="'+id+'"'));
   assert.match(html,/<form hidden inert novalidate>/);assert.match(html,/type="submit"/);assert.match(html,/role="status" aria-live="polite"/);
-  assert.deepEqual([...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map(m=>m[1]),['backend.js']);
+  assert.deepEqual([...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map(m=>m[1]),['theme.js','navigation.js','backend.js']);
   assert.doesNotMatch(html,/avatar_url|type="password"|type="email"/);
   const ui=readFileSync(new URL('../src/lib/profile-ui.js',import.meta.url),'utf8');assert.doesNotMatch(ui,/innerHTML|localStorage|sessionStorage/);
   const api=readFileSync(new URL('../src/lib/profile-api.js',import.meta.url),'utf8');assert.doesNotMatch(api,/\.upsert\(|\.updateUser\(|\.eq\('username'/);

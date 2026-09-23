@@ -1,3 +1,4 @@
+import {validXI} from './studio-lineups.js';
 import {requestedMatchId,isMatchId} from './match-id.js';
 import {requestedRound,seasonValid} from './matches.js';
 import {requestMatches,detailError} from './matches-transport.js';
@@ -19,6 +20,10 @@ export function detailValid(data,id) {
   if (!data || data.id !== id || !seasonValid({season:'2026-2027',matches:[data]}) || !nameValid(data.venue)) return false;
   if (!data.availability || !['stats','lineups','incidents'].every(k => ['available','unavailable','error'].includes(data.availability[k]))) return false;
   if (data.statistics !== null && (!data.statistics || Object.entries(data.statistics).some(([k,v]) => !Object.hasOwn(STAT_LABELS,k) || !v || ['home','away'].some(s => v[s] !== null && (typeof v[s] !== 'number' || !Number.isFinite(v[s]) || v[s] < 0 || v[s] > 1000))))) return false;
+  if(data.studioLineups!==undefined){
+    if(data.status!=='upcoming'||!data.studioLineups)return false;
+    for(const side of ['home','away']){const t=data.studioLineups[side];if(t!==null&&(!validXI(t)||!['confirmed','probable-provider','probable-recent-match'].includes(t.lineupKind)||t.lineupKind==='probable-recent-match'&&!isMatchId(t.sourceMatchId)))return false;}
+  }
   if (data.lineups !== null) {
     if (!data.lineups || !['confirmed','predicted','unknown'].includes(data.lineups.status)) return false;
     for (const side of ['home','away']) {

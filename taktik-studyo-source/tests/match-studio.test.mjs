@@ -90,11 +90,11 @@ test('studio loads once, reset makes no request, no storage, untrusted names sta
   const f=matchBoardDocument(),full=detail();full.lineups.home.starters[0].name='<img src=x onerror=bad()>';let calls=0;
   const page=mountMatchStudio({document:f.document,window:f.window,current:()=>true,api:{load:async()=>{calls++;return{ok:true,match:full};}}});await page.ready;
   const nodes=allNodes(f.nodes.matchStudioContent);assert.equal(nodes.filter(n=>n.className==='match-player').length,22);assert.match(textOf(f.nodes.matchStudioContent),/<img src=x/);
-  fire(nodes.find(n=>n.className==='match-player'),'keydown',{key:'ArrowRight'});fire(nodes.find(n=>n.textContent==='Gerçek Dizilişe Dön'),'click');assert.equal(calls,1);
-  assert.equal(f.nodes.matchStudioContent.children[0].href,'/mac?id=215997&hafta=6');page.dispose();assert.equal(f.nodes.matchStudioContent.children.length,0);
+  fire(nodes.find(n=>n.className==='match-player'),'keydown',{key:'ArrowRight'});fire(nodes.find(n=>n.textContent==='Kaynak Dizilişe Dön'),'click');assert.equal(calls,1);
+  assert.equal(nodes.find(n=>n.className==='match-studio-back').href,'/mac?id=215997&hafta=6');page.dispose();assert.equal(f.nodes.matchStudioContent.children.length,0);
 });
 test('invalid IDs, future XI absence, failure/retry and stale async response never initialize board',async()=>{
-  for(const path of ['/mac-studyosu','/mac-studyosu?id=-1','/mac-studyosu?id=1&id=2']){const f=matchBoardDocument(path);let calls=0;const p=mountMatchStudio({document:f.document,window:f.window,current:()=>true,api:{load(){calls++;}}});await p.ready;assert.equal(calls,0);assert.match(textOf(f.nodes.matchStudioContent),/Maç bulunamadı/);p.dispose();}
+  for(const path of ['/mac-studyosu?id=','/mac-studyosu?id=-1','/mac-studyosu?id=1&id=2']){const f=matchBoardDocument(path);let calls=0;const p=mountMatchStudio({document:f.document,window:f.window,current:()=>true,api:{load(){calls++;}}});await p.ready;assert.equal(calls,0);assert.match(textOf(f.nodes.matchStudioContent),/Maç bulunamadı/);p.dispose();}
   const f=matchBoardDocument(),future=detail();future.lineups=null;const p=mountMatchStudio({document:f.document,window:f.window,current:()=>true,api:{load:async()=>({ok:true,match:future})}});await p.ready;assert.match(textOf(f.nodes.matchStudioContent),/başlangıç kadroları mevcut değil/);assert.equal(allNodes(f.nodes.matchStudioContent).filter(n=>n.className==='match-player').length,0);p.dispose();
   const g=matchBoardDocument(),wait=deferred();let active=true,calls=0;const late=mountMatchStudio({document:g.document,window:g.window,current:()=>active,api:{load(){calls++;return wait.promise;}}});fire(g.nodes.matchStudioContent.children[2],'click');assert.equal(calls,1);active=false;late.dispose();wait.resolve({ok:true,match:detail()});await late.ready;assert.equal(g.nodes.matchStudioContent.children.length,0);
   const h=matchBoardDocument();let tries=0;const retry=mountMatchStudio({document:h.document,window:h.window,current:()=>true,api:{load:async()=>++tries===1?{ok:false,error:{message:'secret'}}:{ok:true,match:detail()}}});await retry.ready;assert.doesNotMatch(textOf(h.nodes.matchStudioContent),/secret/);fire(h.nodes.matchStudioContent.children[2],'click');await tick();assert.equal(tries,2);retry.dispose();
@@ -108,8 +108,8 @@ for(const path of ['/mac-studyosu','/mac-studyosu.html'])test(path+' shares prot
     const page=startPage({auth,document:f.document,window:f.window,client:{functions:{invoke:async()=>{loads++;return{data:detail()};}}},backend:{loadCatalogue(){throw Error('No catalogue');}}});await page.ready;await tick();assert.equal(loads,status==='signed_in'?1:0);assert.equal(f.nodes.protectedContent.hidden,status!=='signed_in');page.dispose();
   }
 });
-test('static M3 uses common app utilities, dedicated horizontal viewport and no M4 controls',()=>{
+test('static Match Studio uses common app utilities and dedicated horizontal viewport',()=>{
   const html=readFileSync(new URL('../dist/mac-studyosu.html',import.meta.url),'utf8'),css=readFileSync(new URL('../dist/match-studio.css',import.meta.url),'utf8');
-  assert.match(html,/app.js/);assert.match(html,/backend.js/);assert.doesNotMatch(html,/comparison.js|rosters.js|drawingCanvas|teamSearch|squadPanel/);
+  assert.match(html,/app.js/);assert.match(html,/backend.js/);assert.doesNotMatch(html,/comparison.js|drawingCanvas|teamSearch|squadPanel/);
   assert.match(css,/min-width:800px/);assert.match(css,/overflow-x:auto/);assert.match(css,/aspect-ratio:1\.6/);assert.match(css,/touch-action:none/);
 });

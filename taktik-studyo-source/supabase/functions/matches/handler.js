@@ -1,3 +1,4 @@
+import {resolveProbableXI} from './probable.js';
 import {fetchSeason,fetchDetail} from './provider.js';
 import {requestedMatchId} from '../../../src/lib/match-id.js';
 
@@ -17,7 +18,36 @@ export function matchesOrigins(value = 'https://taktikstudyo.com') {
 
 export function createMatchesHandler({authenticate,token,origins = matchesOrigins(),load = fetchSeason,loadDetail = fetchDetail,now = Date.now}) {
   let cached = null, expires = 0, pending = null;
-  const details = new Map(), pendingDetails = new Map();
+  const details = new Map(), pendingDetails = new Map(), resolved = new Map(), pendingResolved = new Map();
+  async function season(){
+    if(!cached||now()>=expires){
+      if(!pending)pending=Promise.resolve().then(()=>load({token})).then(data=>{cached=data;expires=now()+300000;return data;}).finally(()=>{pending=null;});
+      await pending;
+    }
+    return cached;
+  }
+  async function rawDetail(id){
+    const existing=details.get(id);if(existing&&now()<existing.expires)return existing;
+    if(!pendingDetails.has(id)){
+      if(pendingDetails.size>=32)throw Error('PROVIDER_UNAVAILABLE');
+      pendingDetails.set(id,Promise.resolve().then(()=>loadDetail({id,token})).then(data=>{
+        const ttl=detailTTL(data),entry={data,ttl,expires:now()+ttl*1000};
+        if(details.size>=128)details.delete(details.keys().next().value);details.set(id,entry);return entry;
+      }).finally(()=>pendingDetails.delete(id)));
+    }
+    return pendingDetails.get(id);
+  }
+  async function studioDetail(id){
+    const existing=resolved.get(id);if(existing&&now()<existing.expires)return existing;
+    if(!pendingResolved.has(id)){
+      if(pendingResolved.size>=32)throw Error('PROVIDER_UNAVAILABLE');
+      pendingResolved.set(id,(async()=>{
+        const raw=await rawDetail(id),data=await resolveProbableXI(raw.data,{season,detail:rawDetail,now});
+        const entry={...raw,data};if(resolved.size>=128)resolved.delete(resolved.keys().next().value);resolved.set(id,entry);return entry;
+      })().finally(()=>pendingResolved.delete(id)));
+    }
+    return pendingResolved.get(id);
+  }
   return async function handle(request) {
     const origin = request.headers.get('origin');
     const headers = {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',Vary:'Origin, Authorization','X-Content-Type-Options':'nosniff'};
@@ -37,28 +67,14 @@ export function createMatchesHandler({authenticate,token,origins = matchesOrigin
     } catch {return reply(401,wantsDetail ? 'UNAUTHORIZED' : 'unauthenticated');}
     if (wantsDetail) {
       try {
-        let entry = details.get(id);
-        if (!entry || now() >= entry.expires) {
-          if (!pendingDetails.has(id)) {
-            if (pendingDetails.size >= 32) return reply(503,'PROVIDER_UNAVAILABLE');
-            pendingDetails.set(id,Promise.resolve().then(() => loadDetail({id,token})).then(data => {
-              const ttl = detailTTL(data), value = {data,ttl,expires:now()+ttl*1000};
-              if (details.size >= 128) details.delete(details.keys().next().value);
-              details.set(id,value); return value;
-            }).finally(() => pendingDetails.delete(id)));
-          }
-          entry = await pendingDetails.get(id);
-        }
+        const entry = await studioDetail(id);
         return new Response(JSON.stringify(entry.data),{headers:{...headers,'Cache-Control':'private, max-age='+Math.max(0,Math.floor((entry.expires-now())/1000))}});
       } catch (error) {return reply(error?.message === 'MATCH_NOT_FOUND' ? 404 : 503,error?.message === 'MATCH_NOT_FOUND' ? 'MATCH_NOT_FOUND' : 'PROVIDER_UNAVAILABLE');}
     }
     try {
       // Authentication precedes every cache hit. Single-flight cache is per
       // isolate, not durable/distributed, and cannot bypass the user check.
-      if (!cached || now() >= expires) {
-        if (!pending) pending = load({token}).then(data => {cached = data; expires = now()+300000; return data;}).finally(() => {pending = null;});
-        await pending;
-      }
+      await season();
       return new Response(JSON.stringify(cached),{headers:{...headers,'Cache-Control':'private, max-age=300'}});
     } catch (error) {return reply(error?.message === 'provider_limited' ? 503 : 502,'matches_unavailable');}
   };

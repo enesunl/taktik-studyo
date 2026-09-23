@@ -86,6 +86,6 @@ test('detail API maps SDK/local status errors, rejects mismatched response and d
   const wait=deferred();let current=true;const api=createMatchDetailApi({client:{functions:{invoke:()=>wait.promise}},current:()=>current});const pending=api.load('215997');current=false;wait.resolve({data:detail()});assert.equal((await pending).error.code,'state_changed');
 });
 test('static detail shell is protected, board-free and provider/media-free',()=>{
-  const html=readFileSync(new URL('../dist/mac.html',import.meta.url),'utf8');assert.match(html,/id="protectedContent"[^>]*hidden inert/);assert.match(html,/Maç verileri: BSD Sports Data/);assert.doesNotMatch(html,/app\.js|rosters\.js|<img|<video|sports\.bzzoiro|BSD_API_TOKEN/);
+  const html=readFileSync(new URL('../dist/mac.html',import.meta.url),'utf8');assert.match(html,/id="protectedContent"[^>]*hidden inert/);assert.match(html,/Maç verileri: BSD Sports Data/);assert.doesNotMatch(html,/<img|<video|sports\.bzzoiro|BSD_API_TOKEN/);
   for(const file of ['match-detail.js','match-detail-ui.js'])assert.doesNotMatch(readFileSync(new URL('../src/lib/'+file,import.meta.url),'utf8'),/innerHTML|BSD_API_TOKEN|sports\.bzzoiro/);
 });

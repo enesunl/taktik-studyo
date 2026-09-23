@@ -14,6 +14,8 @@ export class BoardNode extends MatchNode {
   setPointerCapture(id){this.capture=id;}
   releasePointerCapture(){this.capture=null;}
   focus(){this.focused=true;}
+  showModal(){this.open=true;}
+  close(){this.open=false;}
 }
 export function matchBoardDocument(path='/mac-studyosu?id=215997&hafta=6') {
   const dom=matchesDocument(),win=matchesWindow(path);
