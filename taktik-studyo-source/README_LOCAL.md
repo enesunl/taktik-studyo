@@ -95,11 +95,12 @@ ve deployment yoktur. `.openai/hosting.json` ve `supabase/project.json` mevcut
 projenin kimliğini korur; yeni Site/proje oluşturulmadı.
 
 SQL ve Edge dosyaları incelenebilir kaynak olarak dahil edildi. Mevcut backend'e
-`seed.sql` veya başlangıç migration'ını yeniden uygulama. Yerel migration adı
-`20260913062133_football_backend.sql`, canlı migration kaydı
-`20260913063249 / football_backend`: içerik aynı, tarih kimliği farklıdır.
-Bu durum gelecekteki backend deployment'ından önce ayrıca uzlaştırılmalıdır;
-otomatik `db push` veya migration repair bu paket tarafından çalıştırılmaz.
+`seed.sql` veya başlangıç migration'ını yeniden uygulama. 23 Eylül 2026'da üç
+eski migration'ın yerel dosya adları, SQL içeriği değiştirilmeden production
+history version'larıyla hizalandı. Remote history repair yapılmadı.
+Yalnızca `20260923135716_studio_projects.sql`, tek pending migration olduğu
+dry-run ile doğrulanıp kullanıcı onayıyla uygulandı. Güncel sonuçlar ve smoke
+test sınırları: `STUDIO_PROJECTS_M5_RELEASE.md`. Otomatik deploy yoktur.
 
 `scripts/verify-live-backend.mjs` korunmuş eski canlı test aracıdır; normal
 `npm test` akışında yoktur. Canlı API'ye yazma girişimleri gönderdiğinden bu

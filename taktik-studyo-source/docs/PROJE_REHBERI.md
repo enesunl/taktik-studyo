@@ -8,6 +8,10 @@ Sonraki yerel güncelleme: Edge origin yapılandırması `taktikstudyo.com` içi
 güncellendi; production deploy yapılmadı. Aşağıdaki orijinal kaynak/canlı Edge
 eşleşmesi ve teslim doğrulaması kayıtları ilk teslimin tarihsel sonuçlarıdır.
 
+23 Eylül 2026: Migration dosya version'ları production history ile hizalandı;
+ayrı onayla yalnızca Studio Projects migration'ı uygulandı. Güncel kayıt:
+[`../STUDIO_PROJECTS_M5_RELEASE.md`](../STUDIO_PROJECTS_M5_RELEASE.md).
+
 ## 1. Kaynağın doğrulanması
 
 | Kontrol | Sonuç |
@@ -107,7 +111,7 @@ Supabase CLI `2.117.0` olarak korunmuştur. Yeni bağımlılık eklenmedi.
 
 | Dosya | İçerik |
 |---|---|
-| `supabase/migrations/20260913062133_football_backend.sql` | Başlangıç tabloları, constraint, RLS/grant, indeks, trigger, validation ve RPC |
+| `supabase/migrations/20260913063249_football_backend.sql` | Başlangıç tabloları, constraint, RLS/grant, indeks, trigger, validation ve RPC |
 | `supabase/schema/football.sql` | Aynı SQL'nin şema kaynak kopyası |
 | `supabase/seed.sql` | Statik katalog kökenli 18 takım ve 539 oyuncu |
 | `supabase/config.toml` | Yerel CLI ve lineups entrypoint/JWT doğrulama ayarları |

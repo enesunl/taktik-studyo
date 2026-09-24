@@ -10,7 +10,8 @@ export function mountTeamPicker({document,host,catalogue,current,selected,onSele
   const buttons={};
   function shut(){dialog.close();opener?.focus();}
   for(const value of ['home','away']){
-    const button=node('button',value==='home'?'Ev sahibi takımı seç':'Deplasman takımı seç','match-tactical-button');button.type='button';buttons[value]=button;section.append(button);
+    const name=selected(value),label=value==='home'?'Ev sahibi':'Deplasman';
+    const button=node('button',name?label+': '+name:label+' takımı seç','match-tactical-button');button.type='button';buttons[value]=button;section.append(button);
     listen(button,'click',()=>{if(disposed||!current())return;side=value;opener=button;search.value='';title.textContent=value==='home'?'Ev sahibi takımı seç':'Deplasman takımı seç';filter();dialog.showModal();search.focus();});
   }
   for(const team of catalogue.teams){

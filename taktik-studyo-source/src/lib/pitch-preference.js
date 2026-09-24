@@ -8,13 +8,14 @@ export function pitchMarkings(color){
   const luminance=.2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2];
   return (luminance+.05)/.05>=1.05/(luminance+.05)?'#000000':'#ffffff';
 }
-export function createPitchPreference({getStorage=()=>null,onChange=()=>{}}={}){
+export function createPitchPreference({getStorage=()=>null,onChange=()=>{},initial,persist=true}={}){
   let color=DEFAULT_PITCH_COLOR;
   try{const saved=getStorage()?.getItem(PITCH_COLOR_KEY);if(validPitchColor(saved))color=saved.toLowerCase();}catch{}
+  if(validPitchColor(initial))color=initial.toLowerCase();
   const publish=()=>onChange({color,markings:pitchMarkings(color),isDefault:color===DEFAULT_PITCH_COLOR});
   publish();
   return Object.freeze({get:()=>color,set(value){
     if(!validPitchColor(value))return false;color=value.toLowerCase();publish();
-    try{getStorage()?.setItem(PITCH_COLOR_KEY,color);}catch{}return true;
-  },reset(){color=DEFAULT_PITCH_COLOR;publish();try{getStorage()?.removeItem(PITCH_COLOR_KEY);}catch{}}});
+    try{if(persist)getStorage()?.setItem(PITCH_COLOR_KEY,color);}catch{}return true;
+  },reset(){color=DEFAULT_PITCH_COLOR;publish();try{if(persist)getStorage()?.removeItem(PITCH_COLOR_KEY);}catch{}}});
 }

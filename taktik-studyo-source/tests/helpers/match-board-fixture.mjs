@@ -1,3 +1,4 @@
+import {webcrypto} from 'node:crypto';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {MatchNode,matchesDocument,matchesWindow} from './matches-fixture.mjs';
@@ -19,6 +20,9 @@ export class BoardNode extends MatchNode {
 }
 export function matchBoardDocument(path='/mac-studyosu?id=215997&hafta=6') {
   const dom=matchesDocument(),win=matchesWindow(path);
+  win.window.crypto=webcrypto;
+  const events=new MatchNode();dom.document.listeners=events.listeners;
+  dom.document.addEventListener=events.addEventListener.bind(events);dom.document.removeEventListener=events.removeEventListener.bind(events);
   dom.document.createElement=tag=>new BoardNode(tag);dom.document.createElementNS=(_ns,tag)=>new BoardNode(tag);
   dom.nodes.matchStudioContent=new BoardNode();dom.nodes.matchDetailContent=new BoardNode();
   const context=vm.createContext({window:win.window,document:dom.document});

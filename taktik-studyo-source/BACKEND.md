@@ -47,7 +47,7 @@ current releases on 2026-09-13.
 
 ## Database design
 
-Prepared migration: `supabase/migrations/20260913062133_football_backend.sql`.
+Prepared migration: `supabase/migrations/20260913063249_football_backend.sql`.
 Editable schema source: `supabase/schema/football.sql` (keep migration in sync before applying).
 
 - `public.teams`: identity, names, optional logo/source URL, two team colors, ordering,

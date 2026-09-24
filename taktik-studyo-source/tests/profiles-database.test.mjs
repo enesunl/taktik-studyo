@@ -55,7 +55,7 @@ test('Phase 1 migrations: catalogue access, profiles ownership and sharing isola
       grant usage on schema auth to anon, authenticated;
       grant execute on function auth.uid() to anon, authenticated;
     `);
-    await db.exec(migration('20260913062133_football_backend.sql'));
+    await db.exec(migration('20260913063249_football_backend.sql'));
     await db.exec(`
       insert into public.teams (id, name, short_name, color_primary, color_secondary)
         values ('test', 'Test Team', 'TST', '#123456', '#abcdef');
@@ -68,8 +68,8 @@ test('Phase 1 migrations: catalogue access, profiles ownership and sharing isola
     // Model a hosted project with permissive default grants. The new table must
     // explicitly revoke them; a clean database alone would not catch that bug.
     await db.exec('alter default privileges in schema public grant all on tables to public, anon, authenticated');
-    await db.exec(migration('20260918142336_catalogue_authenticated_read.sql'));
-    await db.exec(migration('20260918142348_profiles_ownership.sql'));
+    await db.exec(migration('20260920094922_catalogue_authenticated_read.sql'));
+    await db.exec(migration('20260920102243_profiles_ownership.sql'));
 
     await t.test('existing sharing functions, ACLs and anon policies remain unchanged', async () => {
       assert.deepEqual(await protectedMetadata(), before);

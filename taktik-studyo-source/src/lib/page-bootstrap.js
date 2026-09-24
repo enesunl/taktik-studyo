@@ -1,3 +1,5 @@
+import {createStudioProjects} from './studio-projects.js';
+import {mountStudioProjects} from './studio-projects-ui.js';
 import {resolvePage} from './page-routes.js';
 import {createProtectedPage} from './protected-page.js';
 import {mountLanding} from './landing-ui.js';
@@ -39,8 +41,9 @@ export function startPage({auth,document,window,backend,client}) {
         : 'Oturum şu anda doğrulanamadı. Biraz sonra tekrar dene.';
     },
     async mount(scope,current,validatedUser) {
+      if (route.page === 'projects') return mountStudioProjects({document,window,current,api:createStudioProjects({client,validatedUser,current})}).dispose;
       if (route.page === 'match-studio') {
-        return mountMatchStudio({document,window,current,api:createMatchDetailApi({client,current,location:window.location})}).dispose;
+        return mountMatchStudio({document,window,current,userId:validatedUser.id,projects:createStudioProjects({client,validatedUser,current}),api:createMatchDetailApi({client,current,location:window.location})}).dispose;
       }
       if (route.page === 'match') {
         return mountMatchDetail({document,window,current,api:createMatchDetailApi({client,current,location:window.location})}).dispose;

@@ -4,7 +4,7 @@ import {mountTacticalDrawings} from './tactical-drawing-ui.js';
 
 // Match positions and contextual same-team replacements. Shared classic-board utilities own jersey rendering,
 // number contrast, percentage drag coordinates and pointer-listener lifecycle.
-export function createMatchBoard({root,document,model,utils,current=()=>true,toolbarHost,getPreferenceStorage}) {
+export function createMatchBoard({root,document,model,utils,current=()=>true,toolbarHost,getPreferenceStorage,initial={},onChange=()=>{}}) {
   if (!model || !utils || !current()) throw Error('Match board unavailable');
   let disposed=false,selected=null,cancelGesture=null,drawing=null;
   const playerListeners=[],listeners=[],markers=new Map(),benchListeners=[];
@@ -12,6 +12,7 @@ export function createMatchBoard({root,document,model,utils,current=()=>true,too
   let source=['home','away'].flatMap(side=>model[side].players.map(p=>Object.freeze({...p,side})));
   const people=new Map(['home','away'].flatMap(side=>[...model[side].players,...(model[side].bench||[])].map(p=>[p.key,{...p,side}])));
   const working=new Map(source.map(p=>[p.key,{x:p.initialX,y:p.initialY,person:p.key}]));
+  for(const p of initial.working||[]){if(!working.has(p.slotKey)||!people.has(p.personKey)||people.get(p.personKey).side!==people.get(p.slotKey).side)throw Error('Invalid working layout');working.set(p.slotKey,{x:p.x,y:p.y,person:p.personKey});}
   const active=()=>!disposed&&current();
   const playersActive=()=>active()&&(!drawing||drawing.getTool()==='select');
   const node=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
@@ -63,7 +64,7 @@ export function createMatchBoard({root,document,model,utils,current=()=>true,too
     const before=person(slot),next=people.get(incoming);
     if(before.side!==next.side||[...working.values()].some(s=>s.person===incoming))return false;
     working.get(slot).person=incoming;visuals(markers.get(slot),next);selected=slot;select(slot);
-    notice.textContent=before.name+' çıktı, '+next.name+' girdi.';markers.get(slot).focus({preventScroll:true});return true;
+    notice.textContent=before.name+' çıktı, '+next.name+' girdi.';markers.get(slot).focus({preventScroll:true});onChange();return true;
   }
   function targetAt(x,y,rect,exclude=null,side=null){
     return [...working].filter(([key])=>key!==exclude&&(!side||person(key).side===side))
@@ -125,7 +126,7 @@ export function createMatchBoard({root,document,model,utils,current=()=>true,too
       else if(moved&&target){const destination={x:working.get(target).x,y:working.get(target).y};Object.assign(working.get(target),{x:previous.x,y:previous.y});Object.assign(working.get(key),destination);paint(target);notice.textContent=person(key).name+' ve '+person(target).name+' yer değiştirdi.';}
       if(moved&&ev.type==='pointerup')suppressedClicks.add(button);highlight(null);
       try{button.releasePointerCapture(event.pointerId);}catch{}
-      button.classList.remove('dragging');if(active())paint(key);
+      button.classList.remove('dragging');if(active()){paint(key);if(moved&&ev.type==='pointerup')onChange();}
     };
     const stop=utils.listenForDrag(button,move,end);cancelGesture=()=>end({type:'pointercancel'});
   }
@@ -140,18 +141,18 @@ export function createMatchBoard({root,document,model,utils,current=()=>true,too
     listen(button,'keydown',event=>{
       if(!playersActive()||cancelGesture)return;
       if(event.key==='Escape'){select(null);return;}
-      if(event.key==='Enter'&&event.shiftKey&&selected&&selected!==p.key&&person(selected).side===p.side){event.preventDefault();const a=working.get(selected),b=working.get(p.key),old={x:a.x,y:a.y};Object.assign(a,{x:b.x,y:b.y});Object.assign(b,old);paint(selected);paint(p.key);notice.textContent=person(selected).name+' ve '+person(p.key).name+' yer değiştirdi.';return;}
+      if(event.key==='Enter'&&event.shiftKey&&selected&&selected!==p.key&&person(selected).side===p.side){event.preventDefault();const a=working.get(selected),b=working.get(p.key),old={x:a.x,y:a.y};Object.assign(a,{x:b.x,y:b.y});Object.assign(b,old);paint(selected);paint(p.key);onChange();notice.textContent=person(selected).name+' ve '+person(p.key).name+' yer değiştirdi.';return;}
       const delta={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[event.key];
       if(!delta)return;event.preventDefault();select(p.key);
       const rect=pitch.getBoundingClientRect();if(!(rect.width>0&&rect.height>0))return;
       const limit=bounds(button,rect),point=working.get(p.key),step=event.shiftKey?3:1;
-      Object.assign(point,{x:utils.clamp(point.x+delta[0]*step,limit.minX,limit.maxX),y:utils.clamp(point.y+delta[1]*step,limit.minY,limit.maxY)});paint(p.key);
+      Object.assign(point,{x:utils.clamp(point.x+delta[0]*step,limit.minX,limit.maxX),y:utils.clamp(point.y+delta[1]*step,limit.minY,limit.maxY)});paint(p.key);onChange();
     });
   }
   }
   renderPlayers();
   if(!toolbarHost){toolbarHost=node('div',undefined,'match-tactical-host');root.append(toolbarHost);}
-  drawing=mountTacticalDrawings({root,pitch,toolbarHost,document,utils,getPreferenceStorage,current:active,onMode(){cancelGesture?.();select(null);}});
+  drawing=mountTacticalDrawings({root,pitch,toolbarHost,document,utils,getPreferenceStorage,initial,onChange,current:active,onMode(){cancelGesture?.();select(null);}});
   return Object.freeze({
     setTeam(side,team){
       if(!active()||!['home','away'].includes(side)||!team)return;
@@ -162,11 +163,12 @@ export function createMatchBoard({root,document,model,utils,current=()=>true,too
       const added=team.players.map(p=>({...p,side}));source=[...source.filter(p=>p.side!==side),...added];
       for(const p of [...team.players,...team.bench])people.set(p.key,{...p,side});
       for(const p of added)working.set(p.key,{x:p.initialX,y:p.initialY,person:p.key});
-      renderPlayers();
+      renderPlayers();onChange();
     },
+    exportState(){return {model,working:[...working].map(([slotKey,p])=>({slotKey,personKey:p.person,x:p.x,y:p.y})),drawings:drawing.getState().objects,pitch:drawing.getPitch()};},
     getDrawings:()=>drawing.getState(),
     getState(){return {matchId:model.matchId,selected,players:source.map(p=>({key:person(p.key).key,side:p.side,playerId:person(p.key).playerId,x:working.get(p.key).x,y:working.get(p.key).y}))};},
-    reset(){if(!active())return;cancelGesture?.();drawing.cancel();for(const p of source){working.set(p.key,{x:p.initialX,y:p.initialY,person:p.key});visuals(markers.get(p.key),person(p.key));paint(p.key);}select(null);},
+    reset(){if(!active())return;cancelGesture?.();drawing.cancel();for(const p of source){working.set(p.key,{x:p.initialX,y:p.initialY,person:p.key});visuals(markers.get(p.key),person(p.key));paint(p.key);}select(null);onChange();},
     dispose(){if(disposed)return;disposed=true;cancelGesture?.();drawing.dispose();for(const off of [...listeners,...playerListeners,...benchListeners])off();root.replaceChildren();markers.clear();working.clear();},
   });
 }

@@ -32,8 +32,27 @@ export function drawingObject({id,type,color,width,start,end,points=[]},preview=
   return {id,type,color,width,geometry};
 }
 
-export function createDrawingHistory(){
-  let objects=[],undo=[],redo=[];
+export function normalizeDrawingObjects(rows){
+  if(!Array.isArray(rows)||rows.length>OBJECT_LIMIT)return null;
+  const ids=new Set(),validPoint=p=>p&&['x','y'].every(k=>typeof p[k]==='number'&&Number.isFinite(p[k])&&p[k]>=0&&p[k]<=1);
+  const result=[];
+  for(const o of rows){
+    if(!o||typeof o.id!=='string'||!/^[A-Za-z0-9_-]{1,80}$/.test(o.id)||ids.has(o.id)||!DRAWING_TYPES.includes(o.type)||!Object.hasOwn(DRAWING_COLORS,o.color)||!Object.hasOwn(DRAWING_WIDTHS,o.width))return null;
+    ids.add(o.id);const g=o.geometry;let geometry;
+    if(o.type==='zone'||o.type==='circle'){
+      if(!validPoint(g)||!['width','height'].every(k=>typeof g[k]==='number'&&Number.isFinite(g[k])&&g[k]>0&&g[k]<=1)||g.x+g.width>1+1e-10||g.y+g.height>1+1e-10)return null;
+      geometry={x:g.x,y:g.y,width:g.width,height:g.height};
+    }else if(o.type==='freehand'){
+      if(!Array.isArray(g?.points)||g.points.length<2||g.points.length>POINT_LIMIT||!g.points.every(validPoint))return null;
+      geometry={points:g.points.map(p=>({x:p.x,y:p.y}))};
+    }else{if(!validPoint(g?.start)||!validPoint(g?.end))return null;geometry={start:{x:g.start.x,y:g.start.y},end:{x:g.end.x,y:g.end.y}};}
+    result.push({id:o.id,type:o.type,color:o.color,width:o.width,geometry});
+  }
+  return result;
+}
+export function createDrawingHistory(initial=[]){
+  let objects=normalizeDrawingObjects(initial),undo=[],redo=[];
+  if(!objects)throw Error('Invalid drawings');
   function commit(next){undo.push(objects);if(undo.length>HISTORY_LIMIT)undo.shift();objects=next;redo=[];return true;}
   return Object.freeze({
     snapshot:()=>({objects:clone(objects),undoCount:undo.length,redoCount:redo.length}),

@@ -7,7 +7,7 @@ deletion, public profiles or profile search is included.
 
 ## Source schema and authorization
 
-The source of truth is `supabase/migrations/20260918142348_profiles_ownership.sql`.
+The source of truth is `supabase/migrations/20260920102243_profiles_ownership.sql`.
 `supabase/schema/football.sql` describes the earlier football schema and provides
 the existing timestamp trigger; it is not a consolidated profiles schema.
 

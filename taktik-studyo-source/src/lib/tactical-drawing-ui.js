@@ -5,9 +5,10 @@ import {createStudioPreferences,SIZE_BOUNDS} from './studio-preferences.js';
 const TOOLS=[['select','Seç','Seç / Oyuncu taşı'],['movement-arrow','Koşu','Koşu oku'],['pass-arrow','Pas','Pas oku'],['line','Çizgi','Düz çizgi'],['freehand','Kalem','Serbest çizim'],['zone','Alan','Alan çiz'],['circle','Çember','Çember çiz'],['eraser','Sil','Çizimi sil']];
 const COLOR_LABELS={white:'Beyaz',yellow:'Sarı',red:'Kırmızı',blue:'Mavi'},WIDTH_LABELS={thin:'İnce',medium:'Orta',thick:'Kalın'};
 
-export function mountTacticalDrawings({root,pitch,toolbarHost,document,utils,current,onMode,getPreferenceStorage}){
-  const history=createDrawingHistory(),listeners=[],toolButtons=new Map(),colorButtons=new Map(),widthButtons=new Map();
+export function mountTacticalDrawings({root,pitch,toolbarHost,document,utils,current,onMode,getPreferenceStorage,initial={},onChange=()=>{}}){
+  const history=createDrawingHistory(initial.drawings||[]),listeners=[],toolButtons=new Map(),colorButtons=new Map(),widthButtons=new Map();
   let tool='select',color='yellow',width='medium',disposed=false,cancelGesture=null,nextId=0;
+  const usedIds=new Set((initial.drawings||[]).map(o=>o.id));while(usedIds.has('draw-'+(nextId+1)))nextId++;
   const active=()=>!disposed&&current();
   const node=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n;};
   const svgNode=tag=>document.createElementNS('http://www.w3.org/2000/svg',tag);
@@ -39,7 +40,7 @@ export function mountTacticalDrawings({root,pitch,toolbarHost,document,utils,cur
     cancelGesture?.();tool=value;onMode(value);refresh();
     notice.textContent=value==='select'?'Oyuncuları taşıyabilir ve boş sahayı yatay kaydırabilirsin.':value==='eraser'?'Silmek istediğin çizime dokun. Sahayı kaydırmak için Seç’e dön.':'Sahada sürükleyerek çiz. Sahayı kaydırmak için Seç’e dön. Escape çizimi iptal eder.';
   }
-  function action(name){if(!active())return;cancelGesture?.();if(history[name]()){paint();notice.textContent={undo:'Çizim işlemi geri alındı.',redo:'Çizim işlemi yinelendi.',clear:'Tüm çizimler temizlendi. Oyuncular korundu.'}[name];}}
+  function action(name){if(!active())return;cancelGesture?.();if(history[name]()){paint();onChange();notice.textContent={undo:'Çizim işlemi geri alındı.',redo:'Çizim işlemi yinelendi.',clear:'Tüm çizimler temizlendi. Oyuncular korundu.'}[name];}}
   for(const [value,label,title]of TOOLS)toolButtons.set(value,button(label,title,'tool',value,()=>setTool(value)));
   const undo=button('↶','Çizimi geri al','action','undo',()=>action('undo'));
   const redo=button('↷','Çizimi yinele','action','redo',()=>action('redo'));
@@ -52,17 +53,17 @@ export function mountTacticalDrawings({root,pitch,toolbarHost,document,utils,cur
   for(const [key,label]of [['width','Saha genişliği'],['height','Saha yüksekliği']]){
     const row=node('label','match-size-label',label),slider=node('input');slider.type='range';slider.min=SIZE_BOUNDS[key][0];slider.max=SIZE_BOUNDS[key][1];slider.step=10;slider.setAttribute('aria-label',label);
     const value=node('output');row.append(slider,value);pitchGroup.append(row);sizeInputs[key]={slider,value};
-    listen(slider,'input',()=>{if(active()){cancelGesture?.();sizePreference.setSize({...sizePreference.getSize(),[key]:Number(slider.value)});}});
+    listen(slider,'input',()=>{if(active()){cancelGesture?.();sizePreference.setSize({...sizePreference.getSize(),[key]:Number(slider.value)});onChange();}});
   }
-  const sizePreference=createStudioPreferences({getStorage:getPreferenceStorage,onSize(size){for(const key of ['width','height']){pitch.style.setProperty('--match-pitch-'+key,size[key]+'px');sizeInputs[key].slider.value=String(size[key]);sizeInputs[key].value.textContent=size[key]+' px';}}});
+  const sizePreference=createStudioPreferences({getStorage:getPreferenceStorage,initialSize:initial.pitch,persistSize:!initial.pitch,onSize(size){for(const key of ['width','height']){pitch.style.setProperty('--match-pitch-'+key,size[key]+'px');sizeInputs[key].slider.value=String(size[key]);sizeInputs[key].value.textContent=size[key]+' px';}}});
   const pitchLabel=node('label','match-pitch-color-label','Saha rengi'),picker=node('input','match-pitch-color'),pitchValue=node('span','match-pitch-color-value'),resetPitch=node('button','match-tactical-button','Varsayılana Dön');
   picker.type='color';picker.setAttribute('aria-label','Saha rengi');resetPitch.type='button';resetPitch.title='Varsayılan saha boyutlarına ve rengine dön';
   pitchLabel.append(picker,pitchValue);pitchGroup.append(pitchLabel,resetPitch);
-  const preference=createPitchPreference({getStorage:getPreferenceStorage,onChange({color,markings,isDefault}){
+  const preference=createPitchPreference({getStorage:getPreferenceStorage,initial:initial.pitch?.color,persist:!initial.pitch,onChange({color,markings,isDefault}){
     picker.value=color;pitchValue.textContent=color;pitch.style.setProperty('--match-pitch-background',isDefault?'repeating-linear-gradient(90deg,#285b3b 0%,#285b3b 10%,#2b6140 10%,#2b6140 20%)':color);
     pitch.style.setProperty('--match-pitch-markings',markings);
   }});
-  listen(picker,'input',()=>{if(active())preference.set(picker.value);});listen(resetPitch,'click',()=>{if(active()){cancelGesture?.();preference.reset();sizePreference.resetSize();}});
+  listen(picker,'input',()=>{if(active()&&preference.set(picker.value))onChange();});listen(resetPitch,'click',()=>{if(active()){cancelGesture?.();preference.reset();sizePreference.resetSize();onChange();}});
 
   listen(input,'pointerdown',event=>{
     if(!active()||tool==='select'||cancelGesture||event.button!==0||event.isPrimary===false)return;
@@ -87,10 +88,10 @@ export function mountTacticalDrawings({root,pitch,toolbarHost,document,utils,cur
       if(ev.type!=='pointerup'||!active())return;
       if(type==='eraser'){
         const bounds=pitch.getBoundingClientRect(),id=hitDrawing(history.snapshot().objects,endPoint,8,bounds);
-        if(id){history.erase(id);paint();notice.textContent='Çizim silindi.';}
+        if(id){history.erase(id);paint();onChange();notice.textContent='Çizim silindi.';}
       }else{
         const value=object(false);if(!value)return;
-        if(history.add(value)){nextId++;paint();notice.textContent='Çizim eklendi.';}
+        if(history.add(value)){usedIds.add(value.id);nextId++;while(usedIds.has('draw-'+(nextId+1)))nextId++;paint();onChange();notice.textContent='Çizim eklendi.';}
         else notice.textContent='En fazla '+OBJECT_LIMIT+' çizim eklenebilir. Bir çizimi sil veya çizimleri temizle.';
       }
     }
@@ -106,8 +107,9 @@ export function mountTacticalDrawings({root,pitch,toolbarHost,document,utils,cur
     }
   }
   for(const target of new Set([root,toolbarHost]))listen(target,'keydown',shortcut);
-  refresh();
+  paint();
   return Object.freeze({
+    getPitch:()=>({...sizePreference.getSize(),color:preference.get()}),
     getTool:()=>tool,
     getState:()=>({tool,color,width,...history.snapshot()}),
     cancel:()=>cancelGesture?.(),
