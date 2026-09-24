@@ -89,7 +89,7 @@ test('Çalışmalarım UI empty state, pagination, open, branded rename/delete a
 });
 test('new navigation is authenticated only; project CSS uses shared tokens and mobile layout',()=>{
  const index=read('dist/index.html');assert.doesNotMatch(index.split('<div id="sharedViewer" hidden>')[1],/calismalarim/);
- for(const name of ['studyo','karsilastirma','mac','maclar','mac-studyosu','profil','calismalarim'])assert.match(read('dist/'+name+'.html'),/href="\/calismalarim"/);
+ for(const name of ['studyo','karsilastirma','mac','maclar','mac-studyosu','profil','calismalarim'])assert.doesNotMatch(read('dist/'+name+'.html').split('</header>')[0],/href="\/calismalarim"/);
  const css=read('dist/studio-projects.css');assert.match(css,/var\(--bg-surface\)/);assert.match(css,/@media\(max-width:600px\)/);assert.match(css,/studio-project-dialog::backdrop/);
 });
 test('unsaved internal navigation is branded and cancellable, beforeunload only warns when dirty; cleanup removes listeners',async()=>{

@@ -8,7 +8,7 @@ const context=vm.createContext({window:{addEventListener(){},scrollBy(){},innerH
 const dir=require('path').join(__dirname,'../dist/');vm.runInContext(fs.readFileSync(dir+'rosters.js','utf8'),context);
 if(process.env.LIVE_CATALOGUE_FILE){const live=JSON.parse(fs.readFileSync(process.env.LIVE_CATALOGUE_FILE,'utf8'));context.window.TAKTIK_TEAMS=live.teams;context.window.TAKTIK_ROSTERS.teams=live.rosters;}
 vm.runInContext(fs.readFileSync(dir+'app.js','utf8'),context);
-const leftRoot=new Element(),rightRoot=new Element();const left=context.window.createTacticsBoard(leftRoot,{team:'Galatasaray'}),right=context.window.createTacticsBoard(rightRoot,{team:'Fenerbahçe'});
+const leftRoot=new Element(),rightRoot=new Element();const left=context.window.createTacticsBoard(leftRoot,{team:'Galatasaray',benchOnly:true}),right=context.window.createTacticsBoard(rightRoot,{team:'Fenerbahçe',benchOnly:true});
 const control=(root,id)=>root.querySelector('[data-control="'+id+'"]');
 function assertJerseys(board,root){
  const state=board.getState();
@@ -96,7 +96,7 @@ console.log('PASS: bench drop substitutes at target slot, invalid drops do nothi
  assert.equal(unusualBoard.getState().team.name,'__proto__');
  console.log('PASS: real board state saves and reloads formation, player movement and drawings; comparison drafts remain independent.');
 
- // Studio derives reserves from the live XI; roster and Comparison remain complete.
+ // Studio and Comparison derive reserves from their own live XI.
  const benchRoot=new Element(),benchBoard=context.window.createTacticsBoard(benchRoot,{benchOnly:true,storageKey:'test:bench'});
  const rosterSnapshot=JSON.stringify(context.window.TAKTIK_ROSTERS);
  function assertReserves(board,root){
@@ -124,8 +124,8 @@ console.log('PASS: bench drop substitutes at target slot, invalid drops do nothi
  assertJerseys(restoredBench,restoredBenchRoot);
  benchBoard.selectTeam('Fenerbahçe');assertReserves(benchBoard,benchRoot);
  assert.equal(JSON.stringify(context.window.TAKTIK_ROSTERS),rosterSnapshot);
- assert.equal(control(rightRoot,'squadList').children.length,context.window.TAKTIK_ROSTERS.teams[right.getState().team.name].players.length);
- console.log('PASS: Studio reserves follow XI swaps, roster replacement, edits, formation, team, undo and draft restore without changing Comparison or roster data.');
+ assertReserves(left,leftRoot);assertReserves(right,rightRoot);
+ console.log('PASS: Studio reserves follow XI swaps, roster replacement, edits, formation, team, undo and draft restore while Comparison sides stay independent and canonical roster data remains unchanged.');
 
  const {createUserDraftScope,userDraftKey}=await import('../src/lib/draft-scope.js');
  const userA='11111111-1111-4111-8111-111111111111',userB='22222222-2222-4222-8222-222222222222';
@@ -236,7 +236,7 @@ console.log('PASS: bench drop substitutes at target slot, invalid drops do nothi
  const comparisonScope=createUserDraftScope({userId:userB,storage});
  const stopComparison=context.window.TAKTIK_COMPARISON.mount({context:slot=>scopedContext(comparisonScope,slot)});
  assert.deepEqual(editorModes,['edit','edit','edit']);context.window.createTacticsBoard=createBoard;
- assert.deepEqual(benchModes,[true,false,false]);
+ assert.deepEqual(benchModes,[true,true,true]);
  assert.equal(document.getElementById('leftFormation').value,'3-4-3');assert.equal(document.getElementById('rightFormation').value,'4-2-3-1');
  document.getElementById('leftFormation').value='4-4-2';document.getElementById('leftFormation').listeners.change();flush();
  assert.equal(readDraft(storage,userDraftKey(userB,'left')).formation,'4-4-2');assert.equal(readDraft(storage,userDraftKey(userB,'right')).formation,'4-2-3-1');

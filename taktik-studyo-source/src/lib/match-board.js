@@ -1,10 +1,11 @@
 import {POSITION_LABELS} from './match-detail.js';
 import {goalMarkers} from './match-goals.js';
 import {mountTacticalDrawings} from './tactical-drawing-ui.js';
+import {matchPlayerKey} from './player-overrides.js';
 
 // Match positions and contextual same-team replacements. Shared classic-board utilities own jersey rendering,
 // number contrast, percentage drag coordinates and pointer-listener lifecycle.
-export function createMatchBoard({root,document,model,utils,current=()=>true,toolbarHost,getPreferenceStorage,initial={},onChange=()=>{}}) {
+export function createMatchBoard({root,document,model,utils,current=()=>true,toolbarHost,getPreferenceStorage,initial={},onChange=()=>{},playerOverrides}) {
   if (!model || !utils || !current()) throw Error('Match board unavailable');
   let disposed=false,selected=null,cancelGesture=null,drawing=null;
   const playerListeners=[],listeners=[],markers=new Map(),benchListeners=[];
@@ -35,9 +36,11 @@ export function createMatchBoard({root,document,model,utils,current=()=>true,too
   const close=node('button','Yedekleri kapat');close.type='button';
   const notice=node('p',undefined,'match-board-notice');notice.setAttribute('role','status');notice.setAttribute('aria-live','polite');
   const ghostRoot=node('div');bench.append(heading,hint,close,list);root.replaceChildren(viewport,bench,notice,ghostRoot);
-  const person=slot=>people.get(working.get(slot).person);
+  const effective=p=>playerOverrides?playerOverrides.effective(matchPlayerKey(p,model[p.side]),p):p;
+  const person=slot=>effective(people.get(working.get(slot).person));
   const reserves=side=>[...people.values()].filter(p=>p.side===side&&![...working.values()].some(s=>s.person===p.key));
   function visuals(button,p){
+    p=effective(p);
     button.dataset.playerKey=p.key;
     button.style.setProperty('--team',model[p.side].color);button.style.setProperty('--team2',model[p.side].color2);
     button.style.setProperty('--jersey-number',utils.jerseyNumberColor(model[p.side].color));
@@ -49,7 +52,8 @@ export function createMatchBoard({root,document,model,utils,current=()=>true,too
     for(const off of benchListeners.splice(0))off();list.replaceChildren();bench.hidden=selected===null;
     if(selected===null)return;
     const p=person(selected);heading.textContent=model[p.side].name+' · '+p.name+' yerine';
-    for(const reserve of reserves(p.side)){
+    for(const raw of reserves(p.side)){
+      const reserve=effective(raw);
       const button=node('button',undefined,'match-reserve');button.type='button';button.dataset.playerKey=reserve.key;visuals(button,reserve);
       button.setAttribute('aria-label',reserve.name+' ile '+p.name+' oyuncusunu değiştir');
       const click=()=>{if(suppressedClicks.delete(button)||!active())return;replace(selected,reserve.key);};
@@ -61,7 +65,7 @@ export function createMatchBoard({root,document,model,utils,current=()=>true,too
   }
   function replace(slot,incoming){
     if(!playersActive()||!working.has(slot)||!people.has(incoming))return false;
-    const before=person(slot),next=people.get(incoming);
+    const before=person(slot),next=effective(people.get(incoming));
     if(before.side!==next.side||[...working.values()].some(s=>s.person===incoming))return false;
     working.get(slot).person=incoming;visuals(markers.get(slot),next);selected=slot;select(slot);
     notice.textContent=before.name+' çıktı, '+next.name+' girdi.';markers.get(slot).focus({preventScroll:true});onChange();return true;
@@ -153,6 +157,7 @@ export function createMatchBoard({root,document,model,utils,current=()=>true,too
   renderPlayers();
   if(!toolbarHost){toolbarHost=node('div',undefined,'match-tactical-host');root.append(toolbarHost);}
   drawing=mountTacticalDrawings({root,pitch,toolbarHost,document,utils,getPreferenceStorage,initial,onChange,current:active,onMode(){cancelGesture?.();select(null);}});
+  const offOverrides=playerOverrides?.subscribe(()=>{if(active()){for(const [key,marker] of markers)visuals(marker,person(key));renderBench();}})||(()=>{});
   return Object.freeze({
     setTeam(side,team){
       if(!active()||!['home','away'].includes(side)||!team)return;
@@ -169,6 +174,6 @@ export function createMatchBoard({root,document,model,utils,current=()=>true,too
     getDrawings:()=>drawing.getState(),
     getState(){return {matchId:model.matchId,selected,players:source.map(p=>({key:person(p.key).key,side:p.side,playerId:person(p.key).playerId,x:working.get(p.key).x,y:working.get(p.key).y}))};},
     reset(){if(!active())return;cancelGesture?.();drawing.cancel();for(const p of source){working.set(p.key,{x:p.initialX,y:p.initialY,person:p.key});visuals(markers.get(p.key),person(p.key));paint(p.key);}select(null);onChange();},
-    dispose(){if(disposed)return;disposed=true;cancelGesture?.();drawing.dispose();for(const off of [...listeners,...playerListeners,...benchListeners])off();root.replaceChildren();markers.clear();working.clear();},
+    dispose(){if(disposed)return;disposed=true;offOverrides();cancelGesture?.();drawing.dispose();for(const off of [...listeners,...playerListeners,...benchListeners])off();root.replaceChildren();markers.clear();working.clear();},
   });
 }

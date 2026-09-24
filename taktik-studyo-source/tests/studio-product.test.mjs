@@ -110,9 +110,15 @@ test('upcoming center enables Studio and clearly labels probable lineups',async(
   const f=localFixture();f.window.location.search='?id=216231';const page=mountMatchDetail({document:f.document,window:f.window,current:()=>true,api:{load:async()=>({ok:true,match:future()})}});await page.ready;
   const root=f.nodes.matchDetailContent;assert.match(textOf(root),/Muhtemel 11/);assert.match(textOf(root),/yerel tahmini/);const button=allNodes(root).find(n=>n.textContent==='Maçı Stüdyoda Aç');assert.equal(button.href,'/mac-studyosu?id=216231');page.dispose();
 });
-test('all authenticated navs preserve one logout button and anonymous/share contracts; no duplicated logout implementation',()=>{
-  for(const name of ['index','studyo','karsilastirma','profil','maclar','mac','mac-studyosu']){const html=read('dist/'+name+'.html');assert.match(html,/href="\/mac-studyosu"[^>]*>Stüdyo/);assert.match(html,/href="\/studyo.html"[^>]*>Taktik Tahtası/);assert.equal((html.match(/id="signOut"/g)||[]).length,1);assert.match(html,/data-account-panel hidden/);assert.match(html,/navigation.js/);}
-  assert.match(read('dist/index.html'),/href="\/mac-studyosu">Başla/);assert.doesNotMatch(read('dist/navigation.js'),/auth\.|signOut\(/);
+test('authenticated navigation uses Profile as the only account hub',()=>{
+  for(const name of ['index','studyo','karsilastirma','profil','maclar','mac','mac-studyosu','calismalarim']){
+    const html=read('dist/'+name+'.html');assert.match(html,/href="\/mac-studyosu"[^>]*>Stüdyo/);
+    assert.match(html,/href="\/studyo.html"[^>]*>Taktik Tahtası/);
+    assert.equal((html.match(/id="signOut"/g)||[]).length,name==='profil'?1:0);
+    assert.doesNotMatch(html,/data-account-panel|navigation.js/);
+    assert.doesNotMatch(html.slice(0,html.indexOf('</header>')),/href="\/calismalarim"/);
+  }
+  assert.match(read('dist/index.html'),/href="\/mac-studyosu">Başla/);
 });
 for(const [from,to,swap]of [[1,2,true],[12,13,true],[1,12,false],[12,1,false]])test(`field swap ${from} -> ${to}: ${swap}`,()=>{
   const f=boardFixture(),before=f.board.getState().players,a=before[from],b=before[to],button=markers(f.root)[from],point=p=>({clientX:30+p.x*10,clientY:100+p.y*6.25});
@@ -137,14 +143,9 @@ test('confirmed source replaces cached probable XI after the upcoming cache TTL'
   assert.equal(resolveStudioLineups(await load()).home.lineupKind,'probable-provider');assert.equal(calls,1);
   clock+=300001;assert.equal(resolveStudioLineups(await load()).home.lineupKind,'confirmed');assert.equal(calls,2);
 });
-test('account disclosure opens/closes, Escape and outside click restore semantics, sole existing logout action runs once',()=>{
-  const root=new BoardNode('span'),trigger=new BoardNode('button'),panel=new BoardNode('span'),logout=new BoardNode('button'),document=new BoardNode(),window=new BoardNode();
-  panel.hidden=true;panel.append(logout);root.append(trigger,panel);document.querySelectorAll=()=>[root];root.querySelector=s=>s==='[data-account-trigger]'?trigger:panel;panel.querySelectorAll=()=>[logout];root.contains=n=>allNodes(root).includes(n);logout.closest=()=>logout;
-  let signouts=0;logout.addEventListener('click',()=>signouts++);vm.runInNewContext(read('dist/navigation.js'),{document,window});
-  fire(trigger,'click');assert.equal(panel.hidden,false);assert.equal(trigger.attrs['aria-expanded'],'true');fire(trigger,'click');assert.equal(panel.hidden,true);
-  fire(root,'keydown',{target:trigger,key:'ArrowDown'});assert.equal(logout.focused,true);fire(root,'keydown',{key:'Escape'});assert.equal(panel.hidden,true);assert.equal(trigger.focused,true);
-  fire(trigger,'click');fire(document,'pointerdown',{target:new BoardNode()});assert.equal(panel.hidden,true);
-  fire(trigger,'click');fire(logout,'click');fire(panel,'click',{target:logout});assert.equal(signouts,1);assert.equal(panel.hidden,true);
-  fire(trigger,'click');fire(document,'focusin',{target:new BoardNode()});assert.equal(panel.hidden,true);
-  fire(window,'pagehide');assert.equal(trigger.listeners.get('click').size,0);assert.equal(document.listeners.get('pointerdown').size,0);
+test('profile hub keeps unavailable pages disabled and logout last',()=>{
+ const html=read('dist/profil.html'),panel=html.slice(html.indexOf('<aside'),html.indexOf('</aside>'));
+ assert.match(panel,/href="\/calismalarim"/);assert.match(panel,/disabled[^>]*>Ayarlar/);assert.match(panel,/disabled[^>]*>Gizlilik/);
+ assert.ok(panel.indexOf('id="signOut"')>panel.indexOf('</nav>'));
+ assert.match(read('dist/routes.css'),/@media[^}]+700px/);
 });

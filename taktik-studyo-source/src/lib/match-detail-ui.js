@@ -1,23 +1,29 @@
 import {LINEUP_LABELS} from './studio-lineups.js';
+import {playerKey} from './player-overrides.js';
 import {requestedMatchId,backToMatches,POSITION_LABELS,STAT_LABELS,INCIDENT_LABELS,incidentMinute} from './match-detail.js';
 import {matchDate,MATCH_STATUS_LABELS} from './matches.js';
 import {matchStudioAvailable,matchPageUrl,createLocalCatalogue,resolveStudioLineups} from './match-layout.js';
 import {matchGoals,appendScorers} from './match-goals.js';
 
-export function mountMatchDetail({document,window,api,current}) {
+export function mountMatchDetail({document,window,api,current,playerOverrides}) {
   const root = document.getElementById('matchDetailContent');
   const node = (tag,text,className) => {const el=document.createElement(tag);if(text!==undefined)el.textContent=text;if(className)el.className=className;return el;};
   const back=node('a','← Maçlara Dön','match-back');back.href=backToMatches(window.location.search);
   const status=node('p','','matches-status');status.setAttribute('role','status');status.setAttribute('aria-live','polite');
   const retry=node('button','Tekrar Dene','matches-retry');retry.type='button';retry.hidden=true;
   const content=node('div',undefined,'match-center');root.replaceChildren(back,status,retry,content);
-  const id=requestedMatchId(window.location.search);let stopped=false,busy=false;
+  const id=requestedMatchId(window.location.search);let stopped=false,busy=false,lastMatch=null;
   const active=()=>!stopped&&current();
   function colors(el,team){el.style.setProperty('--club-primary',team.color);el.style.setProperty('--club-secondary',team.color2);}
   function teamName(team){const el=node('div',undefined,'center-team'),marker=node('span',undefined,'team-marker');marker.setAttribute('aria-hidden','true');colors(marker,team);el.append(marker,node('strong',team.name));return el;}
   function section(title){const el=node('section',undefined,'center-section');el.append(node('h2',title));content.append(el);return el;}
   const placeholder=(el,text)=>el.append(node('p',text,'section-empty'));
   function render(match){
+    lastMatch=match;content.replaceChildren();
+    // Provider incidents retain their IDs/minutes/team attribution; only display fields merge.
+    const effective=p=>p&&playerOverrides?playerOverrides.effective(playerKey(p.id,'bsd'),p):p;
+    const event=e=>({...e,player:effective(e.player),incoming:effective(e.incoming),outgoing:effective(e.outgoing)});
+    if(playerOverrides)match={...match,incidents:match.incidents.map(event),substitutions:match.substitutions.map(event)};
     const local=createLocalCatalogue(window),resolved=resolveStudioLineups(match,local);
     const date=matchDate(match.kickoff),header=node('section',undefined,'match-summary');
     header.setAttribute('aria-label','Maç özeti');header.append(node('p','SÜPER LİG · '+match.round+'. HAFTA','eyebrow'));
@@ -66,7 +72,7 @@ export function mountMatchDetail({document,window,api,current}) {
         if(!data)placeholder(column,'Kadrolar henüz açıklanmadı.');
         else for(const [key,label] of [['starters','İlk 11'],['substitutes','Yedekler']]){
           column.append(node('h4',key==='starters'&&data.lineupKind&&data.lineupKind!=='confirmed'?'Muhtemel 11':label));const list=node('ul',undefined,'lineup-list');
-          for(const player of data[key]){const row=node('li',undefined,'lineup-player');row.dataset.playerId=player.id;
+          for(const raw of data[key]){const player=playerOverrides?playerOverrides.effective(playerKey(raw.id,data.lineupKind==='probable-local'?'local':'bsd'),raw):raw;const row=node('li',undefined,'lineup-player');row.dataset.playerId=player.id;
             row.append(node('span',player.number===null?'—':String(player.number),'lineup-number'),node('span',player.name),node('span',POSITION_LABELS[player.position],'lineup-position'));list.append(row);}
           if(!data[key].length)placeholder(column,'Oyuncu bilgisi mevcut değil.');else column.append(list);
         }
@@ -104,12 +110,13 @@ export function mountMatchDetail({document,window,api,current}) {
   async function load(){
     if(!active()||busy)return;
     if(!id){status.textContent='Maç bulunamadı. Geçerli bir maç seç.';return;}
-    busy=true;retry.hidden=true;content.replaceChildren();status.textContent='Maç bilgileri yükleniyor…';
+    busy=true;lastMatch=null;retry.hidden=true;content.replaceChildren();status.textContent='Maç bilgileri yükleniyor…';
     let result;try{result=await api.load(id);}catch{result={ok:false};}
     if(!active())return;busy=false;
     if(!result.ok){const code=result.error?.code;status.textContent=['INVALID_MATCH_ID','MATCH_NOT_FOUND'].includes(code)?'Maç bulunamadı.':code==='UNAUTHORIZED'?'Oturum doğrulanamadı. Giriş yapıp tekrar dene.':'Maç bilgileri şu anda alınamıyor.';retry.hidden=['INVALID_MATCH_ID','MATCH_NOT_FOUND'].includes(code);return;}
     status.textContent='';render(result.match);
   }
   retry.addEventListener('click',load);
-  return {ready:load(),dispose(){stopped=true;retry.removeEventListener('click',load);root.replaceChildren();}};
+  const off=playerOverrides?.subscribe(()=>{if(active()&&!busy&&lastMatch)render(lastMatch);})||(()=>{});
+  return {ready:load(),dispose(){stopped=true;off();retry.removeEventListener('click',load);root.replaceChildren();}};
 }

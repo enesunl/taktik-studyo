@@ -10,6 +10,7 @@ import {mountMatches} from './matches-ui.js';
 import {createMatchDetailApi} from './match-detail.js';
 import {mountMatchDetail} from './match-detail-ui.js';
 import {mountMatchStudio} from './match-studio-ui.js';
+import {createPlayerOverrides} from './player-overrides.js';
 
 export function startPage({auth,document,window,backend,client}) {
   const route = resolvePage(window.location);
@@ -41,12 +42,18 @@ export function startPage({auth,document,window,backend,client}) {
         : 'Oturum şu anda doğrulanamadı. Biraz sonra tekrar dene.';
     },
     async mount(scope,current,validatedUser) {
+      let playerOverrides=null;
+      if(['studio','comparison','match-studio','match'].includes(route.page)){
+        playerOverrides=createPlayerOverrides({client,validatedUser,current});await playerOverrides.load();
+        if(!current()){playerOverrides.dispose();return;}
+      }
+      const owned=dispose=>()=>{dispose?.();playerOverrides?.dispose();};
       if (route.page === 'projects') return mountStudioProjects({document,window,current,api:createStudioProjects({client,validatedUser,current})}).dispose;
       if (route.page === 'match-studio') {
-        return mountMatchStudio({document,window,current,userId:validatedUser.id,projects:createStudioProjects({client,validatedUser,current}),api:createMatchDetailApi({client,current,location:window.location})}).dispose;
+        return owned(mountMatchStudio({document,window,current,playerOverrides,userId:validatedUser.id,projects:createStudioProjects({client,validatedUser,current}),api:createMatchDetailApi({client,current,location:window.location})}).dispose);
       }
       if (route.page === 'match') {
-        return mountMatchDetail({document,window,current,api:createMatchDetailApi({client,current,location:window.location})}).dispose;
+        return owned(mountMatchDetail({document,window,current,playerOverrides,api:createMatchDetailApi({client,current,location:window.location})}).dispose);
       }
       if (route.page === 'matches') {
         return mountMatches({document,window,current,api:createMatchesApi({client,current,location:window.location})}).dispose;
@@ -57,18 +64,18 @@ export function startPage({auth,document,window,backend,client}) {
       }
       // Open the user's own draft directly. Device-wide legacy drafts are
       // neither imported nor deleted as a side effect of opening a board.
-      if (!current()) return;
+      if (!current()) {playerOverrides?.dispose();return;}
       await backend.loadCatalogue();
-      if (!current()) return;
-      return route.page === 'studio'
-        ? window.TAKTIK_APP.mountStudio(document.getElementById('studioRoot'),scope)
-        : window.TAKTIK_COMPARISON.mount(scope);
+      if (!current()) {playerOverrides?.dispose();return;}
+      return owned(route.page === 'studio'
+        ? window.TAKTIK_APP.mountStudio(document.getElementById('studioRoot'),scope,playerOverrides)
+        : window.TAKTIK_COMPARISON.mount(scope,playerOverrides));
     },
   });
   const signOut = () => {void guard.signOut();}, tryAgain = () => {void guard.retry();};
-  logout.addEventListener('click',signOut); retry.addEventListener('click',tryAgain);
+  logout?.addEventListener('click',signOut); retry.addEventListener('click',tryAgain);
   function dispose() {
-    guard.dispose(); logout.removeEventListener('click',signOut); retry.removeEventListener('click',tryAgain);
+    guard.dispose(); logout?.removeEventListener('click',signOut); retry.removeEventListener('click',tryAgain);
     window.removeEventListener('pagehide',dispose);
   }
   window.addEventListener('pagehide',dispose);

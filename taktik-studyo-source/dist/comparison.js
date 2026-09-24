@@ -1,5 +1,5 @@
 'use strict';
-window.TAKTIK_COMPARISON={mount(scope){
+window.TAKTIK_COMPARISON={mount(scope,playerOverrides){
  const cleanups=[];
  const template=document.getElementById('boardTemplate');
  const params=new URLSearchParams(location.search);
@@ -21,7 +21,7 @@ window.TAKTIK_COMPARISON={mount(scope){
    formationSelect.value=state.formation;
   };
   const team=side==='left'?(params.get('sol')||'Galatasaray'):'Fenerbahçe';
-  const api=window.createTacticsBoard(mount,{mode:'edit',team,onChange:sync,draftContext:scope.context(side)});
+  const api=window.createTacticsBoard(mount,{mode:'edit',team,benchOnly:true,playerOverrides,onChange:sync,draftContext:scope.context(side)});
   boardApis[side]=api;
   teamSelect.replaceChildren();
   for(const t of api.getTeams()){

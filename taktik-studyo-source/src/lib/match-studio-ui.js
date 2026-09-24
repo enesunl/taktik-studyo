@@ -9,7 +9,7 @@ import {mountTeamPicker} from './studio-team-picker.js';
 import {LINEUP_LABELS} from './studio-lineups.js';
 import {createMatchBoard} from './match-board.js';
 
-export function mountMatchStudio({document,window,api,current,projects,userId}) {
+export function mountMatchStudio({document,window,api,current,projects,userId,playerOverrides}) {
   const root=document.getElementById('matchStudioContent');
   const node=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
   const back=node('a','← Maç Merkezine Dön','match-studio-back');back.href=matchPageUrl('/mac',window.location.search);
@@ -63,7 +63,7 @@ export function mountMatchStudio({document,window,api,current,projects,userId}) 
     const note=node('p','Yerleşim, formasyon ve genel mevkilerden üretilir. Çalışmanı kaydederek oyuncuları, çizimleri ve saha görünümünü daha sonra aynı şekilde açabilirsin.');
     const instructions=node('p','Oyuncuyu seç: yedekler sahanın altında açılır. Üstüne bırakarak yer değiştir; ok tuşlarıyla taşı. Klavyeyle takas: bir oyuncuyu seç, diğerinde Shift+Enter kullan. Küçük ekranda sahanın boş alanını yatay kaydır.','match-studio-help');
     const boardRoot=node('div',undefined,'match-board-root');help.append(instructions,note);stage.append(boardRoot,help);content.append(sidebar,stage);
-    try{board=createMatchBoard({root:boardRoot,document,model,utils:window.TAKTIK_BOARD_UTILS,current:active,toolbarHost,getPreferenceStorage:()=>window.localStorage,initial,onChange:()=>saveUI?.controller.changed()});}
+    try{board=createMatchBoard({root:boardRoot,document,model,utils:window.TAKTIK_BOARD_UTILS,current:active,toolbarHost,getPreferenceStorage:()=>window.localStorage,initial,playerOverrides,onChange:()=>saveUI?.controller.changed()});}
     catch{content.replaceChildren();status.textContent='Maç stüdyosu şu anda açılamıyor. Sayfayı yeniden yükle.';return;}
     if(projects&&userId)saveUI=mountStudioSave({document,window,host:saveHost,api:projects,current:active,
       capture:()=>serializeStudioProject({source,...board.exportState()}),project,restored,recovery,userId,newId,storage});

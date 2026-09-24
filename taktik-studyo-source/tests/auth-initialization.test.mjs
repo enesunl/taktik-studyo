@@ -26,6 +26,7 @@ function sdkFixture(initial = session, store = new Map()) {
       if (url.pathname === '/auth/v1/user') {requested.resolve(); await response.promise; return Response.json(user);}
       if (url.pathname === '/auth/v1/token') return Response.json(session);
       if (url.pathname === '/auth/v1/logout') {assert.equal(url.searchParams.get('scope'),'local'); return new Response(null,{status:204});}
+      if (url.pathname === '/rest/v1/player_overrides') return Response.json([]);
       if (url.pathname === '/rest/v1/profiles') return Response.json([{id:user.id,username:'Test_12',display_name:'Test'}]);
       throw Error('Unexpected fake endpoint');
     }}

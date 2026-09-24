@@ -162,14 +162,14 @@ test('comparison legacy decisions are per slot; account disposal dismisses pendi
   scope.dispose();await pending;assert.equal(container.children.length,0);assert.equal(storage.getItem(userDraftKey(A,'right')),null);
 });
 
-test('landing stays public through Auth failure/recovery; nav and local logout update',async()=>{
+test('landing stays public through Auth failure/recovery and external logout updates nav',async()=>{
   const f=authFake(state(null)),out=[new Node(),new Node()],inside=[new Node(),new Node()],button=new Node(),message=new Node(),events=new Node();
   const document={querySelectorAll:q=>q==='[data-logged-out]'?out:inside,getElementById:id=>id==='signOut'?button:message};
   const page=mountLanding({auth:f.auth,document,eventTarget:events});await page.ready;
   assert.equal(out[0].hidden,false);assert.equal(inside[0].hidden,true);
   f.emit(state(A));assert.equal(inside[0].hidden,false);assert.equal(out[0].hidden,true);
   f.emit({status:'password_recovery',user:{id:A}});assert.equal(inside[0].hidden,true);
-  f.emit(state(A));await button.emit('click');assert.equal(inside[0].hidden,true);assert.equal(out[0].hidden,false);
+  f.emit(state(A));f.emit(state(null));assert.equal(inside[0].hidden,true);assert.equal(out[0].hidden,false);
   page.dispose();
   f.auth.initialize=async()=>{throw Error('offline');};const failed=mountLanding({auth:f.auth,document,eventTarget:events});await failed.ready;assert.equal(out[0].hidden,false);failed.dispose();
 });
@@ -241,7 +241,7 @@ test('static shells hide protected contents and deterministic defer order leaves
   for(const file of ['studyo','karsilastirma','profil']){
     const html=readFileSync(new URL('../dist/'+file+'.html',import.meta.url),'utf8');
     assert.match(html,/id="protectedContent"[^>]*hidden inert/);assert.match(html,/id="guardMessage" role="status"/);
-    assert.match(html,/<button id="signOut" type="button">/);
+    assert.equal(/<button id="signOut"/.test(html),file==='profil');
     if(file!=='profil')assert.ok(html.indexOf('src="backend.js" defer')<html.indexOf('src="app.js" defer'));
   }
   const app=readFileSync(new URL('../dist/app.js',import.meta.url),'utf8');
