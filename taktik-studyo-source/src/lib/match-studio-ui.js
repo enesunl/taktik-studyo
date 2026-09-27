@@ -36,6 +36,8 @@ export function mountMatchStudio({document,window,api,current,projects,userId,pl
       if(!active())return;busy=false;
       const initial=result?.ok&&projectBoardState(result.project.snapshot);
       if(!initial){status.textContent='Çalışma bulunamadı veya şu anda kullanılamıyor.';retry.hidden=false;return;}
+      try{await playerOverrides?.prepare?.(['home','away'].flatMap(side=>{const t=initial.model[side];return [...t.players,...t.bench].map(p=>(p.key.startsWith('local:')?'local:':p.key.startsWith('internal:')?'internal:':'bsd:')+p.playerId);}));}catch{status.textContent='Oyuncu düzenlemeleri şu anda yüklenemedi.';return;}
+      if(!active())return;
       setup(initial.model,{source:result.project.snapshot.source,project:result.project,initial});return;
     }
     busy=true;retry.hidden=true;status.textContent='Maç stüdyosu hazırlanıyor…';

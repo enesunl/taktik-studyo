@@ -1,0 +1,67 @@
+import {PGlite} from '@electric-sql/pglite';
+import {readFileSync} from 'node:fs';
+import {syncLocal,readState} from './sync.mjs';
+const read=p=>readFileSync(new URL('../../'+p,import.meta.url),'utf8');
+export async function openCatalogueDatabase(dataDir){
+ // PGlite has no remote database URL or linked Supabase path.
+ const db=new PGlite(dataDir);
+ await db.exec('create table if not exists public.d3_local_versions(version text primary key)');
+ const versions=new Set((await db.query('select version from public.d3_local_versions')).rows.map(r=>r.version));
+ const apply=async(version,sql)=>{
+  if(versions.has(version))return;
+  // Every step and local version marker commit together; recoverable restart.
+  await db.transaction(async tx=>{await tx.exec(sql.replace(/^begin;\s*$/gmi,'').replace(/^commit;\s*$/gmi,''));await tx.query('insert into public.d3_local_versions values($1)',[version]);});
+ };
+ await apply('roles',`create role anon;create role authenticated;create role service_role bypassrls;
+  create schema auth;create table auth.users(id uuid primary key);
+  create function auth.uid() returns uuid language sql stable set search_path='' as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+  grant usage on schema auth to anon,authenticated;grant execute on function auth.uid() to anon,authenticated;`);
+ for(const name of ['20260913063249_football_backend','20260920094922_catalogue_authenticated_read','20260920102243_profiles_ownership','20260923135716_studio_projects','20260924094207_player_overrides','20260925035438_catalogue_identity_foundation'])await apply(name,read('supabase/migrations/'+name+'.sql'));
+ await apply('internal_override_keys',read('supabase/local/catalogue_override_keys.sql'));
+ const fixture=JSON.parse(read('tests/fixtures/bsd-catalogue-audit.json'));
+ // Keep product ordering, not the alphabetical order of the audit report table.
+ const order=['galatasaray','fenerbahce','besiktas','trabzonspor','samsunspor','basaksehir','goztepe','caykur-rizespor','kasimpasa','konyaspor','alanyaspor','gaziantep-fk','eyupspor','kocaelispor','genclerbirligi','erzurumspor','amedspor','corum-fk'];
+ const input={...fixture,teams:fixture.teams.map(t=>({...t,sort_order:order.indexOf(t.id)})),provider:'bsd',complete:true};
+ if(!versions.has('audit_population')){
+  await syncLocal(db,input,{dryRun:false,aliases:fixture.aliases,teamAliases:fixture.teams.map(t=>({legacy_id:t.legacyId,provider_id:t.bsdId,evidence:'D1_TEAM_SCOPE'}))});
+  await db.query("insert into public.d3_local_versions values('audit_population')");
+ }
+ return {db,state:await readState(db),fixture};
+}
+const fields={
+ catalogue_teams:['id','display_name','short_name','color_primary','color_secondary','sort_order','catalogue_active'],
+ catalogue_players:['id','team_id','display_name','position_group','specific_position','shirt_number','catalogue_active'],
+ player_overrides:['user_id','player_key','name','number','role'],
+ studio_projects:['id','user_id','title','studio_mode','match_id','match_week','snapshot_version','snapshot','revision','created_at','updated_at'],
+};
+const insertable={player_overrides:['user_id','player_key','name','number','role'],studio_projects:['id','user_id','title','snapshot_version','snapshot']};
+const updatable={player_overrides:['name','number','role'],studio_projects:['title','snapshot_version','snapshot']};
+export async function localQuery(db,owner,q){
+ try{
+  if(!q||!Object.hasOwn(fields,q.table))throw Error();
+  const allowed=fields[q.table],col=k=>{if(!allowed.includes(k))throw Error();return '"'+k+'"';};
+  const operation=q.operation;if(!['select','insert','update','delete'].includes(operation))throw Error();
+  if(operation!=='select'&&!Object.hasOwn(insertable,q.table))throw Error();
+  const columns=(q.columns==='*'?allowed:q.columns.split(',')).map(col).join(','),params=[];
+  const bind=v=>{params.push(typeof v==='object'&&v!==null?JSON.stringify(v):v);return '$'+params.length;};
+  let sql;
+  if(operation==='insert'||operation==='update'){
+   const entries=Object.entries(q.values||{}),permission=operation==='insert'?insertable[q.table]:updatable[q.table];
+   if(!entries.length||entries.some(([k])=>!permission.includes(k)))throw Error();
+   sql=operation==='insert'?`insert into public.${q.table} (${entries.map(([k])=>col(k)).join(',')}) values (${entries.map(([,v])=>bind(v)).join(',')})`
+    :`update public.${q.table} set ${entries.map(([k,v])=>col(k)+'='+bind(v)).join(',')}`;
+  }else sql=operation==='select'?`select ${columns} from public.${q.table}`:`delete from public.${q.table}`;
+  if(!Array.isArray(q.filters)||q.filters.length>12||!Array.isArray(q.orders)||q.orders.length>3)throw Error();
+  if(operation!=='insert'&&q.filters.length)sql+=' where '+q.filters.map(([k,op,v])=>{if(!['eq','gt'].includes(op))throw Error();return col(k)+(op==='eq'?'=':'>')+bind(v);}).join(' and ');
+  if(operation==='select'){
+   if(!Number.isInteger(q.limit)||q.limit<1||q.limit>1000||!Number.isInteger(q.offset)||q.offset<0||q.offset>100000)throw Error();
+   if(q.orders.length)sql+=' order by '+q.orders.map(([k,asc])=>col(k)+(asc?' asc':' desc')).join(',');
+   sql+=' limit '+bind(q.limit)+' offset '+bind(q.offset);
+  }else sql+=' returning '+columns;
+  return await db.transaction(async tx=>{
+   await tx.query('insert into auth.users(id) values($1) on conflict do nothing',[owner]);
+   await tx.query("select set_config('request.jwt.claim.sub',$1,true)",[owner]);await tx.exec('set local role authenticated');
+   const {rows}=await tx.query(sql,params);return {data:q.single?(rows.length<=1?rows[0]??null:null):rows,error:q.single&&rows.length>1?{code:'PGRST116'}:null};
+  });
+ }catch(e){return {data:null,error:{code:['23505','23514','23503','42501','42P01'].includes(e.code)?e.code:'invalid_query'}};}
+}

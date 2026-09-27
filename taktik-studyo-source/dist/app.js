@@ -29,6 +29,7 @@ function coordinates(shape){const rows=shape.split('-').map(Number),result=[{x:5
 
 // Shared local roster selection; the classic board retains its existing slot fallback.
 function selectRosterXI(squad,shape='4-3-3'){
+ if(window.TAKTIK_CATALOGUE_RUNTIME?.canonical)return window.TAKTIK_CATALOGUE_RUNTIME.selectXI(squad,shape);
  const available=[...(squad?.players||[])].sort((a,b)=>(Number(!!b.photo)-Number(!!a.photo))||((b.starts??0)-(a.starts??0))||((b.value??0)-(a.value??0)));
  return coordinates(shape).map(slot=>{const group=slot.role==='KL'?'G':['SLB','SĞB','STP'].includes(slot.role)?'D':['SLK','SĞK','SF'].includes(slot.role)?'F':'M';let ix=available.findIndex(p=>p.roles?.includes(slot.role));if(ix<0)ix=available.findIndex(p=>p.position===group);if(ix<0)ix=available.findIndex(p=>p.position!=='G');if(ix<0)ix=0;return available.splice(ix,1)[0]||null;});
 }
@@ -65,6 +66,7 @@ const saveOnPagehide=()=>{clearTimeout(draftTimer);if(!disposed&&activeGesture==
 if(!readonly&&!scoped)window.addEventListener('pagehide',saveOnPagehide);
 
 
+function sameAthlete(a,b){const runtime=window.TAKTIK_CATALOGUE_RUNTIME;return a===b||!!runtime?.canonical&&runtime.resolveKey(runtime.key(a))===runtime.resolveKey(runtime.key(b));}
 function squadFor(team=state.team){const rosters=window.TAKTIK_ROSTERS?.teams;return rosters&&Object.hasOwn(rosters,team.name)?rosters[team.name]:null;}
 function teamPlayers(team,shape){
  const squad=squadFor(team);if(!squad?.players?.length)return initialPlayers(shape);
@@ -74,28 +76,28 @@ function teamPlayers(team,shape){
 function effectivePlayer(p){
  if(!playerOverrides||!p.athleteId)return p;
  const canonical=squadFor()?.players.find(a=>a.id===p.athleteId);
- return playerOverrides.effective(playerOverrides.key(p.athleteId),canonical?{...p,name:canonical.name,number:canonical.number}:p);
+ return playerOverrides.effective(playerOverrides.key(p.athleteId),canonical&&!window.TAKTIK_CATALOGUE_RUNTIME?.canonical?{...p,name:canonical.name,number:canonical.number}:p);
 }
 function effectiveAthlete(p){return playerOverrides?playerOverrides.effective(playerOverrides.key(p.id),p):p;}
 function renderRosterSelect(p){
  const roster=squadFor();$('rosterSelectLabel').hidden=!roster;
  const select=$('rosterSelect');select.replaceChildren();if(!roster)return;
  const empty=document.createElement('option');empty.value='';empty.textContent='Futbolcu seç';select.append(empty);
- for(const original of roster.players){const athlete=effectiveAthlete(original);const option=document.createElement('option');option.value=athlete.id;option.textContent=(athlete.number??'–')+' · '+athlete.name+(state.players.some(s=>s.athleteId===athlete.id)?' · Sahada':'');select.append(option);}
+ for(const original of roster.players){const athlete=effectiveAthlete(original);const option=document.createElement('option');option.value=athlete.id;option.textContent=(athlete.number??'–')+' · '+athlete.name+(state.players.some(s=>sameAthlete(s.athleteId,athlete.id))?' · Sahada':'');select.append(option);}
  select.value=p.athleteId||'';
 }
 function replaceAthlete(athleteId,slotId=selected){
  const target=state.players.find(p=>p.id===slotId),athlete=squadFor()?.players.find(p=>p.id===athleteId);
  if(!target||!athlete){announce('Önce sahadan değiştirmek istediğin oyuncuyu seç.');return;}
  if(target.athleteId===athlete.id)return;
- snapshot();selected=target.id;const other=state.players.find(p=>p.athleteId===athlete.id);
+ snapshot();selected=target.id;const other=state.players.find(p=>sameAthlete(p.athleteId,athlete.id));
  const identity=p=>({name:p.name,number:p.number,athleteId:p.athleteId,photo:p.photo,renamed:p.renamed});
  if(other){const old=identity(target);Object.assign(target,identity(other));Object.assign(other,old);}else Object.assign(target,{name:athlete.name,number:athlete.number,athleteId:athlete.id,photo:athlete.photo,renamed:false});
  render();announce(athlete.name+' sahaya yerleştirildi.');
 }
 function renderSquad(){
  const roster=squadFor();$('squadPanel').hidden=!roster;if(!roster)return;
- const displayed=expanded||options.benchOnly?roster.players.filter(a=>!state.players.some(p=>p.athleteId===a.id)):roster.players;
+ const displayed=expanded||options.benchOnly?roster.players.filter(a=>!state.players.some(p=>sameAthlete(p.athleteId,a.id))):roster.players;
  $('squadTitle').textContent=expanded?'Yedekler':options.benchOnly?'Yedek Oyuncular':'Takım kadrosu';$('squadCount').textContent=displayed.length+' futbolcu';
  const selectedPlayer=state.players.find(p=>p.id===selected),active=selectedPlayer&&effectivePlayer(selectedPlayer);
  $('squadHint').textContent=active?active.name+' yerine seç veya sahadaki oyuncunun üzerine sürükle.':'Yedeği sahadaki oyuncunun üzerine sürükle. Dokunmatik ekranda ⠿ tutamacını kullan.';
@@ -103,13 +105,13 @@ function renderSquad(){
  const groupNames={G:'Kaleci',D:'Defans',M:'Orta saha',F:'Forvet'};
  for(const original of displayed){
   const athlete=effectiveAthlete(original);
-  const onPitch=state.players.find(p=>p.athleteId===athlete.id),button=document.createElement('button');button.className='squad-player'+(onPitch?' on-pitch':'')+(onPitch?.id===selected?' picked':'');button.type='button';button.dataset.athleteId=athlete.id;button.title=athlete.name;button.setAttribute('aria-label',athlete.name+', '+(athlete.number??'–')+' numara, '+(athlete.roles?.[0]||athlete.position)+(onPitch?' — sahada':' — kadrodan seç'));
+  const onPitch=state.players.find(p=>sameAthlete(p.athleteId,athlete.id)),button=document.createElement('button');button.className='squad-player'+(onPitch?' on-pitch':'')+(onPitch?.id===selected?' picked':'');button.type='button';button.dataset.athleteId=athlete.id;button.title=athlete.name;button.setAttribute('aria-label',athlete.name+', '+(athlete.number??'–')+' numara, '+(athlete.roles?.[0]||athlete.position)+(onPitch?' — sahada':' — kadrodan seç'));
   const jersey=createJersey(athlete.number);
   const info=document.createElement('span');info.className='squad-info';const name=document.createElement('strong');name.textContent=athlete.name;const detail=document.createElement('small');detail.textContent=(athlete.roles?.[0]||groupNames[athlete.position])+(onPitch?' · Sahada':'');info.append(name,detail);button.append(jersey,info);
   const handle=document.createElement('span');handle.className='squad-drag-handle';handle.textContent='⠿';handle.title='Sahadaki oyuncunun üzerine sürükle';handle.setAttribute('aria-hidden','true');button.append(handle);button.addEventListener('pointerdown',e=>onSquadDrag(e,athlete.id));
   button.onclick=()=>{if(Date.now()<suppressSquadClickUntil)return;if(selected===null){if(onPitch)selectPlayer(onPitch.id);else announce('Önce sahadan değiştirmek istediğin oyuncuyu seç.');}else replaceAthlete(athlete.id);};list.append(button);
  }
- const source=$('squadSource');source.replaceChildren();source.append('Kadro verisi: ');const link=document.createElement('a');link.href=roster.source;link.textContent='FotMob';link.target='_blank';link.rel='noopener noreferrer';source.append(link,' · 12 Eylül 2026 · Başlangıç 11’i düzenlenebilir.');
+ const source=$('squadSource');source.replaceChildren();if(roster.identity==='internal'){source.textContent='Takım kadrosu · Başlangıç yerleşimi düzenlenebilir.';}else{source.append('Kadro verisi: ');const link=document.createElement('a');link.href=roster.source;link.textContent='FotMob';link.target='_blank';link.rel='noopener noreferrer';source.append(link,' · 12 Eylül 2026 · Başlangıç 11’i düzenlenebilir.');}
 }
 
 function snapshot(){history.push(JSON.parse(JSON.stringify(state)));if(history.length>40)history.shift();$('undo').disabled=false;}

@@ -34,7 +34,7 @@ export function detailValid(data,id) {
   }
   return ['incidents','substitutions'].every(k => Array.isArray(data[k]) && data[k].length <= 500 && data[k].every(incidentValid));
 }
-export function createMatchDetailApi({client,current,location,fetchImpl}) {
+export function createMatchDetailApi({client,current,location,fetchImpl,identity}) {
   return {async load(id) {
     if (!isMatchId(id)) return {ok:false,error:{code:'INVALID_MATCH_ID'}};
     if (!current()) return {ok:false,error:{code:'state_changed'}};
@@ -44,6 +44,12 @@ export function createMatchDetailApi({client,current,location,fetchImpl}) {
       if (!current()) return {ok:false,error:{code:'state_changed'}};
       if (error) throw Error(detailError(error.context?.status));
       if (!detailValid(data,id)) throw Error('PROVIDER_UNAVAILABLE');
+      if(identity){
+        if(!identity.validateMatch(data))throw Error('PROVIDER_UNAVAILABLE');
+        const keys=['home','away'].flatMap(side=>['starters','substitutes'].flatMap(k=>(data.lineups?.[side]?.[k]||[]).map(p=>'bsd:'+p.id)));
+        for(const event of [...data.incidents,...data.substitutions])for(const person of [event.player,event.incoming,event.outgoing])if(person?.id)keys.push('bsd:'+person.id);
+        await identity.resolveKeys(keys);if(!current())return {ok:false,error:{code:'state_changed'}};
+      }
       return {ok:true,match:data};
     } catch (error) {return {ok:false,error:{code:!current() ? 'state_changed' : ['INVALID_MATCH_ID','MATCH_NOT_FOUND','UNAUTHORIZED'].includes(error?.message) ? error.message : 'PROVIDER_UNAVAILABLE'}};}
   }};

@@ -42,18 +42,23 @@ export function startPage({auth,document,window,backend,client}) {
         : 'Oturum şu anda doğrulanamadı. Biraz sonra tekrar dene.';
     },
     async mount(scope,current,validatedUser) {
+      const catalogue=backend.catalogue,canonical=catalogue?.canonical;
+      const dataClient=canonical?catalogue.dataClient:client;
+      if(canonical&&['studio','comparison','match-studio','match'].includes(route.page)){
+        await backend.loadCatalogue();if(!current())return;
+      }
       let playerOverrides=null;
       if(['studio','comparison','match-studio','match'].includes(route.page)){
-        playerOverrides=createPlayerOverrides({client,validatedUser,current});await playerOverrides.load();
+        playerOverrides=createPlayerOverrides({client:dataClient,validatedUser,current,identity:canonical?catalogue:null});await playerOverrides.load();
         if(!current()){playerOverrides.dispose();return;}
       }
       const owned=dispose=>()=>{dispose?.();playerOverrides?.dispose();};
-      if (route.page === 'projects') return mountStudioProjects({document,window,current,api:createStudioProjects({client,validatedUser,current})}).dispose;
+      if (route.page === 'projects') return mountStudioProjects({document,window,current,api:createStudioProjects({client:dataClient,validatedUser,current})}).dispose;
       if (route.page === 'match-studio') {
-        return owned(mountMatchStudio({document,window,current,playerOverrides,userId:validatedUser.id,projects:createStudioProjects({client,validatedUser,current}),api:createMatchDetailApi({client,current,location:window.location})}).dispose);
+        return owned(mountMatchStudio({document,window,current,playerOverrides,userId:validatedUser.id,projects:createStudioProjects({client:dataClient,validatedUser,current}),api:createMatchDetailApi({client,current,location:window.location,identity:canonical?catalogue:null})}).dispose);
       }
       if (route.page === 'match') {
-        return owned(mountMatchDetail({document,window,current,playerOverrides,api:createMatchDetailApi({client,current,location:window.location})}).dispose);
+        return owned(mountMatchDetail({document,window,current,playerOverrides,api:createMatchDetailApi({client,current,location:window.location,identity:canonical?catalogue:null})}).dispose);
       }
       if (route.page === 'matches') {
         return mountMatches({document,window,current,api:createMatchesApi({client,current,location:window.location})}).dispose;
@@ -61,6 +66,11 @@ export function startPage({auth,document,window,backend,client}) {
       if (route.page === 'profile') {
         const api = createProfileApi({client,validatedUser,current});
         return mountProfile({document,api,validatedUser,current}).dispose;
+      }
+      if(canonical&&scope){
+        const slots=route.page==='studio'?['main']:['left','right'];
+        const keys=slots.flatMap(slot=>(scope.context(slot).read()?.players||[]).map(p=>catalogue.key(p.athleteId)));
+        await catalogue.resolveKeys(keys);if(!current()){playerOverrides?.dispose();return;}
       }
       // Open the user's own draft directly. Device-wide legacy drafts are
       // neither imported nor deleted as a side effect of opening a board.

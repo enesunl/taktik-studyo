@@ -5,3 +5,4 @@ node_modules/
 .sites-runtime/
 supabase/.temp/
 supabase/.branches/
+.local/

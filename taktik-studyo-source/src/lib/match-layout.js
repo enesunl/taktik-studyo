@@ -22,10 +22,19 @@ export function resolveStudioLineups(match,local){
   return result;
 }
 export function matchStudioAvailable(match,local) {
+  if(local?.canonical)return !!match?.canonicalModel;
   if(!match||!detailValid(match,match.id))return false;
   const lineups=resolveStudioLineups(match,local);return ['home','away'].every(side=>validXI(lineups[side]));
 }
 export function createLocalCatalogue(window){
+  if(window.TAKTIK_CATALOGUE_RUNTIME?.canonical){
+    const runtime=window.TAKTIK_CATALOGUE_RUNTIME;
+    return {canonical:true,teams:window.TAKTIK_TEAMS,lineup(team){
+      const arrangement=runtime.arrangement(team.id),players=runtime.model.players.filter(p=>p.teamId===team.id);
+      const convert=id=>{const p=players.find(p=>p.id===id);return {id:p.id,name:p.name,number:p.number,position:({G:'goalkeeper',D:'defender',M:'midfielder',F:'forward'})[p.positionGroup]};};
+      return {identity:'internal',starters:arrangement.starters.map(p=>convert(p.playerId)),substitutes:arrangement.bench.map(convert),formation:arrangement.formation,lineupKind:arrangement.kind==='recent-confirmed'?'probable-recent-match':'probable-local'};
+    }};
+  }
   const utils=window.TAKTIK_BOARD_UTILS,teams=Array.from(utils?.getLocalTeams?.()||[],team=>{
     const source=window.TAKTIK_ROSTERS?.teams?.[team.name]?.source,rosterId=source?.match(/\/teams\/(\d+)\//)?.[1];
     return {...team,id:team.id||(rosterId?'fotmob-'+rosterId:team.name)};
@@ -42,16 +51,17 @@ export function createLocalCatalogue(window){
 }
 export const emptyStudioTeam=()=>({teamId:null,name:'',color:'#285b3b',color2:'#ffffff',players:[],bench:[],formation:null});
 export function createFreeTeam(team,side,local){
-  const source=local.lineup(team);return source?layoutTeam({teamId:team.id||team.name,...team},source,side,'local',()=>0):null;
+  const source=local.lineup(team);return source?layoutTeam({teamId:team.id||team.name,...team},source,side,local.canonical?'internal':'local',()=>0):null;
 }
 const order={defender:0,midfielder:1,forward:2,unknown:3};
 export function createMatchLayout(match,local) {
+  if(local?.canonical)return match?.canonicalModel||null;
   if (!matchStudioAvailable(match,local)) return null;
   const model={matchId:match.id},goals=matchGoals(match),lineups=resolveStudioLineups(match,local);
   for(const side of ['home','away'])model[side]=layoutTeam({...match[side],teamId:match[side].providerId},lineups[side],side,match.id,id=>match.status==='upcoming'?0:goals.count(side,id));
   return Object.freeze(model);
 }
-function layoutTeam(team,source,side,prefix,goalCount){
+export function layoutTeam(team,source,side,prefix,goalCount){
     const formation=parseFormation(source.formation);
     const keeper=source.starters.find(p=>p.position==='goalkeeper');
     // Stable grouping preserves provider order within broad groups. No LB/RW/etc.
