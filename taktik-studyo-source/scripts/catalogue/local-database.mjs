@@ -1,8 +1,14 @@
 import {PGlite} from '@electric-sql/pglite';
 import {readFileSync} from 'node:fs';
-import {syncLocal,readState} from './sync.mjs';
+import {syncLocal,readCanonicalState} from './sync.mjs';
 const read=p=>readFileSync(new URL('../../'+p,import.meta.url),'utf8');
-export async function openCatalogueDatabase(dataDir){
+export function cleanCatalogueInput(){
+ const fixture=JSON.parse(read('tests/fixtures/bsd-catalogue-clean.json'));
+ const registrations=JSON.parse(read('scripts/catalogue/team-registrations.json'));
+ if(fixture.leagueId!==11||fixture.seasonId!==1539||fixture.teams.length!==18)throw Error('team_scope_changed');
+ return {...fixture,teams:fixture.teams.map(t=>{const reg=registrations.find(r=>r.bsdId===t.provider_id);if(!reg)throw Error('unreviewed_team');return {...reg};})};
+}
+export async function openCatalogueDatabase(dataDir,{populate=true}={}){
  // PGlite has no remote database URL or linked Supabase path.
  const db=new PGlite(dataDir);
  await db.exec('create table if not exists public.d3_local_versions(version text primary key)');
@@ -14,19 +20,19 @@ export async function openCatalogueDatabase(dataDir){
  };
  await apply('roles',`create role anon;create role authenticated;create role service_role bypassrls;
   create schema auth;create table auth.users(id uuid primary key);
+  create schema tactics_private;revoke all on schema tactics_private from public,anon,authenticated;
+  create function tactics_private.touch_updated_at() returns trigger language plpgsql security invoker set search_path='' as $$begin new.updated_at=now();return new;end $$;
+  revoke all on function tactics_private.touch_updated_at() from public,anon,authenticated;
   create function auth.uid() returns uuid language sql stable set search_path='' as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
   grant usage on schema auth to anon,authenticated;grant execute on function auth.uid() to anon,authenticated;`);
- for(const name of ['20260913063249_football_backend','20260920094922_catalogue_authenticated_read','20260920102243_profiles_ownership','20260923135716_studio_projects','20260924094207_player_overrides','20260925035438_catalogue_identity_foundation'])await apply(name,read('supabase/migrations/'+name+'.sql'));
+ for(const name of ['20260923135716_studio_projects','20260924094207_player_overrides','20260925035438_catalogue_identity_foundation'])await apply(name,read('supabase/migrations/'+name+'.sql'));
  await apply('internal_override_keys',read('supabase/local/catalogue_override_keys.sql'));
- const fixture=JSON.parse(read('tests/fixtures/bsd-catalogue-audit.json'));
- // Keep product ordering, not the alphabetical order of the audit report table.
- const order=['galatasaray','fenerbahce','besiktas','trabzonspor','samsunspor','basaksehir','goztepe','caykur-rizespor','kasimpasa','konyaspor','alanyaspor','gaziantep-fk','eyupspor','kocaelispor','genclerbirligi','erzurumspor','amedspor','corum-fk'];
- const input={...fixture,teams:fixture.teams.map(t=>({...t,sort_order:order.indexOf(t.id)})),provider:'bsd',complete:true};
- if(!versions.has('audit_population')){
-  await syncLocal(db,input,{dryRun:false,aliases:fixture.aliases,teamAliases:fixture.teams.map(t=>({legacy_id:t.legacyId,provider_id:t.bsdId,evidence:'D1_TEAM_SCOPE'}))});
-  await db.query("insert into public.d3_local_versions values('audit_population')");
+ const input=cleanCatalogueInput();
+ if(populate&&!versions.has('clean_population')){
+  await syncLocal(db,input,{dryRun:false});
+  await db.query("insert into public.d3_local_versions values('clean_population')");
  }
- return {db,state:await readState(db),fixture};
+ return {db,state:await readCanonicalState(db)};
 }
 const fields={
  catalogue_teams:['id','display_name','short_name','color_primary','color_secondary','sort_order','catalogue_active'],
@@ -52,7 +58,7 @@ export async function localQuery(db,owner,q){
     :`update public.${q.table} set ${entries.map(([k,v])=>col(k)+'='+bind(v)).join(',')}`;
   }else sql=operation==='select'?`select ${columns} from public.${q.table}`:`delete from public.${q.table}`;
   if(!Array.isArray(q.filters)||q.filters.length>12||!Array.isArray(q.orders)||q.orders.length>3)throw Error();
-  if(operation!=='insert'&&q.filters.length)sql+=' where '+q.filters.map(([k,op,v])=>{if(!['eq','gt'].includes(op))throw Error();return col(k)+(op==='eq'?'=':'>')+bind(v);}).join(' and ');
+  if(operation!=='insert'&&q.filters.length)sql+=' where '+q.filters.map(([k,op,v])=>{if(!['eq','gt','like'].includes(op))throw Error();return col(k)+({eq:'=',gt:'>',like:' like '})[op]+bind(v);}).join(' and ');
   if(operation==='select'){
    if(!Number.isInteger(q.limit)||q.limit<1||q.limit>1000||!Number.isInteger(q.offset)||q.offset<0||q.offset>100000)throw Error();
    if(q.orders.length)sql+=' order by '+q.orders.map(([k,asc])=>col(k)+(asc?' asc':' desc')).join(',');

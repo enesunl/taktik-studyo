@@ -6,9 +6,9 @@ export class Element{
 }
 
 export const control=(root,id)=>root.querySelector('[data-control="'+id+'"]');
-export function classicFixture(){
+export function classicFixture({canonical=false}={}){
  const document={body:{dataset:{page:'comparison'},style:{overflow:''},append(){}},createElement:()=>new Element(),createComment:()=>new Element(),documentElement:new Element(),querySelectorAll:()=>[],addEventListener(){}};
  const context=vm.createContext({window:{addEventListener(){},removeEventListener(){},scrollBy(){},innerHeight:900},document,setTimeout(){},clearTimeout(){},requestAnimationFrame:()=>1,cancelAnimationFrame(){},URLSearchParams});
- for(const name of ['rosters','app'])vm.runInContext(readFileSync(new URL('../../dist/'+name+'.js',import.meta.url),'utf8'),context);
+ for(const name of (canonical?['app']:['rosters','app']))vm.runInContext(readFileSync(new URL('../../dist/'+name+'.js',import.meta.url),'utf8'),context);
  return {context,create:(options={})=>{const root=new Element(),board=context.window.createTacticsBoard(root,options);return {root,board};}};
 }

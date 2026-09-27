@@ -15,6 +15,10 @@ export function matchPageUrl(page,search) {
   return page+'?id='+id+(week?'&hafta='+week:'');
 }
 export function resolveStudioLineups(match,local){
+  if(local?.canonical&&match.canonicalModel)return Object.fromEntries(['home','away'].map(side=>{
+    const team=match.canonicalModel[side],convert=p=>({id:p.playerId,playerId:p.playerId,name:p.name,number:p.number,position:p.position});
+    return [side,{formation:team.formation,lineupKind:team.lineupKind,starters:team.players.map(convert),substitutes:team.bench.map(convert)}];
+  }));
   const result={};
   for(const side of ['home','away'])result[side]=providerXI(match,side)
     ||(match.status==='upcoming'&&validXI(match.studioLineups?.[side])?match.studioLineups[side]:null)
@@ -30,7 +34,7 @@ export function createLocalCatalogue(window){
   if(window.TAKTIK_CATALOGUE_RUNTIME?.canonical){
     const runtime=window.TAKTIK_CATALOGUE_RUNTIME;
     return {canonical:true,teams:window.TAKTIK_TEAMS,lineup(team){
-      const arrangement=runtime.arrangement(team.id),players=runtime.model.players.filter(p=>p.teamId===team.id);
+      const teamId=team.id??team.teamId,arrangement=runtime.arrangement(teamId),players=runtime.model.players.filter(p=>p.teamId===teamId);
       const convert=id=>{const p=players.find(p=>p.id===id);return {id:p.id,name:p.name,number:p.number,position:({G:'goalkeeper',D:'defender',M:'midfielder',F:'forward'})[p.positionGroup]};};
       return {identity:'internal',starters:arrangement.starters.map(p=>convert(p.playerId)),substitutes:arrangement.bench.map(convert),formation:arrangement.formation,lineupKind:arrangement.kind==='recent-confirmed'?'probable-recent-match':'probable-local'};
     }};

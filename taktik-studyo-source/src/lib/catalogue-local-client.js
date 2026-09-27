@@ -13,7 +13,7 @@ export function createLocalCatalogueClient({auth,origin,fetchImpl=fetch}){
  return {request,from(table){
   const query={table,operation:'select',columns:'*',filters:[],orders:[],limit:1000,offset:0,single:false};
   const q={select(v){query.columns=v;return q;},eq(k,v){query.filters.push([k,'eq',v]);return q;},gt(k,v){query.filters.push([k,'gt',v]);return q;},
-   order(k,o={}){query.orders.push([k,o.ascending!==false]);return q;},limit(n){query.limit=n;return q;},range(a,b){query.offset=a;query.limit=b-a+1;return q;},maybeSingle(){query.single=true;return q;},
+   like(k,v){query.filters.push([k,'like',v]);return q;},order(k,o={}){query.orders.push([k,o.ascending!==false]);return q;},limit(n){query.limit=n;return q;},range(a,b){query.offset=a;query.limit=b-a+1;return q;},maybeSingle(){query.single=true;return q;},
    insert(v){query.operation='insert';query.values=v;return q;},update(v){query.operation='update';query.values=v;return q;},delete(){query.operation='delete';return q;},
    then(resolve,reject){return request('query',{query}).then(resolve,reject);}};return q;
  }};

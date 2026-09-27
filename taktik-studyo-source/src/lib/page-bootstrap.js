@@ -49,7 +49,7 @@ export function startPage({auth,document,window,backend,client}) {
       }
       let playerOverrides=null;
       if(['studio','comparison','match-studio','match'].includes(route.page)){
-        playerOverrides=createPlayerOverrides({client:dataClient,validatedUser,current,identity:canonical?catalogue:null});await playerOverrides.load();
+        playerOverrides=createPlayerOverrides({client:dataClient,validatedUser,current,internalOnly:!!canonical});await playerOverrides.load();
         if(!current()){playerOverrides.dispose();return;}
       }
       const owned=dispose=>()=>{dispose?.();playerOverrides?.dispose();};
@@ -66,11 +66,6 @@ export function startPage({auth,document,window,backend,client}) {
       if (route.page === 'profile') {
         const api = createProfileApi({client,validatedUser,current});
         return mountProfile({document,api,validatedUser,current}).dispose;
-      }
-      if(canonical&&scope){
-        const slots=route.page==='studio'?['main']:['left','right'];
-        const keys=slots.flatMap(slot=>(scope.context(slot).read()?.players||[]).map(p=>catalogue.key(p.athleteId)));
-        await catalogue.resolveKeys(keys);if(!current()){playerOverrides?.dispose();return;}
       }
       // Open the user's own draft directly. Device-wide legacy drafts are
       // neither imported nor deleted as a side effect of opening a board.

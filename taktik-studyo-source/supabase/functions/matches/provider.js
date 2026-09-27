@@ -7,13 +7,13 @@ const endpoint = 'https://sports.bzzoiro.com/api/v2/events/';
 const statuses = new Map([['notstarted','upcoming'],['upcoming','upcoming'],['live','live'],['inprogress','live'],['finished','finished'],['postponed','postponed'],['cancelled','cancelled'],['canceled','cancelled']]);
 const score = value => Number.isInteger(value) && value >= 0 && value <= 100 ? value : null;
 
-export function normalizeEvent(event) {
+export function normalizeEvent(event,teamResolver=mapTeam) {
   if (!event || event.league_id !== LEAGUE_ID || event.season_id !== SEASON_ID
     || !Number.isSafeInteger(event.id) || event.id < 1
     || !Number.isInteger(event.round_number) || event.round_number < 1 || event.round_number > 34
     || typeof event.event_date !== 'string' || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?(?:Z|\+00:00)$/.test(event.event_date)
     || !Number.isFinite(Date.parse(event.event_date))) return null;
-  const home = mapTeam(event.home_team_id,event.home_team), away = mapTeam(event.away_team_id,event.away_team);
+  const home = teamResolver(event.home_team_id,event.home_team), away = teamResolver(event.away_team_id,event.away_team);
   if (!home || !away || home.providerId === away.providerId) return null;
   const status = statuses.get(event.status) || 'unknown';
   return {id:String(event.id),competition:{id:'super-lig',name:'Süper Lig'},season:SEASON,
@@ -37,7 +37,7 @@ function nextOffset(value,offset) {
 
 // Only constants construct upstream URLs. Even a provider-supplied next URL is
 // validated, then reconstructed; neither browser input nor redirects are followed.
-export async function fetchSeason({token,fetchImpl = fetch,timeoutMs = 12000}) {
+export async function fetchSeason({token,fetchImpl = fetch,timeoutMs = 12000,teamResolver=mapTeam}) {
   if (!token) throw Error('matches_unavailable');
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(),timeoutMs);
   const matches = new Map();
@@ -54,7 +54,7 @@ export async function fetchSeason({token,fetchImpl = fetch,timeoutMs = 12000}) {
         || (total !== null && total !== data.count)) throw Error('matches_unavailable');
       total = data.count; received += data.results.length;
       for (const raw of data.results) {
-        const match = normalizeEvent(raw);
+        const match = normalizeEvent(raw,teamResolver);
         if (!match) {skipped++; continue;}
         if (matches.has(match.id)) {duplicates++; continue;}
         matches.set(match.id,match);
@@ -72,7 +72,7 @@ export async function fetchSeason({token,fetchImpl = fetch,timeoutMs = 12000}) {
   } finally {clearTimeout(timer);}
 }
 
-export async function fetchDetail({id,token,fetchImpl = fetch,timeoutMs = 18000}) {
+export async function fetchDetail({id,token,fetchImpl = fetch,timeoutMs = 18000,teamResolver=mapTeam}) {
   if (!isMatchId(id)) throw Error('INVALID_MATCH_ID');
   if (!token) throw Error('PROVIDER_UNAVAILABLE');
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(),timeoutMs);
@@ -89,7 +89,7 @@ export async function fetchDetail({id,token,fetchImpl = fetch,timeoutMs = 18000}
   try {
     const raw = await read();
     if (!raw || String(raw.id) !== id || raw.league_id !== LEAGUE_ID || raw.season_id !== SEASON_ID) throw Error('MATCH_NOT_FOUND');
-    const match = normalizeEvent(raw);
+    const match = normalizeEvent(raw,teamResolver);
     if (!match) throw Error('PROVIDER_UNAVAILABLE');
     // Never request optional endpoints for an out-of-scope match.
     const names = ['lineups','incidents','stats'];

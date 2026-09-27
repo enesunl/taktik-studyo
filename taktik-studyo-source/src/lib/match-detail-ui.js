@@ -21,7 +21,7 @@ export function mountMatchDetail({document,window,api,current,playerOverrides}) 
   function render(match){
     lastMatch=match;content.replaceChildren();
     // Provider incidents retain their IDs/minutes/team attribution; only display fields merge.
-    const effective=p=>p&&playerOverrides?playerOverrides.effective(playerKey(p.id,'bsd'),p):p;
+    const effective=p=>p&&playerOverrides?playerOverrides.effective(playerKey(p.playerId??p.id,'bsd'),p):p;
     const event=e=>({...e,player:effective(e.player),incoming:effective(e.incoming),outgoing:effective(e.outgoing)});
     if(playerOverrides)match={...match,incidents:match.incidents.map(event),substitutions:match.substitutions.map(event)};
     const local=createLocalCatalogue(window),resolved=resolveStudioLineups(match,local);
@@ -72,7 +72,7 @@ export function mountMatchDetail({document,window,api,current,playerOverrides}) 
         if(!data)placeholder(column,'Kadrolar henüz açıklanmadı.');
         else for(const [key,label] of [['starters','İlk 11'],['substitutes','Yedekler']]){
           column.append(node('h4',key==='starters'&&data.lineupKind&&data.lineupKind!=='confirmed'?'Muhtemel 11':label));const list=node('ul',undefined,'lineup-list');
-          for(const raw of data[key]){const player=playerOverrides?playerOverrides.effective(playerKey(raw.id,data.lineupKind==='probable-local'?'local':'bsd'),raw):raw;const row=node('li',undefined,'lineup-player');row.dataset.playerId=player.id;
+          for(const raw of data[key]){const player=playerOverrides?playerOverrides.effective(playerKey(raw.playerId??raw.id,data.lineupKind==='probable-local'?'local':'bsd'),raw):raw;const row=node('li',undefined,'lineup-player');row.dataset.playerId=player.id;
             row.append(node('span',player.number===null?'—':String(player.number),'lineup-number'),node('span',player.name),node('span',POSITION_LABELS[player.position],'lineup-position'));list.append(row);}
           if(!data[key].length)placeholder(column,'Oyuncu bilgisi mevcut değil.');else column.append(list);
         }

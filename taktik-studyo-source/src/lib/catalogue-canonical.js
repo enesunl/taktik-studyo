@@ -9,7 +9,7 @@ export function normalizeCanonical(teams,players){
   if(!teams.length||!players.length)throw catalogueError('catalogue_empty');
   const result={teams:teams.map(t=>{
    if(!/^[a-z][a-z0-9-]{0,79}$/.test(t.id)||t.id.startsWith('fotmob-')||!text(t.display_name,80)||!text(t.short_name,8)||!/^#[0-9a-f]{6}$/i.test(t.color_primary)||!/^#[0-9a-f]{6}$/i.test(t.color_secondary)||!Number.isInteger(t.sort_order)||t.catalogue_active!==true)throw Error();
-   return {id:t.id,name:t.display_name,shortName:t.short_name,color:t.color_primary,color2:t.color_secondary,sortOrder:t.sort_order};
+   return {id:t.id,name:t.display_name,shortName:t.short_name,color:t.color_primary,color2:t.color_secondary,sortOrder:t.sort_order,catalogueActive:t.catalogue_active};
   }),players:players.map(p=>{
    if(!internalPlayerId(p.id)||!teams.some(t=>t.id===p.team_id)||!text(p.display_name,100)||p.catalogue_active!==true||!(p.shirt_number===null||Number.isInteger(p.shirt_number)&&p.shirt_number>=1&&p.shirt_number<=99))throw Error();
    positionCompatibility(p.position_group,p.specific_position);

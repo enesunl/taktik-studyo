@@ -1,13 +1,19 @@
 import {openCatalogueDatabase,localQuery} from './local-database.mjs';
-import {identityResolver} from '../../src/lib/catalogue-identity.js';
+import {providerIdentityResolver} from '../../src/lib/catalogue-identity.js';
 import {defaultXI,squadFallback} from '../../src/lib/catalogue-default-xi.js';
 import {layoutTeam,parseFormation} from '../../src/lib/match-layout.js';
 import {validXI} from '../../src/lib/studio-lineups.js';
 import {matchGoals} from '../../src/lib/match-goals.js';
 import {fetchSeason,fetchDetail,SEASON,SEASON_ID} from '../../supabase/functions/matches/provider.js';
 import {generateFallback} from './fallback.mjs';
-export async function createLocalCatalogueService({dataDir,authenticate,port,token,loadSeason=fetchSeason,loadDetail=fetchDetail}){
- const local=await openCatalogueDatabase(dataDir),{db,state}=local,resolver=identityResolver(state);
+export async function createLocalCatalogueService({dataDir,authenticate,port,token,loadSeason,loadDetail}){
+ const local=await openCatalogueDatabase(dataDir),{db,state}=local,resolver=providerIdentityResolver(state);
+ const teamResolver=providerId=>{
+  const id=resolver.team(String(providerId),'bsd'),team=state.teams.find(t=>t.id===id&&t.catalogue_active);
+  return team?{providerId:String(providerId),teamId:id,name:team.display_name,color:team.color_primary,color2:team.color_secondary}:null;
+ };
+ loadSeason??=options=>fetchSeason({...options,teamResolver});
+ loadDetail??=options=>fetchDetail({...options,teamResolver});
  let pending,until=0,cached;
  function resolveLineup(source,teamId){
   if(!validXI(source)||!parseFormation(source.formation))return null;
@@ -63,7 +69,11 @@ export async function createLocalCatalogueService({dataDir,authenticate,port,tok
    const line={formation:arrangement.formation,lineupKind,starters:arrangement.starters.map(p=>convert(p.playerId)),substitutes:arrangement.bench.map(convert)};
    model[side]=layoutTeam({teamId:id,name:team.display_name,color:team.color_primary,color2:team.color_secondary},line,side,'internal',pid=>goals.count(side,goalIds.get(pid)));
   }
-  return {...match,canonicalModel:model};
+  // Provider DTO identities stay separate; presentation gets only a resolved internal key.
+  const person=p=>p?{...p,playerId:resolver.player(p.id,'bsd')}:p;
+  const lineups=lines=>lines?{...lines,...Object.fromEntries(['home','away'].map(side=>[side,lines[side]?{...lines[side],starters:lines[side].starters.map(person),substitutes:lines[side].substitutes.map(person)}:null]))}:lines;
+  const events=rows=>rows.map(e=>({...e,player:person(e.player),incoming:person(e.incoming),outgoing:person(e.outgoing)}));
+  return {...match,lineups:lineups(match.lineups),...(match.studioLineups?{studioLineups:lineups(match.studioLineups)}:{}),incidents:events(match.incidents),substitutions:events(match.substitutions),canonicalModel:model};
  }
  async function handle(request){
   const headers={'Content-Type':'application/json','Cache-Control':'no-store'},reply=(status,data)=>new Response(JSON.stringify(data),{status,headers});
@@ -77,13 +87,9 @@ export async function createLocalCatalogueService({dataDir,authenticate,port,tok
    const raw=await request.text();if(raw.length>4*1024*1024)return reply(413,{error:{code:'invalid_request'}});const body=JSON.parse(raw);
    if(body.action==='query')return reply(200,await localQuery(db,user.id,body.query));
    if(body.action==='defaults')return reply(200,{data:await defaults()});
-   if(body.action==='resolve'){
-    if(!Array.isArray(body.keys)||body.keys.length>500||body.keys.some(k=>typeof k!=='string'||!/^(local:[a-zA-Z0-9_-]{1,80}|bsd:[1-9][0-9]{0,15})$/.test(k)))throw Error();
-    return reply(200,{data:Object.fromEntries(body.keys.map(k=>[k,resolver.player(k.slice(k.indexOf(':')+1),k.startsWith('local:')?'legacy':'bsd')]))});
-   }
    if(body.action==='fallback')return new Response(generateFallback(state),{status:200,headers});
    return reply(400,{error:{code:'invalid_request'}});
   }catch{return reply(503,{error:{code:'catalogue_unavailable'}});}
  }
- return {handle,canonicalMatch,canonicalEvent,defaults,...local,resolver};
+ return {handle,canonicalMatch,canonicalEvent,defaults,loadSeason,loadDetail,teamResolver,...local,resolver};
 }

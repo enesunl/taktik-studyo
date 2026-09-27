@@ -1,0 +1,164 @@
+[
+  {
+    "id": "galatasaray",
+    "bsdId": "125",
+    "display_name": "Galatasaray",
+    "short_name": "GS",
+    "color_primary": "#a51935",
+    "color_secondary": "#efb62a",
+    "sort_order": 0
+  },
+  {
+    "id": "fenerbahce",
+    "bsdId": "134",
+    "display_name": "Fenerbahçe",
+    "short_name": "FB",
+    "color_primary": "#19294d",
+    "color_secondary": "#f3d233",
+    "sort_order": 1
+  },
+  {
+    "id": "besiktas",
+    "bsdId": "196",
+    "display_name": "Beşiktaş",
+    "short_name": "BJK",
+    "color_primary": "#222222",
+    "color_secondary": "#eeeeee",
+    "sort_order": 2
+  },
+  {
+    "id": "trabzonspor",
+    "bsdId": "197",
+    "display_name": "Trabzonspor",
+    "short_name": "TS",
+    "color_primary": "#702039",
+    "color_secondary": "#8cc1dc",
+    "sort_order": 3
+  },
+  {
+    "id": "samsunspor",
+    "bsdId": "184",
+    "display_name": "Samsunspor",
+    "short_name": "SAM",
+    "color_primary": "#ca303a",
+    "color_secondary": "#eeeeee",
+    "sort_order": 4
+  },
+  {
+    "id": "basaksehir",
+    "bsdId": "194",
+    "display_name": "Başakşehir",
+    "short_name": "İBF",
+    "color_primary": "#ed7835",
+    "color_secondary": "#213a63",
+    "sort_order": 5
+  },
+  {
+    "id": "goztepe",
+    "bsdId": "190",
+    "display_name": "Göztepe",
+    "short_name": "GÖZ",
+    "color_primary": "#bb2039",
+    "color_secondary": "#edc932",
+    "sort_order": 6
+  },
+  {
+    "id": "caykur-rizespor",
+    "bsdId": "189",
+    "display_name": "Çaykur Rizespor",
+    "short_name": "RİZ",
+    "color_primary": "#198c55",
+    "color_secondary": "#276dad",
+    "sort_order": 7
+  },
+  {
+    "id": "kasimpasa",
+    "bsdId": "187",
+    "display_name": "Kasımpaşa",
+    "short_name": "KAS",
+    "color_primary": "#173c74",
+    "color_secondary": "#ffffff",
+    "sort_order": 8
+  },
+  {
+    "id": "konyaspor",
+    "bsdId": "192",
+    "display_name": "Konyaspor",
+    "short_name": "KON",
+    "color_primary": "#23855c",
+    "color_secondary": "#ffffff",
+    "sort_order": 9
+  },
+  {
+    "id": "alanyaspor",
+    "bsdId": "188",
+    "display_name": "Alanyaspor",
+    "short_name": "ALA",
+    "color_primary": "#ef802b",
+    "color_secondary": "#228756",
+    "sort_order": 10
+  },
+  {
+    "id": "gaziantep-fk",
+    "bsdId": "183",
+    "display_name": "Gaziantep FK",
+    "short_name": "GFK",
+    "color_primary": "#c3313c",
+    "color_secondary": "#252b2b",
+    "sort_order": 11
+  },
+  {
+    "id": "eyupspor",
+    "bsdId": "191",
+    "display_name": "Eyüpspor",
+    "short_name": "EYP",
+    "color_primary": "#713576",
+    "color_secondary": "#e6be42",
+    "sort_order": 12
+  },
+  {
+    "id": "kocaelispor",
+    "bsdId": "198",
+    "display_name": "Kocaelispor",
+    "short_name": "KOC",
+    "color_primary": "#148255",
+    "color_secondary": "#242b28",
+    "sort_order": 13
+  },
+  {
+    "id": "genclerbirligi",
+    "bsdId": "185",
+    "display_name": "Gençlerbirliği",
+    "short_name": "GEN",
+    "color_primary": "#b72637",
+    "color_secondary": "#262725",
+    "sort_order": 14
+  },
+  {
+    "id": "erzurumspor",
+    "bsdId": "1346",
+    "display_name": "Erzurumspor FK",
+    "short_name": "ERZ",
+    "color_primary": "#2c65ad",
+    "color_secondary": "#ffffff",
+    "sort_order": 15
+  },
+  {
+    "id": "amedspor",
+    "bsdId": "3380",
+    "display_name": "Amedspor",
+    "short_name": "AMD",
+    "color_primary": "#168553",
+    "color_secondary": "#c5353d",
+    "sort_order": 16
+  },
+  {
+    "id": "corum-fk",
+    "bsdId": "3295",
+    "display_name": "Çorum FK",
+    "short_name": "ÇOR",
+    "color_primary": "#c1303b",
+    "color_secondary": "#242a28",
+    "sort_order": 17
+  }
+]

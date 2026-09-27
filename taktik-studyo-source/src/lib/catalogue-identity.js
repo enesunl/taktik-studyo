@@ -1,6 +1,15 @@
 // Opt-in D2 compatibility infrastructure; not connected to the active browser.
 // Historical snapshot identity is preserved; active catalogue identity is provider-independent.
 export const internalPlayerId=v=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(v);
+// Active resolver reads only internal identities and explicit provider mappings.
+// The migration-only resolver below remains for historical D2 tooling/tests.
+export function providerIdentityResolver({teams=[],players=[],teamMappings=[],playerMappings=[]}){
+  const build=(rows,mappings,target)=>{
+    const ids=new Set(rows.map(r=>r.id)),map=index(mappings,r=>r.provider+':'+r.provider_id,target);
+    return (id,provider='bsd')=>{const found=provider==='internal'?id:map.get(provider+':'+id);return ids.has(found)?found:null;};
+  };
+  return {team:build(teams,teamMappings,'team_id'),player:build(players,playerMappings,'player_id')};
+}
 function index(rows,key,value){
   const map=new Map();for(const row of rows){const k=key(row),v=row[value];if(map.has(k)&&map.get(k)!==v)throw Error('ambiguous_identity');map.set(k,v);}return map;
 }

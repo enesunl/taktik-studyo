@@ -11,6 +11,7 @@ import {serializeStudioProject,projectBoardState} from '../src/lib/studio-projec
 import {createMatchLayout,createFreeTeam,createLocalCatalogue,emptyStudioTeam} from '../src/lib/match-layout.js';
 import {createMatchBoard} from '../src/lib/match-board.js';
 import {mountMatchStudio} from '../src/lib/match-studio-ui.js';
+import {mountMatchDetail} from '../src/lib/match-detail-ui.js';
 import {classicFixture,control,Element} from './helpers/classic-board-fixture.mjs';
 import {matchBoardDocument,fire} from './helpers/match-board-fixture.mjs';
 import {allNodes,textOf} from './helpers/matches-fixture.mjs';
@@ -22,13 +23,13 @@ import {squadFallback} from '../src/lib/catalogue-default-xi.js';
 import {createUserDraftScope} from '../src/lib/draft-scope.js';
 const owner='11111111-1111-4111-8111-111111111111',other='22222222-2222-4222-8222-222222222222';
 const origin='http://localhost:4173';
-test('D3 local canonical cutover: actual SQL, page engines and compatibility, zero external requests',async t=>{
+test('D4 clean room: no old catalogue, aliases or roster script; actual SQL and page engines',async t=>{
  const service=await createLocalCatalogueService({authenticate:async token=>({id:token==='other'?other:owner}),port:4173});
  const calls=[];let token='owner';
  const client={auth:{getSession:async()=>({data:{session:{access_token:token}}})}};
- const fetchImpl=async(path,options)=>{assert.equal(path,'/__local/catalogue');const body=JSON.parse(options.body);calls.push(body);return service.handle(new Request(origin+path,{...options,headers:{...options.headers,Origin:origin}}));};
+ const fetchImpl=async(path,options)=>{assert.equal(path,'/__local/catalogue');const body=JSON.parse(options.body);assert.notEqual(body.action,'resolve');if(body.action==='query')assert(!['teams','players','legacy_team_aliases','legacy_player_aliases'].includes(body.query.table));calls.push(body);return service.handle(new Request(origin+path,{...options,headers:{...options.headers,Origin:origin}}));};
  const make=window=>{window.location??={origin};return createCatalogueSource({config:{source:'canonical'},window,client,fetchImpl});};
- const classic=classicFixture(),runtime=make(classic.context.window);let model;
+ const classic=classicFixture({canonical:true}),runtime=make(classic.context.window);let model;
  try{
   await t.test('18/543, two queries, single-flight/cache, no provider plumbing/legacy fields in browser model',async()=>{
    const [a,b]=await Promise.all([runtime.load(),runtime.load()]);assert.equal(a,b);model=a;
@@ -38,11 +39,15 @@ test('D3 local canonical cutover: actual SQL, page engines and compatibility, ze
    assert.doesNotMatch(JSON.stringify(model),/fotmob|source_url|photo_url|faces\/|selection_rank|"roles"|"starts"|"value"|provider_id/);
    assert.equal(model.teams[0].id,'galatasaray');assert.equal(model.teams[0].shortName,'GS');
    assert.equal(new Set(service.state.playerMappings.map(m=>m.provider_id)).size,543);
-   assert.equal(service.state.teamAliases.length,18);assert.equal(service.state.playerAliases.length,388);
+   assert.equal((await service.db.query('select count(*)::int n from legacy_team_aliases')).rows[0].n,0);assert.equal((await service.db.query('select count(*)::int n from legacy_player_aliases')).rows[0].n,0);
+   assert.equal((await service.db.query("select to_regclass('public.teams') t,to_regclass('public.players') p")).rows[0].t,null);
+   assert.equal((await service.db.query("select to_regclass('public.players') p")).rows[0].p,null);
+   // Stronger than empty: every following page operation must work with no alias tables.
+   await service.db.exec('drop table public.legacy_player_aliases,public.legacy_team_aliases');
   });
   await t.test('Classic/Comparison engines use UUIDs: team/formations, reserves, substitute, drag, independent boards',()=>{
    const left=classic.create({team:'Galatasaray',benchOnly:true}),right=classic.create({team:'Galatasaray',benchOnly:true});
-   assert(left.board.getState().players.every(p=>internalPlayerId(p.athleteId)));assert.equal(left.board.getState().team.id,'galatasaray');
+   assert(left.board.getState().players.every(p=>internalPlayerId(p.athleteId)&&!Object.hasOwn(p,'photo')));assert.equal(left.board.getState().team.id,'galatasaray');
    const before=JSON.stringify(right.board.getState());left.board.selectTeam('Fenerbahçe');left.board.applyFormation('3-5-2');assert.equal(JSON.stringify(right.board.getState()),before);
    const state=left.board.getState();assert.equal(state.team.id,'fenerbahce');assert.equal(state.players.length,11);
    const reserves=control(left.root,'squadList').children;assert(reserves.length>0);assert(reserves.every(b=>!state.players.some(p=>p.athleteId===b.dataset.athleteId)));
@@ -83,6 +88,11 @@ test('D3 local canonical cutover: actual SQL, page engines and compatibility, ze
    assert(mr.validateMatch(match));const invalid=structuredClone(match);invalid.canonicalModel.home.players[0].playerId='603669';assert(!mr.validateMatch(invalid));
    const mp=mountMatchStudio({...m,current:()=>true,api:{load:async()=>({ok:true,match})}});await mp.ready;
    assert.equal(allNodes(m.nodes.matchStudioContent).filter(n=>n.className==='match-player').length,22);mp.dispose();
+   const center=matchBoardDocument('/mac?id=215997'),cr=make(center.window);await cr.load();
+   const upcoming={...match,status:'upcoming',lineups:null};
+   const cp=mountMatchDetail({...center,current:()=>true,api:{load:async()=>({ok:true,match:upcoming})}});await cp.ready;
+   const rows=allNodes(center.nodes.matchDetailContent).filter(n=>n.className==='lineup-player');
+   assert(rows.length>=22);assert(rows.every(n=>internalPlayerId(n.dataset.playerId)));cp.dispose();
   });
   await t.test('same-season completed confirmed XI resolves provider IDs only on server; predicted ignored',async()=>{
    const raw=detail();
@@ -101,17 +111,15 @@ test('D3 local canonical cutover: actual SQL, page engines and compatibility, ze
     raw.lineups.home.formation='4-3-3';raw.lineups.home.starters[1].id='999999999999';assert.notEqual((await recent.canonicalMatch(raw)).canonicalModel.home.lineupKind,'confirmed');
    }finally{await recent.db.close();}
   });
-  await t.test('canonical overrides persist locally and overlay classic, free/match, projects; legacy aliases safe',async()=>{
-   const a=service.fixture.aliases[0],id=service.resolver.player(a.legacy_id),key='internal:'+id;
-   const opts={client:runtime.dataClient,validatedUser:{id:owner},current:()=>true,identity:runtime};
-   const old=createPlayerOverrides(opts);assert((await old.save('local:'+a.legacy_id,{name:'Historical edit',number:8,role:'MO'})).ok);
-   const store=createPlayerOverrides(opts);await store.load();assert.equal(store.effective(key,{}).name,'Historical edit');
+  await t.test('internal-only overrides persist on a clean database and overlay classic, free/match, projects',async()=>{
+   const id=model.players.find(p=>p.teamId==='galatasaray'&&p.positionGroup==='F').id,key='internal:'+id;
+   const opts={client:runtime.dataClient,validatedUser:{id:owner},current:()=>true,internalOnly:true};
+   const store=createPlayerOverrides(opts);assert((await store.load()).ok);assert(!store.has(key));
+   assert(!(await store.save('local:123',{name:'Rejected',number:8,role:'MO'})).ok);
+   assert(!(await store.save('bsd:123',{name:'Rejected',number:8,role:'MO'})).ok);
    assert((await store.save(key,{name:'Canonical edit',number:9,role:'SF'})).ok);
-   const reload=createPlayerOverrides(opts);await reload.load();assert.equal(reload.effective(key,{}).name,'Canonical edit');assert.equal(reload.effective('local:'+a.legacy_id,{}).name,'Canonical edit');
-   await runtime.resolveKeys(['bsd:'+a.provider_id]);assert.equal(reload.effective('bsd:'+a.provider_id,{}).name,'Canonical edit');
-   assert((await reload.save('local:1011932',{name:'Unresolved historical',number:6,role:'MO'})).ok);
-   const another=createPlayerOverrides(opts);await another.load();assert.equal(another.effective('local:1011932',{}).name,'Unresolved historical');
-   assert.equal(runtime.resolveKey('local:1011932'),'local:1011932');assert.equal((await service.db.query("select count(*)::int n from player_overrides where player_key='local:1011932'")).rows[0].n,1);
+   const reload=createPlayerOverrides(opts);assert((await reload.load()).ok);assert.equal(reload.effective(key,{}).name,'Canonical edit');
+   assert.equal((await service.db.query("select count(*)::int n from player_overrides where player_key not like 'internal:%'")).rows[0].n,0);
    const same=classic.create({team:model.teams.find(t=>model.players.find(p=>p.id===id).teamId===t.id).name,playerOverrides:reload});
    assert.equal(reload.key(id),key);assert(same.board.getState().players.every(p=>internalPlayerId(p.athleteId)));
    control(same.root,'players').children[1].listeners.click();control(same.root,'rosterSelect').onchange({target:{value:id}});
@@ -122,11 +130,14 @@ test('D3 local canonical cutover: actual SQL, page engines and compatibility, ze
    token='other';const otherStore=createPlayerOverrides({...opts,validatedUser:{id:other}});await otherStore.load();assert(!otherStore.has(key));token='owner';
    assert((await reload.reset(key)).ok);const reset=createPlayerOverrides(opts);await reset.load();assert(!reset.has(key));
   });
-  await t.test('new draft/share UUIDs; unresolved historical embedded values load and readonly does not adopt catalogue',async()=>{
+  await t.test('new UUID draft/share snapshot renders readonly without provider or alias lookup',async()=>{
    const {board}=classic.create({team:'Galatasaray'}),s=JSON.parse(JSON.stringify(board.getState())),map=new Map(),storage={getItem:k=>map.get(k),setItem:(k,v)=>map.set(k,v)};
    assert(writeDraft(storage,'new',s));assert(readDraft(storage,'new').players.every(p=>internalPlayerId(p.athleteId)));assert(shareValid(toShare(s)));
-   s.team.id='fotmob-8637';s.players[0].athleteId='1011932';s.players[0].name='Embedded old person';assert(writeDraft(storage,'old',s));
-   const restored=classic.create({mode:'readonly',initialState:readDraft(storage,'old')});assert.equal(restored.board.getState().players[0].name,'Embedded old person');assert.equal(restored.board.getState().players[0].athleteId,'1011932');
+   const shared=JSON.parse(JSON.stringify(toShare(s))),viewer=classicFixture({canonical:true});
+   Object.defineProperty(viewer.context.window,'TAKTIK_ROSTERS',{get(){throw Error('readonly catalogue lookup');}});
+   const beforeCalls=calls.length,restored=viewer.create({mode:'readonly',initialState:{...s,...shared}});assert.equal(calls.length,beforeCalls);
+   assert.equal(restored.board.getState().players[0].athleteId,s.players[0].athleteId);assert.equal(restored.board.getState().players[0].name,s.players[0].name);
+   assert.equal(control(restored.root,'players').children[0].querySelector('.player-jersey').className,'player-jersey');
   });
   await t.test('new internal project save/reopen/rename/delete uses real local RLS and preserves snapshots',async()=>{
    const f=matchBoardDocument(),rt=make(f.window);await rt.load();const local=createLocalCatalogue(f.window),home=createFreeTeam(local.teams[0],'home',local),away=createFreeTeam(local.teams[1],'away',local);

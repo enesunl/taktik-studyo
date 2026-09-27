@@ -66,12 +66,12 @@ const saveOnPagehide=()=>{clearTimeout(draftTimer);if(!disposed&&activeGesture==
 if(!readonly&&!scoped)window.addEventListener('pagehide',saveOnPagehide);
 
 
-function sameAthlete(a,b){const runtime=window.TAKTIK_CATALOGUE_RUNTIME;return a===b||!!runtime?.canonical&&runtime.resolveKey(runtime.key(a))===runtime.resolveKey(runtime.key(b));}
+function sameAthlete(a,b){return a===b;}
 function squadFor(team=state.team){const rosters=window.TAKTIK_ROSTERS?.teams;return rosters&&Object.hasOwn(rosters,team.name)?rosters[team.name]:null;}
 function teamPlayers(team,shape){
  const squad=squadFor(team);if(!squad?.players?.length)return initialPlayers(shape);
  const chosen=selectRosterXI(squad,shape);
- return coordinates(shape).map((slot,i)=>{const athlete=chosen[i];return athlete?{...slot,id:i,name:athlete.name,number:athlete.number,athleteId:athlete.id,photo:athlete.photo,renamed:false}:initialPlayers(shape)[i];});
+ return coordinates(shape).map((slot,i)=>{const athlete=chosen[i];return athlete?{...slot,id:i,name:athlete.name,number:athlete.number,athleteId:athlete.id,...(athlete.photo!==undefined?{photo:athlete.photo}:{}),renamed:false}:initialPlayers(shape)[i];});
 }
 function effectivePlayer(p){
  if(!playerOverrides||!p.athleteId)return p;
@@ -91,8 +91,8 @@ function replaceAthlete(athleteId,slotId=selected){
  if(!target||!athlete){announce('Önce sahadan değiştirmek istediğin oyuncuyu seç.');return;}
  if(target.athleteId===athlete.id)return;
  snapshot();selected=target.id;const other=state.players.find(p=>sameAthlete(p.athleteId,athlete.id));
- const identity=p=>({name:p.name,number:p.number,athleteId:p.athleteId,photo:p.photo,renamed:p.renamed});
- if(other){const old=identity(target);Object.assign(target,identity(other));Object.assign(other,old);}else Object.assign(target,{name:athlete.name,number:athlete.number,athleteId:athlete.id,photo:athlete.photo,renamed:false});
+ const identity=p=>({name:p.name,number:p.number,athleteId:p.athleteId,...(p.photo!==undefined?{photo:p.photo}:{}),renamed:p.renamed});
+ if(other){const old=identity(target);Object.assign(target,identity(other));Object.assign(other,old);}else Object.assign(target,{name:athlete.name,number:athlete.number,athleteId:athlete.id,...(athlete.photo!==undefined?{photo:athlete.photo}:{}),renamed:false});
  render();announce(athlete.name+' sahaya yerleştirildi.');
 }
 function renderSquad(){

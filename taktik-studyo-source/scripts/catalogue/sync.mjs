@@ -46,10 +46,11 @@ export function planSync(input,state=emptyState(),{newId=randomUUID}={}){
   const teamMappings=input.teams.map(t=>({provider:'bsd',provider_id:t.bsdId,team_id:t.id}));
   // All-team complete runs only; absent players stay addressable with last team.
   const present=new Set(players.map(p=>p.id)),scope=new Set(teams.map(t=>t.id));
+  const inactiveTeams=state.teamMappings.filter(m=>m.provider==='bsd'&&!scope.has(m.team_id)).map(m=>m.team_id);
   const inactive=state.playerMappings.filter(m=>m.provider==='bsd'&&!present.has(m.player_id))
-    .filter(m=>state.players.some(p=>p.id===m.player_id&&scope.has(p.team_id)&&p.catalogue_active)).map(m=>m.player_id);
+    .filter(m=>state.players.some(p=>p.id===m.player_id&&p.catalogue_active)).map(m=>m.player_id);
   const conflicts=input.players.filter(p=>positionCompatibility(p.position_group,p.specific_position).conflict).map(p=>p.provider_id);
-  return {teams,players,teamMappings,playerMappings,inactive,conflicts,summary:{teams:teams.length,activePlayers:players.length,newPlayers:players.filter(p=>!state.players.some(s=>s.id===p.id)).length,inactive:inactive.length,positionConflicts:conflicts.length}};
+  return {teams,players,teamMappings,playerMappings,inactive,inactiveTeams,conflicts,summary:{teams:teams.length,activePlayers:players.length,newPlayers:players.filter(p=>!state.players.some(s=>s.id===p.id)).length,inactive:inactive.length,positionConflicts:conflicts.length}};
 }
 // GET URLs are constructed here; provider pagination URLs are never followed.
 export async function fetchBsdCatalogue({token,registrations,leagueId=11,seasonId=1539,fetchImpl=fetch}){
@@ -81,19 +82,21 @@ export async function fetchBsdCatalogue({token,registrations,leagueId=11,seasonI
   const input={provider:'bsd',complete:true,teams,players};validateInput(input);return input;
 }
 const tables={teams:'catalogue_teams',players:'catalogue_players',teamMappings:'team_provider_ids',playerMappings:'player_provider_ids',teamAliases:'legacy_team_aliases',playerAliases:'legacy_player_aliases'};
+export async function readCanonicalState(db){const state={};for(const key of ['teams','players','teamMappings','playerMappings'])state[key]=(await db.query('select * from public.'+tables[key])).rows;return state;}
 export async function readState(db){const state={};for(const [key,table] of Object.entries(tables))state[key]=(await db.query('select * from public.'+table)).rows;return state;}
 // D2 ships NO remote database writer. Only a real, in-process PGlite is accepted.
 // A future production runner needs separate review, lock/concurrency and approval.
 export async function syncLocal(db,input,{dryRun=true,aliases=[],teamAliases=[],newId=randomUUID}={}){
   check(db instanceof PGlite,'local_database_required');
   return db.transaction(async tx=>{
-    const state=await readState(tx),plan=planSync(input,state,{newId});
+    const state=await readCanonicalState(tx),plan=planSync(input,state,{newId});
     if(dryRun)return plan;
     const insert=async(table,row,conflict)=>{const keys=Object.keys(row);await tx.query(`insert into public.${table} (${keys.join(',')}) values (${keys.map((_,i)=>'$'+(i+1)).join(',')}) ${conflict}`,Object.values(row));};
     for(const t of plan.teams)await insert('catalogue_teams',t,'on conflict(id) do update set catalogue_active=excluded.catalogue_active');
     for(const p of plan.players)await insert('catalogue_players',p,'on conflict(id) do update set '+[...playerFields,'catalogue_active'].map(k=>k+'=excluded.'+k).join(','));
     for(const [kind,rows] of [['team_provider_ids',plan.teamMappings],['player_provider_ids',plan.playerMappings]])for(const m of rows)await insert(kind,m,'on conflict(provider,provider_id) do nothing');
     if(plan.inactive.length)await tx.query('update public.catalogue_players set catalogue_active=false where id=any($1::uuid[])',[plan.inactive]);
+    if(plan.inactiveTeams.length)await tx.query('update public.catalogue_teams set catalogue_active=false where id=any($1::text[])',[plan.inactiveTeams]);
     // Evidence-reviewed aliases only. Generic sync does not guess names.
     for(const [kind,rows,targetKey,mapping] of [
       ['legacy_team_aliases',teamAliases,'team_id',new Map(plan.teamMappings.map(m=>[m.provider_id,m.team_id]))],

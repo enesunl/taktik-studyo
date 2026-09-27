@@ -24,18 +24,10 @@ export function mergePlayerOverride(base,override){
 }
 const fail=code=>({ok:false,error:{code}});
 // One store per validated route generation. No global account cache or token exposure.
-export function createPlayerOverrides({client,validatedUser,current,identity}){
+export function createPlayerOverrides({client,validatedUser,current,internalOnly=false}){
  const owner=validatedUser?.id,cache=new Map(),listeners=new Set(),writing=new Set();let stopped=false,loaded=false,pending=null;
  const active=()=>!stopped&&!!owner&&current();
- const effectiveValue=key=>{
-  if(!active())return null;
-  const target=identity?.resolveKey(key)||key;
-  // A canonical edit is explicit. Otherwise only one safely resolved legacy
-  // customization may overlay it; collisions never choose an arbitrary winner.
-  if(cache.has(target))return cache.get(target);
-  const old=[...cache].filter(([k])=>identity?.resolveKey(k)===target);
-  return old.length===1?old[0][1]:cache.get(key);
- };
+ const effectiveValue=key=>active()&&(!internalOnly||key?.startsWith('internal:'))?cache.get(key):null;
  const notify=key=>{if(active())for(const fn of listeners){try{fn(key);}catch{/* A view cannot turn a completed write into a failed save. */}}};
  function load(){
   if(!active())return Promise.resolve(fail('state_changed'));
@@ -46,11 +38,12 @@ export function createPlayerOverrides({client,validatedUser,current,identity}){
     if(!client)return fail('overrides_unavailable');
     for(let page=0;page<20;page++){
      let q=client.from('player_overrides').select(columns).eq('user_id',owner).order('player_key').limit(500);
+     if(internalOnly)q=q.like('player_key','internal:%');
      if(after)q=q.gt('player_key',after);
      const r=await q;if(!active())return fail('state_changed');
      if(r.error||!Array.isArray(r.data))return fail('overrides_unavailable');
      for(const row of r.data){const value=normalizePlayerOverride(row);if(row.user_id!==owner||!overrideKeyValid(row.player_key)||!value)return fail('overrides_unavailable');next.set(row.player_key,value);}
-     if(r.data.length<500){if(identity)await identity.resolveKeys([...next.keys()]);if(!active())return fail('state_changed');cache.clear();for(const [key,value] of next)cache.set(key,value);loaded=true;notify(null);return {ok:true};}
+     if(r.data.length<500){if(!active())return fail('state_changed');cache.clear();for(const [key,value] of next)cache.set(key,value);loaded=true;notify(null);return {ok:true};}
      after=r.data.at(-1).player_key;
     }
     return fail('overrides_unavailable');
@@ -60,17 +53,11 @@ export function createPlayerOverrides({client,validatedUser,current,identity}){
  async function write(key,value,remove=false){
   if(!active())return fail('state_changed');
   const normalized=remove?null:normalizePlayerOverride(value);
-  if(!overrideKeyValid(key)||!remove&&!normalized)return fail('invalid_player');
+  if(!overrideKeyValid(key)||(internalOnly&&!key.startsWith('internal:'))||!remove&&!normalized)return fail('invalid_player');
   if(writing.has(key))return fail('save_in_progress');writing.add(key);
   try{
    const ready=await load();if(!active())return fail('state_changed');if(!ready.ok)return ready;
-   if(remove&&identity&&key.startsWith('internal:')){
-    const aliases=[...cache.keys()].filter(k=>k!==key&&identity.resolveKey(k)===key);
-    if(aliases.length>1)return fail('override_conflict');
-    // Explicit reset removes the uniquely resolved inherited customization too,
-    // preventing it from resurfacing after the canonical edit is removed.
-    for(const old of aliases){const r=await client.from('player_overrides').delete().eq('user_id',owner).eq('player_key',old).select('player_key');if(!active())return fail('state_changed');if(r.error)return fail('override_save_failed');cache.delete(old);}
-   }
+
    let r;
    if(remove)r=await client.from('player_overrides').delete().eq('user_id',owner).eq('player_key',key).select('player_key');
    else{
@@ -85,7 +72,6 @@ export function createPlayerOverrides({client,validatedUser,current,identity}){
   }catch{return fail(active()?'override_save_failed':'state_changed');}finally{writing.delete(key);}
  }
  return Object.freeze({load,ready:()=>active()&&loaded,key:playerKey,
-  async prepare(keys){if(identity&&active())await identity.resolveKeys(keys);return active();},
   effective:(key,base)=>mergePlayerOverride(base,effectiveValue(key)),has:key=>!!effectiveValue(key),
   save:(key,value)=>write(key,value),reset:key=>write(key,null,true),
   subscribe(fn){if(!active())return()=>{};listeners.add(fn);return()=>listeners.delete(fn);},

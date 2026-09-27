@@ -18,7 +18,7 @@ function catalogue(){
   const {createClient}=await import('@supabase/supabase-js');
   const {createLocalCatalogueService}=await import('./catalogue/local-service.mjs');
   const client=createClient(process.env.SUPABASE_URL,process.env.SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
-  return createLocalCatalogueService({dataDir:path.resolve(__dirname,'../.local/catalogue-d3'),port,token:process.env.BSD_API_TOKEN,
+  return createLocalCatalogueService({dataDir:path.resolve(__dirname,'../.local/catalogue-d4'),port,token:process.env.BSD_API_TOKEN,
    authenticate:async jwt=>{const {data,error}=await client.auth.getUser(jwt);return error?null:data.user;}});
  })().catch(e=>{catalogueService=null;throw e;});
  return catalogueService;
@@ -32,7 +32,8 @@ async function localMatches(req,res) {
       const envPath = path.resolve(__dirname,'../.env');
       if (require('node:fs').existsSync(envPath)) process.loadEnvFile(envPath);
       const {createLocalMatches} = await import('./local-matches.mjs');
-      matchesHandler = createLocalMatches({url:process.env.SUPABASE_URL,key:process.env.SUPABASE_PUBLISHABLE_KEY,token:process.env.BSD_API_TOKEN,port});
+      const provider=catalogueSource==='canonical'?await catalogue():null;
+      matchesHandler = createLocalMatches({load:provider?.loadSeason,loadDetail:provider?.loadDetail,url:process.env.SUPABASE_URL,key:process.env.SUPABASE_PUBLISHABLE_KEY,token:process.env.BSD_API_TOKEN,port});
     }
     let response = await matchesHandler(new Request('http://'+req.headers.host+req.url,{method:req.method,headers:req.headers}));
     if(catalogueSource==='canonical'&&response.ok&&req.method==='GET'){
