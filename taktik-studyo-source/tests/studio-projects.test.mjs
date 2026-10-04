@@ -4,6 +4,30 @@ import {createStudioProjects,PROJECT_COLUMNS} from '../src/lib/studio-projects.j
 import {snapshot,row,owner,id,copyId,queryMock} from './helpers/studio-project-fixture.mjs';
 import {deferred} from './helpers/matches-fixture.mjs';
 const setup=(responses,current=()=>true)=>{const mock=queryMock(responses);return{...mock,api:createStudioProjects({client:mock.client,validatedUser:{id:owner},current})};};
+
+test('workspace summary counts every owned free/match project, returns four recent metadata rows and never snapshots',async()=>{
+ const f=setup([{data:Array.from({length:5},()=>row())},{count:27},{count:8}]);
+ const r=await f.api.getWorkspaceSummary();assert.equal(r.ok,true);assert.deepEqual(r.counts,{total:35,free:27,match:8});assert.equal(r.projects.length,4);
+ assert(r.projects.every(p=>!Object.hasOwn(p,'snapshot')&&!Object.hasOwn(p,'user_id')));assert.equal(f.calls.length,3);
+ assert.deepEqual(f.calls[0].find(c=>c[0]==='range'),['range',0,4]);
+ assert.deepEqual(f.calls[0].filter(c=>c[0]==='order'),[['order','updated_at',{ascending:false}],['order','id',{ascending:false}]]);
+ for(const [i,mode]of [[1,'free'],[2,'match']])assert.deepEqual(f.calls[i],[['from','studio_projects'],['select','id',{count:'exact',head:true}],['eq','user_id',owner],['eq','studio_mode',mode]]);
+ assert(f.calls[0].some(c=>c[0]==='eq'&&c[1]==='user_id'&&c[2]===owner));
+});
+
+test('workspace summary distinguishes real zero from failed/missing counts and hides raw errors',async()=>{
+ const empty=setup([{data:[]},{count:0},{count:0}]);assert.deepEqual(await empty.api.getWorkspaceSummary(),{ok:true,projects:[],counts:{total:0,free:0,match:0}});
+ for(const count of [null,undefined,-1,1.5]){
+  const f=setup([{data:[]},{count},{count:1}]);assert.equal((await f.api.getWorkspaceSummary()).ok,false);
+ }
+ const f=setup([{data:[]},{error:{message:'private database failure'}},{count:0}]);assert.deepEqual(await f.api.getWorkspaceSummary(),{ok:false,error:{code:'project_request_failed'}});
+});
+
+test('workspace summary never delivers A statistics after account invalidation or starts stale queries',async()=>{
+ let current=true;const wait=deferred(),f=setup([{data:[row()]},wait.promise,{count:1}],()=>current);
+ const pending=f.api.getWorkspaceSummary();current=false;wait.resolve({count:10});assert.equal((await pending).error.code,'state_changed');
+ const calls=f.calls.length;assert.equal((await f.api.getWorkspaceSummary()).error.code,'state_changed');assert.equal(f.calls.length,calls);
+});
 test('private project list uses owner-only metadata query, stable updated DESC and pagination',async()=>{
  const f=setup([{data:Array.from({length:21},()=>row())}]);const r=await f.api.listProjects(20);
  assert.equal(r.projects.length,20);assert.equal(r.more,true);assert.equal(r.nextOffset,40);assert.equal(r.projects[0].snapshot,undefined);

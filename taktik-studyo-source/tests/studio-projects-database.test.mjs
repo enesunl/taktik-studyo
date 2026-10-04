@@ -13,17 +13,19 @@ function sqlClient(db,calls){
  const columns=new Set([...PROJECT_COLUMNS.split(','),'snapshot']);
  const column=name=>{assert.ok(columns.has(name));return '"'+name+'"';};
  return {from(table){
-  assert.equal(table,'studio_projects');let action='select',values,selected='*';const filters=[];
+  assert.equal(table,'studio_projects');let action='select',values,selected='*',head=false,single=false,range;const filters=[],orders=[];
   const q={insert(v){action='insert';values=v;calls.push(structuredClone(v));return q;},update(v){action='update';values=v;return q;},delete(){action='delete';return q;},
-   select(v){selected=v.split(',').map(column).join(',');return q;},eq(k,v){filters.push([k,v]);return q;},maybeSingle(){return q;},
+   select(v,options){selected=v.split(',').map(column).join(',');head=options?.head===true;return q;},eq(k,v){filters.push([k,v]);return q;},maybeSingle(){single=true;return q;},
+   order(k,{ascending}){orders.push(column(k)+(ascending?' asc':' desc'));return q;},range(from,to){range=[from,to];return q;},
    async then(resolve,reject){try{
     const params=[],bind=v=>{params.push(v&&typeof v==='object'?JSON.stringify(v):v);return '$'+params.length;};
-    let sql=action==='select'?'select '+selected+' from public.studio_projects':action==='delete'?'delete from public.studio_projects':action==='insert'
+    let sql=action==='select'?'select '+(head?'count(*) as total':selected)+' from public.studio_projects':action==='delete'?'delete from public.studio_projects':action==='insert'
      ?'insert into public.studio_projects ('+Object.keys(values).map(column).join(',')+') values ('+Object.values(values).map(bind).join(',')+')'
      :'update public.studio_projects set '+Object.entries(values).map(([k,v])=>column(k)+'='+bind(v)).join(',');
     if(filters.length)sql+=' where '+filters.map(([k,v])=>column(k)+'='+bind(v)).join(' and ');
     if(action!=='select')sql+=' returning '+selected;
-    resolve({data:(await db.query(sql,params)).rows[0]??null,error:null});
+    if(orders.length)sql+=' order by '+orders.join(',');if(range)sql+=' limit '+bind(range[1]-range[0]+1)+' offset '+bind(range[0]);
+    const rows=(await db.query(sql,params)).rows;resolve({data:head?null:single?rows[0]??null:rows,error:null,...(head?{count:Number(rows[0].total)}:{})});
    }catch(e){reject(e);}}
   };return q;
  }};
@@ -60,6 +62,17 @@ test('M5 private project migration: real SQL ownership, grants, CAS and constrai
     assert.equal((await db.query("update public.studio_projects set title='Stolen' where id=$1 returning id",[id])).rows.length,0);
     assert.equal((await db.query('delete from public.studio_projects where id=$1 returning id',[id])).rows.length,0);});
    await as(null,async()=>{for(const q of ['select * from public.studio_projects',"update public.studio_projects set title='Bad'",'delete from public.studio_projects'])await denied(()=>db.exec(q));await denied(()=>insert());},'anon');
+  });
+  await t.test('profile summary runs real owned metadata/count queries under RLS without snapshots',async()=>{
+   const foreignId='cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+   await as(owner,()=>insert(owner,copyId,snapshot('free')));await as(other,()=>insert(other,foreignId));
+   try{
+    for(const [uid,counts]of [[owner,{total:2,free:1,match:1}],[other,{total:1,free:0,match:1}]])await as(uid,async()=>{
+     const api=createStudioProjects({client:sqlClient(db,[]),validatedUser:{id:uid},current:()=>true});
+     const result=await api.getWorkspaceSummary();assert.equal(result.ok,true);assert.deepEqual(result.counts,counts);assert.equal(result.projects.length,counts.total);assert(result.projects.every(p=>!Object.hasOwn(p,'snapshot')));
+     assert(result.projects.every(p=>uid===owner?p.id!==foreignId:p.id===foreignId));
+    });
+   }finally{await as(owner,()=>db.query('delete from public.studio_projects where id=$1',[copyId]));await as(other,()=>db.query('delete from public.studio_projects where id=$1',[foreignId]));}
   });
   await t.test('revision CAS prevents stale tab overwrite; rename preserves snapshot and server timestamps',async()=>{
    await as(owner,async()=>{

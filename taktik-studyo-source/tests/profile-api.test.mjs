@@ -105,3 +105,14 @@ test('installed SDK generates exact own-row select/update/insert HTTP contracts 
   for(const r of requests){assert.equal(r.url.pathname,'/rest/v1/profiles');assert.equal(r.url.searchParams.get('select'),profileColumns);if(r.method!=='POST')assert.equal(r.url.searchParams.get('id'),'eq.'+A);}
   assert.deepEqual(requests[2].body,values);assert.deepEqual(requests[4].body,{id:A,...values});
 });
+
+
+test('P1 profile load/save requests only deployed profile columns without favourite-team schema',async()=>{
+  const columns='id,username,display_name,created_at,updated_at';
+  assert.equal(profileColumns,columns);
+  const f=make(c=>c.columns===columns?{data:row()}:{error:{code:'42703'}});
+  assert.equal((await f.api.load()).ok,true);assert.equal((await f.api.save(input)).ok,true);
+  assert.deepEqual(f.calls.map(c=>c.kind),['select','select','update']);
+  for(const c of f.calls){assert.equal(c.table,'profiles');assert.equal(c.columns,columns);assert.deepEqual(c.filters,[['id',A]]);}
+  assert.deepEqual(f.calls.at(-1).values,values);
+});

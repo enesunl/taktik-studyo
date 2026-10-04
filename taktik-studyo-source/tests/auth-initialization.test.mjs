@@ -101,7 +101,10 @@ for (const path of ['/studyo.html','/profil.html','/karsilastirma.html','/studyo
       if (path.startsWith('/profil')) {
         assert.equal(page.mounts.length,0);
         assert.equal(page.profile.mounts.length,1);
-        assert.equal(page.profile.mounts[0].fields.form.hidden,false,'profile loads only after guard validation');
+        const fields=page.profile.mounts[0].fields;
+        assert.equal(fields['#profileReadOnly'].hidden,false,'read-only profile loads only after guard validation');
+        assert.equal(fields.form.hidden,true,'loading a profile must not open its editor');
+        await fields['#profileEdit'].emit('click');assert.equal(fields.form.hidden,false,'explicit editing remains available after validation');
       } else assert.deepEqual(page.mounts,['catalogue',path.startsWith('/studyo')?'studio':'comparison']);
     } finally {mounted?.dispose();await f.dispose();}
   });

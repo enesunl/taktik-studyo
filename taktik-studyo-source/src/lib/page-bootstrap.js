@@ -67,7 +67,7 @@ export function startPage({auth,document,window,backend,client}) {
       }
       if (route.page === 'profile') {
         const api = createProfileApi({client,validatedUser,current});
-        return mountProfile({document,api,validatedUser,current}).dispose;
+        return mountProfile({document,api,validatedUser,current,projects:createStudioProjects({client:dataClient,validatedUser,current}),onSignOut:()=>guard.signOut()}).dispose;
       }
       // Open the user's own draft directly. Device-wide legacy drafts are
       // neither imported nor deleted as a side effect of opening a board.

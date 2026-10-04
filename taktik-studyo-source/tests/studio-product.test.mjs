@@ -114,7 +114,7 @@ test('authenticated navigation uses Profile as the only account hub',()=>{
   for(const name of ['index','studyo','karsilastirma','profil','maclar','mac','mac-studyosu','calismalarim']){
     const html=read('dist/'+name+'.html');assert.match(html,/href="\/mac-studyosu"[^>]*>Stüdyo/);
     assert.match(html,/href="\/studyo.html"[^>]*>Taktik Tahtası/);
-    assert.equal((html.match(/id="signOut"/g)||[]).length,name==='profil'?1:0);
+    assert.equal((html.match(/id="(?:profileSignOut|signOut)"/g)||[]).length,name==='profil'?1:0);
     assert.doesNotMatch(html,/data-account-panel|navigation.js/);
     assert.doesNotMatch(html.slice(0,html.indexOf('</header>')),/href="\/calismalarim"/);
   }
@@ -143,9 +143,11 @@ test('confirmed source replaces cached probable XI after the upcoming cache TTL'
   assert.equal(resolveStudioLineups(await load()).home.lineupKind,'probable-provider');assert.equal(calls,1);
   clock+=300001;assert.equal(resolveStudioLineups(await load()).home.lineupKind,'confirmed');assert.equal(calls,2);
 });
-test('profile hub keeps unavailable pages disabled and logout last',()=>{
- const html=read('dist/profil.html'),panel=html.slice(html.indexOf('<aside'),html.indexOf('</aside>'));
- assert.match(panel,/href="\/calismalarim"/);assert.match(panel,/disabled[^>]*>Ayarlar/);assert.match(panel,/disabled[^>]*>Gizlilik/);
- assert.ok(panel.indexOf('id="signOut"')>panel.indexOf('</nav>'));
- assert.match(read('dist/routes.css'),/@media[^}]+700px/);
+test('profile workspace exposes real work links, existing editing and a single accessible account logout',()=>{
+ const html=read('dist/profil.html'),panel=html.match(/<template id="profileTemplate">[\s\S]*?<\/template>/)?.[0]||'';
+ assert.match(panel,/href="\/calismalarim"/);assert.match(panel,/href="\/haftanin-ilk-11i"/);assert.match(panel,/id="profileUsername"/);assert.match(panel,/id="profileDisplayName"/);
+ assert.doesNotMatch(panel.match(/<header class="profile-hero">[\s\S]*?<\/header>/)[0],/profileSignOut/);
+ assert.match(panel,/<section id="profileAccount"[\s\S]*<button id="profileSignOut" type="button">Çıkış Yap →<\/button>/);
+ assert.equal((panel.match(/id="profileSignOut"/g)||[]).length,1);assert.doesNotMatch(panel,/disabled[^>]*>(?:Ayarlar|Gizlilik)/);
+ assert.match(read('dist/profile.css'),/@media\(max-width:760px\)/);
 });

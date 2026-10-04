@@ -26,6 +26,19 @@ test('theme toggles both ways, syncs all header controls and persists across pag
   const f=theme();f.ready();f.buttons[0].click();assert.equal(f.current(),'dark');assert.equal(f.store.get('taktik:theme:v1'),'dark');assert.equal(f.buttons[1].attrs['aria-pressed'],'true');
   const next=theme({store:f.store});assert.equal(next.current(),'dark');next.ready();next.buttons[1].click();assert.equal(next.current(),'light');assert.equal(f.network()+next.network(),0);
 });
+
+test('profile offers theme control only in the navbar and preserves the shared preference',()=>{
+ const html=readFileSync(new URL('../dist/profil.html',import.meta.url),'utf8');
+ assert.equal((html.match(/data-theme-toggle/g)||[]).length,1);
+ assert.match(html.match(/<nav\b[\s\S]*?<\/nav>/)[0],/data-theme-toggle/);
+ assert.doesNotMatch(html.slice(html.indexOf('<main')),/data-theme-toggle/);
+ assert.doesNotMatch(html,/profile-appearance|profile-theme-/);
+ const css=readFileSync(new URL('../dist/profile.css',import.meta.url),'utf8');
+ assert.doesNotMatch(css,/profile-appearance|profile-theme-/);
+ const f=theme();f.ready();f.buttons[0].click();assert.equal(f.current(),'dark');assert.equal(f.store.get('taktik:theme:v1'),'dark');
+ f.buttons[0].click();assert.equal(f.current(),'light');assert.equal(f.store.get('taktik:theme:v1'),'light');assert.equal(f.network(),0);
+});
+
 test('system changes follow only without explicit choice; cross-tab values are validated',()=>{
   const f=theme();f.ready();f.system(true);assert.equal(f.current(),'dark');f.buttons[0].click();f.system(true);assert.equal(f.current(),'light');
   f.storage('dark');assert.equal(f.current(),'dark');f.system(false);assert.equal(f.current(),'dark');f.storage('garbage');assert.equal(f.current(),'light');f.system(true);assert.equal(f.current(),'dark');

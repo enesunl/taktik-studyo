@@ -241,7 +241,8 @@ test('static shells hide protected contents and deterministic defer order leaves
   for(const file of ['studyo','karsilastirma','profil']){
     const html=readFileSync(new URL('../dist/'+file+'.html',import.meta.url),'utf8');
     assert.match(html,/id="protectedContent"[^>]*hidden inert/);assert.match(html,/id="guardMessage" role="status"/);
-    assert.equal(/<button id="signOut"/.test(html),file==='profil');
+    assert.equal(/<button id="profileSignOut"/.test(html),file==='profil');
+    if(file==='profil')assert.match(html,/<template id="profileTemplate">[\s\S]*<button id="profileSignOut"/);
     if(file!=='profil')assert.ok(html.indexOf('src="backend.js" defer')<html.indexOf('src="app.js" defer'));
   }
   const app=readFileSync(new URL('../dist/app.js',import.meta.url),'utf8');

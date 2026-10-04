@@ -29,21 +29,24 @@ export function profileClient(handler = () => ({data:row(),error:null})) {
 }
 
 export class ProfileNode {
-  constructor(){this.listeners=new Map();this.children=[];this.value='';this.textContent='';this.hidden=false;this.inert=false;this.disabled=false;this.attrs={};}
+  constructor(tag){this.tagName=tag;this.listeners=new Map();this.children=[];this.value='';this.textContent='';this.hidden=false;this.inert=false;this.disabled=false;this.attrs={};}
   addEventListener(name,fn){this.listeners.set(name,fn);}
   removeEventListener(name,fn){if(this.listeners.get(name)===fn)this.listeners.delete(name);}
   setAttribute(name,value){this.attrs[name]=value;}
-  emit(name){return this.listeners.get(name)?.({preventDefault(){}});}
+  emit(name){return this.listeners.get(name)?.({currentTarget:this,preventDefault(){}});}
   replaceChildren(...children){this.children=children;}
+  append(...children){this.children.push(...children);}
+  focus(){this.focused=true;}
+  scrollIntoView(){this.scrolled=true;}
   querySelector(selector){return this.children[0]?.fields[selector];}
 }
 export function profileDocument(base = {getElementById(){}}) {
   const root = new ProfileNode(), mounts = [];
   const template = {content:{cloneNode(){
-    const fields = Object.fromEntries(['form','#profileUsername','#profileDisplayName','#profileEmail','#profileStatus','#profileSave','#profileRetry'].map(key=>[key,new ProfileNode()]));
+    const fields = Object.fromEntries(['form','#profileUsername','#profileDisplayName','#profileEmail','#profileStatus','#profileSave','#profileRetry','#profileName','#profileInitials','#profileEdit','#profileSignOut','#profileStats','#profileRecent','#profileEmpty','#profileProjectsStatus','#profileProjectsRetry','#profileCountTotal','#profileCountFree','#profileCountMatch','#profileAccount','#profileAccountEdit','#profileCancel','#profileReadOnly','#profileReadUsername','#profileReadDisplayName','#profileReadEmail'].map(key=>[key,new ProfileNode()]));
     fields.form.hidden=true;fields.form.inert=true;
     const fragment={fields};mounts.push(fragment);return fragment;
   }}};
   const get = base.getElementById.bind(base);
-  return {root,mounts,document:{...base,getElementById:id=>id==='profileContent'?root:id==='profileTemplate'?template:get(id)}};
+  return {root,mounts,document:{...base,createElement:tag=>new ProfileNode(tag),getElementById:id=>id==='profileContent'?root:id==='profileTemplate'?template:get(id)}};
 }
