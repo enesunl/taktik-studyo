@@ -13,7 +13,7 @@ export function resolvePage(location) {
   }
   // Static hosts can serve/rewrite links to extensionless HTML paths. Keep the
   // aliases exact and retain canonical .html paths for the safe-next allowlist.
-  const canonicalPath = {'/haftanin-ilk-11i':'/haftanin-ilk-11i.html','/calismalarim':'/calismalarim.html','/studyo':'/studyo.html','/karsilastirma':'/karsilastirma.html','/profil':'/profil.html','/maclar':'/maclar.html','/mac':'/mac.html','/mac-studyosu':'/mac-studyosu.html'}[path] || path;
-  const protectedPages = {'/haftanin-ilk-11i.html':'weekly-xi','/calismalarim.html':'projects','/studyo.html':'studio','/karsilastirma.html':'comparison','/profil.html':'profile','/maclar.html':'matches','/mac.html':'match','/mac-studyosu.html':'match-studio'};
+  const canonicalPath = {'/hos-geldin':'/hos-geldin.html','/haftanin-ilk-11i':'/haftanin-ilk-11i.html','/calismalarim':'/calismalarim.html','/studyo':'/studyo.html','/karsilastirma':'/karsilastirma.html','/profil':'/profil.html','/maclar':'/maclar.html','/mac':'/mac.html','/mac-studyosu':'/mac-studyosu.html'}[path] || path;
+  const protectedPages = {'/hos-geldin.html':'onboarding','/haftanin-ilk-11i.html':'weekly-xi','/calismalarim.html':'projects','/studyo.html':'studio','/karsilastirma.html':'comparison','/profil.html':'profile','/maclar.html':'matches','/mac.html':'match','/mac-studyosu.html':'match-studio'};
   return protectedPages[canonicalPath] ? {kind:'protected',page:protectedPages[canonicalPath],path:canonicalPath} : {kind:'auth'};
 }

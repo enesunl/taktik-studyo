@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {preferenceColumns} from '../src/lib/profile-preferences.js';
 import {mountProfile,profileInitials} from '../src/lib/profile-ui.js';
 import {startPage} from '../src/lib/page-bootstrap.js';
 import {createProtectedPage} from '../src/lib/protected-page.js';
@@ -106,7 +107,7 @@ function routeFixture(initialId=A) {
   Object.assign(window,{location:{pathname:'/profil.html',search:'',replace:url=>navigations.push(url)}});
   Object.defineProperty(window,'localStorage',{get(){throw Error('Profile must not access draft storage');}});
   const f={...dom,nodes,window,navigations,requests,validation:async()=>({ok:true,user:{id:state.user.id,email:'server-validated@example.test'}}),handler:c=>({data:row(c.filters[0][1],c.filters[0][1]===A?'Alice':'Bobby')})};
-  const db=profileClient(c=>{requests.push(c);return f.handler(c);});
+  const db=profileClient(c=>{requests.push(c);return c.columns===preferenceColumns?{error:{code:'42703'}}:f.handler(c);});
   const auth={getState:()=>state,initialize:async()=>({ok:true}),validateUser:()=>f.validation(),
     subscribe(fn){listeners.add(fn);return()=>listeners.delete(fn);},onInvalidate(fn){invalidators.add(fn);return()=>invalidators.delete(fn);},
     signOut:async()=>{f.emit(null);return {ok:true};}};
@@ -211,5 +212,5 @@ test('canonical mode retains the original profile client and edits despite unava
  await fields['#profileEdit'].emit('click');fields['#profileDisplayName'].value='Saved Name';
  f.handler=c=>({data:c.kind==='update'?{...row(),...c.values}:row()});
  await fields.form.emit('submit');assert.equal(fields['#profileName'].textContent,'Saved Name');assert.equal(fields.form.hidden,true);assert.equal(fields['#profileReadOnly'].hidden,false);
- assert(f.requests.some(c=>c.kind==='update'));for(const c of f.requests)assert.equal(c.columns,'id,username,display_name,created_at,updated_at');assert.equal(teamRequests,0);page.dispose();
+ assert(f.requests.some(c=>c.kind==='update'));assert.equal(f.requests.filter(c=>c.columns===preferenceColumns).length,1);for(const c of f.requests.filter(c=>c.columns!==preferenceColumns))assert.equal(c.columns,'id,username,display_name,created_at,updated_at');assert.equal(teamRequests,0);page.dispose();
 });

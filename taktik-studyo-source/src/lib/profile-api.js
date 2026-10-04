@@ -1,3 +1,4 @@
+import {createProfilePreferences} from './profile-preferences.js';
 import {usernameValid} from './auth-validation.js';
 import {createProfileBootstrap, profileColumns} from './profile-bootstrap.js';
 
@@ -67,5 +68,5 @@ export function createProfileApi({client,validatedUser,current}) {
       return raced.profile ? await updateOwn() : failure('username_conflict');
     } catch {return failure(active() ? 'profile_save_failed' : 'state_changed');}
   }
-  return Object.freeze({load,save});
+  return Object.freeze({load,save,...createProfilePreferences({client,validatedUser,current})});
 }

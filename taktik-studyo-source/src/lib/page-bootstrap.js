@@ -1,3 +1,4 @@
+import {createOnboardingGate} from './onboarding.js';
 import {mountWeeklyXI} from './weekly-xi-ui.js';
 import {createStudioProjects} from './studio-projects.js';
 import {mountStudioProjects} from './studio-projects-ui.js';
@@ -34,6 +35,7 @@ export function startPage({auth,document,window,backend,client}) {
     try {storage = window.localStorage;} catch {storage = {getItem(){return null;},setItem(){throw Error('Storage unavailable');}};}
   }
   const guard = createProtectedPage({auth,storage,drafts,path:route.path,navigate:url => window.location.replace(url),
+    beforeMount:client?createOnboardingGate({path:route.path,createApi:(validatedUser,current)=>createProfileApi({client,validatedUser,current})}):undefined,
     show(state) {
       const ready = state === 'ready';
       content.hidden = !ready; content.inert = !ready; status.hidden = ready;
@@ -43,6 +45,7 @@ export function startPage({auth,document,window,backend,client}) {
         : 'Oturum şu anda doğrulanamadı. Biraz sonra tekrar dene.';
     },
     async mount(scope,current,validatedUser) {
+      if (route.page === 'onboarding') return () => {}; // O1 protected development placeholder; O2 owns the UI.
       const catalogue=backend.catalogue,canonical=catalogue?.canonical;
       const dataClient=canonical?catalogue.dataClient:client;
       if((canonical&&['studio','comparison','match-studio','match'].includes(route.page))||route.page==='weekly-xi'){

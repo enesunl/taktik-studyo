@@ -18,7 +18,7 @@ test('local HTTP server serves every protected alias, including Çalışmalarım
       server.stdout.on('data',chunk=>{if(chunk.toString().includes('Taktik Studyo:'))resolve();});
     });
     const origin='http://127.0.0.1:'+port;
-    for(const path of ['/studyo','/karsilastirma','/profil','/maclar','/mac','/mac-studyosu','/calismalarim']){
+    for(const path of ['/hos-geldin','/studyo','/karsilastirma','/profil','/maclar','/mac','/mac-studyosu','/calismalarim']){
       assert.equal(resolvePage(new URL(path,origin)).kind,'protected');
       const alias=await fetch(origin+path+'?test=route'),html=await fetch(origin+path+'.html');
       assert.equal(alias.status,200,path);assert.equal(html.status,200,path+'.html');

@@ -36,5 +36,12 @@ export function createCanonicalCatalogue(client,now=Date.now){
    cache=normalizeCanonical(t.data,rows);expires=now()+300000;return cache;
   }catch(e){throw e.code?e:failure(e);}
  }
- return {load(){if(cache&&now()<expires)return Promise.resolve(cache);if(!pending)pending=read().finally(()=>pending=null);return pending;}};
+ return {
+  async hasActiveTeam(id){
+   if(typeof id!=='string'||!/^[a-z][a-z0-9-]{0,79}$/.test(id)||/^(fotmob|bsd)-/.test(id))return false;
+   const r=await client.from('catalogue_teams').select('id').eq('id',id).eq('catalogue_active',true).maybeSingle();
+   if(r.error)throw failure(r.error);
+   return r.data?.id===id;
+  },
+  load(){if(cache&&now()<expires)return Promise.resolve(cache);if(!pending)pending=read().finally(()=>pending=null);return pending;}};
 }
