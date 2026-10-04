@@ -246,7 +246,7 @@ test('static shells hide protected contents and deterministic defer order leaves
   }
   const app=readFileSync(new URL('../dist/app.js',import.meta.url),'utf8');
   assert.doesNotMatch(app,/startMainBoard\(\);/);
-  const redirects=readFileSync(new URL('../dist/_redirects',import.meta.url),'utf8');assert.equal(redirects.trim(),'/lineup/* /index.html 200');
+  const redirects=readFileSync(new URL('../dist/_redirects',import.meta.url),'utf8');assert.deepEqual(redirects.trim().split(/\r?\n/),['/lineup/* /index.html 200','/haftanin-ilk-11i /haftanin-ilk-11i.html 200']);
 });
 
 test('actual backend bundle defers routes to DOMContentLoaded; landing/profile avoid catalogue; bfcache revalidates',async()=>{

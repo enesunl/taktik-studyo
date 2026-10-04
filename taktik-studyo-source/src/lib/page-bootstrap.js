@@ -1,3 +1,4 @@
+import {mountWeeklyXI} from './weekly-xi-ui.js';
 import {createStudioProjects} from './studio-projects.js';
 import {mountStudioProjects} from './studio-projects-ui.js';
 import {resolvePage} from './page-routes.js';
@@ -44,15 +45,16 @@ export function startPage({auth,document,window,backend,client}) {
     async mount(scope,current,validatedUser) {
       const catalogue=backend.catalogue,canonical=catalogue?.canonical;
       const dataClient=canonical?catalogue.dataClient:client;
-      if(canonical&&['studio','comparison','match-studio','match'].includes(route.page)){
+      if((canonical&&['studio','comparison','match-studio','match'].includes(route.page))||route.page==='weekly-xi'){
         await backend.loadCatalogue();if(!current())return;
       }
       let playerOverrides=null;
-      if(['studio','comparison','match-studio','match'].includes(route.page)){
+      if(['studio','comparison','match-studio','match','weekly-xi'].includes(route.page)){
         playerOverrides=createPlayerOverrides({client:dataClient,validatedUser,current,internalOnly:!!canonical});await playerOverrides.load();
         if(!current()){playerOverrides.dispose();return;}
       }
       const owned=dispose=>()=>{dispose?.();playerOverrides?.dispose();};
+      if (route.page === 'weekly-xi') return owned(mountWeeklyXI({document,window,current,userId:validatedUser.id,catalogue,playerOverrides,matchesApi:createMatchesApi({client,current,location:window.location})}).dispose);
       if (route.page === 'projects') return mountStudioProjects({document,window,current,api:createStudioProjects({client:dataClient,validatedUser,current})}).dispose;
       if (route.page === 'match-studio') {
         return owned(mountMatchStudio({document,window,current,playerOverrides,userId:validatedUser.id,projects:createStudioProjects({client:dataClient,validatedUser,current}),api:createMatchDetailApi({client,current,location:window.location,identity:canonical?catalogue:null})}).dispose);

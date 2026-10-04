@@ -79,7 +79,7 @@ const server = http.createServer(async (req, res) => {
   // Match the existing dist/_redirects route without changing application code.
   if (pathname === '/' || pathname.startsWith('/lineup/')) pathname = '/index.html';
   // Mirror the exact extensionless protected routes served by static hosting.
-  if (['/studyo','/karsilastirma','/profil','/maclar','/mac','/mac-studyosu','/calismalarim'].includes(pathname)) pathname += '.html';
+  if (['/haftanin-ilk-11i','/studyo','/karsilastirma','/profil','/maclar','/mac','/mac-studyosu','/calismalarim'].includes(pathname)) pathname += '.html';
   const file = path.resolve(root, '.' + pathname);
   try {
     const real = await fs.realpath(file);
