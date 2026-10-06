@@ -6,6 +6,7 @@ import {readCanonicalState,syncLocal,fetchBsdCatalogue} from '../scripts/catalog
 import {createLocalCatalogueService} from '../scripts/catalogue/local-service.mjs';
 import {providerIdentityResolver} from '../src/lib/catalogue-identity.js';
 import {event} from './helpers/matches-fixture.mjs';
+import {promoteFavoriteMatch} from '../src/lib/favorite-team.js';
 
 test('D4 zero-data SQL sync: no legacy schema/alias access, stable IDs, team departure, metadata ownership',async()=>{
  const {db}=await openCatalogueDatabase(undefined,{populate:false}),input=cleanCatalogueInput();
@@ -70,6 +71,11 @@ test('D4 match provider resolves directly to product IDs; unknown IDs never try 
   const raw=event(),fetchImpl=async()=>({ok:true,text:async()=>JSON.stringify({count:1,next:null,results:[raw]})});
   const data=await service.loadSeason({token:'D4-mock-only',fetchImpl});
   assert.equal(data.matches.length,1);assert.equal(data.matches[0].home.teamId,'amedspor');assert.equal(data.matches[0].away.teamId,'besiktas');
+  // O3 consumes the existing canonical identity, including away-team matches.
+  const before={...data.matches[0],id:'other',home:{teamId:'other'},away:{teamId:'else'}};
+  const promoted=promoteFavoriteMatch([before,...data.matches],{id:'besiktas'});
+  assert.deepEqual(promoted.matches.map(m=>m.id),[data.matches[0].id,'other']);
+  assert.equal(promoted.favoriteMatchId,data.matches[0].id);
   assert.doesNotMatch(JSON.stringify(data),/fotmob/i);assert.equal(service.teamResolver(9999999),null);
   await service.db.exec('drop table public.legacy_player_aliases,public.legacy_team_aliases');
   assert.equal((await service.defaults()).galatasaray.starters.length,11);

@@ -1,3 +1,5 @@
+import {mountProfileFavorite} from './profile-favorite-ui.js';
+
 const messages = {
   invalid_profile:'Kullanıcı adı 3–24 harf, rakam veya alt çizgi içermeli. Görünen ad en fazla 60 karakter olmalı; kontrol karakterleri kullanma.',
   username_conflict:'Bu kullanıcı adı kullanılıyor. Başka bir kullanıcı adı seç.',
@@ -13,7 +15,7 @@ export function profileInitials(name){
   return letters.normalize('NFD').replace(/\p{M}/gu,'').toLocaleUpperCase('en-US')||'TS';
 }
 
-export function mountProfile({document,api,validatedUser,current,projects,onSignOut}) {
+export function mountProfile({document,api,validatedUser,current,projects,onSignOut,catalogue}) {
   const root = document.getElementById('profileContent');
   root.replaceChildren(document.getElementById('profileTemplate').content.cloneNode(true));
   const form = root.querySelector('form'), username = root.querySelector('#profileUsername');
@@ -100,6 +102,7 @@ export function mountProfile({document,api,validatedUser,current,projects,onSign
   }
   function dispose() {
     if (disposed) return;
+    favorite?.dispose();
     disposed = true; form.hidden = true; form.inert = true; apply(null); email.textContent = ''; status.textContent = '';
     form.removeEventListener('submit',submit); retry.removeEventListener('click',load);
     edit.removeEventListener('click',editProfile);accountEdit.removeEventListener('click',editProfile);cancel.removeEventListener('click',cancelEdit);logout.removeEventListener('click',signOut);projectRetry.removeEventListener('click',loadProjects);
@@ -107,6 +110,8 @@ export function mountProfile({document,api,validatedUser,current,projects,onSign
   }
   form.addEventListener('submit',submit); retry.addEventListener('click',load);
   edit.addEventListener('click',editProfile);accountEdit.addEventListener('click',editProfile);cancel.addEventListener('click',cancelEdit);logout.addEventListener('click',signOut);projectRetry.addEventListener('click',loadProjects);
+  const favoriteRoot=root.querySelector('#profileFavorite');
+  const favorite=favoriteRoot&&catalogue?mountProfileFavorite({document,root:favoriteRoot,initials,api,catalogue,current:active}):null;
   const ready = Promise.all([load(),loadProjects()]);
-  return {ready,dispose};
+  return {ready,favoriteReady:favorite?.ready,dispose};
 }

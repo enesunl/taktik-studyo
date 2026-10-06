@@ -31,7 +31,7 @@ export function profileClient(handler = () => ({data:row(),error:null})) {
 }
 
 export class ProfileNode {
-  constructor(tag){this.tagName=tag;this.listeners=new Map();this.children=[];this.value='';this.textContent='';this.hidden=false;this.inert=false;this.disabled=false;this.attrs={};}
+  constructor(tag){this.tagName=tag;this.listeners=new Map();this.children=[];this.value='';this.textContent='';this.hidden=false;this.inert=false;this.disabled=false;this.attrs={};this.style={setProperty:(key,value)=>{this.attrs[key]=value;}};}
   addEventListener(name,fn){this.listeners.set(name,fn);}
   removeEventListener(name,fn){if(this.listeners.get(name)===fn)this.listeners.delete(name);}
   setAttribute(name,value){this.attrs[name]=value;}

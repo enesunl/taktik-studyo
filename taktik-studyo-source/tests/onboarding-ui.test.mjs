@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {mountOnboarding} from '../src/lib/onboarding-ui.js';
-import {createCanonicalCatalogue} from '../src/lib/catalogue-canonical.js';
+import {createCanonicalCatalogue,normalizeCanonicalTeams} from '../src/lib/catalogue-canonical.js';
 import {ProfileNode,deferred,tick} from './helpers/profile-fixture.mjs';
 
 const incomplete={onboarding_completed_at:null,onboarding_version:0};
@@ -110,4 +110,14 @@ test('welcome shell reuses theme, guarded content, local CSS; accessible respons
   const html=await readFile(new URL('../dist/hos-geldin.html',import.meta.url),'utf8'),css=await readFile(new URL('../dist/onboarding.css',import.meta.url),'utf8');
   assert.match(html,/id="protectedContent"[^>]*hidden inert/);assert.match(html,/onboarding.css/);assert(html.indexOf('theme.js')<html.indexOf('styles.css'));assert.match(html,/data-theme-toggle/);
   assert.match(css,/prefers-reduced-motion:no-preference/);assert.match(css,/@media\(max-width:640px\)/);assert.match(css,/min-height:44px/);assert.match(css,/focus-within/);
+});
+
+test('O3 shared picker keeps all 18 canonical teams and explicit no-team option in O2',async()=>{
+  const registrations=JSON.parse(await readFile(new URL('../scripts/catalogue/team-registrations.json',import.meta.url),'utf8'));
+  const teams=normalizeCanonicalTeams(registrations.map(t=>({...t,catalogue_active:true})));
+  const f=fixture({teams:async()=>teams});await f.final();
+  const radios=f.walk().filter(n=>n.tagName==='input');assert.equal(radios.length,19);
+  assert.deepEqual(radios.map(n=>n.value),[...teams.map(t=>t.id),'']);
+  await f.choose('galatasaray');await f.click("Taktik Stüdyo'ya Başla →");
+  assert.deepEqual(f.writes,[{favoriteTeamSlug:'galatasaray'}]);assert.deepEqual(f.navigation,['/studyo.html']);f.page.dispose();
 });

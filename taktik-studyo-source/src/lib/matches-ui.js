@@ -1,6 +1,7 @@
+import {promoteFavoriteMatch} from './favorite-team.js';
 import {ROUNDS,requestedRound,adjacentRound,defaultRound,matchDate,MATCH_STATUS_LABELS} from './matches.js';
 
-export function mountMatches({document,window,api,current,now = Date.now}) {
+export function mountMatches({document,window,api,current,loadFavorite,now = Date.now}) {
   const root = document.getElementById('matchesContent');
   const node = (tag,text,className) => {const el = document.createElement(tag); if (text !== undefined) el.textContent = text; if (className) el.className = className; return el;};
   const status = node('p','','matches-status'); status.setAttribute('role','status'); status.setAttribute('aria-live','polite');
@@ -14,7 +15,7 @@ export function mountMatches({document,window,api,current,now = Date.now}) {
   controls.append(heading,weeks);
   const list = node('div',undefined,'matches-list');
   root.replaceChildren(status,retry,controls,list);
-  let stopped = false, busy = false, generation = 0, matches = [], selected = 1;
+  let stopped = false, busy = false, generation = 0, matches = [], selected = 1, favorite = null, loaded = false;
   const active = () => !stopped && current();
   const listeners = [];
   function listen(target,event,fn) {target.addEventListener(event,fn); listeners.push(() => target.removeEventListener(event,fn));}
@@ -26,12 +27,14 @@ export function mountMatches({document,window,api,current,now = Date.now}) {
     if (!active()) return;
     title.textContent = selected+'. hafta'; previous.disabled = selected === 1; next.disabled = selected === 34;
     buttons.forEach((button,i) => button.setAttribute('aria-pressed',String(i+1 === selected)));
-    const fixtures = matches.filter(m => m.round === selected).sort((a,b) => Date.parse(a.kickoff)-Date.parse(b.kickoff) || a.id.localeCompare(b.id));
+    const ordered = matches.filter(m => m.round === selected).sort((a,b) => Date.parse(a.kickoff)-Date.parse(b.kickoff) || a.id.localeCompare(b.id));
+    const {matches:fixtures,favoriteMatchId}=promoteFavoriteMatch(ordered,favorite);
     list.replaceChildren(); status.textContent = fixtures.length ? '' : 'Bu hafta için maç bulunamadı.';
     let day = null, group;
     for (const match of fixtures) {
       const date = matchDate(match.kickoff);
-      if (date.key !== day) {day = date.key; group = node('section',undefined,'match-day'); group.append(node('h3',date.date)); list.append(group);}
+      if (date.key !== day || match.id===favoriteMatchId) {day = date.key; group = node('section',undefined,'match-day'); group.append(node('h3',date.date)); list.append(group);}
+      if(match.id===favoriteMatchId)day=null; // Keep promoted date heading separate from the chronological remainder.
       const card = node('a',undefined,'match-card'); card.dataset.matchId = match.id;
       card.href = '/mac?id='+match.id+'&hafta='+selected;
       card.setAttribute('aria-label',match.home.name+' - '+match.away.name+' maç detayını aç');
@@ -45,6 +48,11 @@ export function mountMatches({document,window,api,current,now = Date.now}) {
       const state = node('div',undefined,'match-state');
       if (match.status === 'upcoming') {const time = node('time',date.time); time.setAttribute('datetime',match.kickoff); state.append(time);}
       else state.append(node('span',MATCH_STATUS_LABELS[match.status]));
+      if(match.id===favoriteMatchId){
+        card.className+=' match-card-favorite';
+        card.append(node('span','Favori takımın','match-favorite-label'));
+        card.setAttribute('aria-label','Favori takımın: '+match.home.name+' - '+match.away.name+' maç detayını aç');
+      }
       card.append(teams,scores,state); group.append(card);
     }
   }
@@ -54,17 +62,21 @@ export function mountMatches({document,window,api,current,now = Date.now}) {
   listen(window,'popstate',() => {if (active() && !busy) {selected = requestedRound(window.location.search) || defaultRound(matches,now()); render();}});
   async function load() {
     if (!active() || busy) return;
-    busy = true; const turn = ++generation;
+    loaded=false;busy = true; const turn = ++generation;
     status.textContent = 'Maçlar yükleniyor…'; retry.hidden = true; controls.hidden = true; list.replaceChildren();
     let result;
     try {result = await api.load();} catch {result = {ok:false};}
     if (!active() || turn !== generation) return;
     busy = false;
     if (!result.ok) {status.textContent = 'Maç verileri şu anda alınamıyor. Lütfen biraz sonra tekrar deneyin.'; retry.hidden = false; return;}
-    matches = result.matches; selected = requestedRound(window.location.search) || defaultRound(matches,now());
+    loaded=true;matches = result.matches; selected = requestedRound(window.location.search) || defaultRound(matches,now());
     urlRound(selected,true); controls.hidden = false; render();
   }
   listen(retry,'click',load);
   function dispose() {stopped = true; generation++; listeners.forEach(off => off()); root.replaceChildren();}
-  return {ready:load(),dispose};
+  const ready=load();
+  const favoriteReady=Promise.resolve().then(()=>active()?loadFavorite?.():null).catch(()=>null).then(team=>{
+    if(!active())return;favorite=team??null;if(loaded&&!busy)render();
+  });
+  return {ready,favoriteReady,dispose};
 }

@@ -1,3 +1,4 @@
+import {loadFavoriteTeam} from './favorite-team.js';
 import {mountOnboarding} from './onboarding-ui.js';
 import {createCanonicalCatalogue} from './catalogue-canonical.js';
 import {createOnboardingGate} from './onboarding.js';
@@ -76,11 +77,14 @@ export function startPage({auth,document,window,backend,client}) {
         return owned(mountMatchDetail({document,window,current,playerOverrides,api:createMatchDetailApi({client,current,location:window.location,identity:canonical?catalogue:null})}).dispose);
       }
       if (route.page === 'matches') {
-        return mountMatches({document,window,current,api:createMatchesApi({client,current,location:window.location})}).dispose;
+        const teamCatalogue=createCanonicalCatalogue(dataClient);
+        const preferences=createProfileApi({client,validatedUser,current,teamCatalogue});
+        return mountMatches({document,window,current,loadFavorite:()=>loadFavoriteTeam({api:preferences,catalogue:teamCatalogue}),api:createMatchesApi({client,current,location:window.location})}).dispose;
       }
       if (route.page === 'profile') {
-        const api = createProfileApi({client,validatedUser,current});
-        return mountProfile({document,api,validatedUser,current,projects:createStudioProjects({client,validatedUser,current}),onSignOut:()=>guard.signOut()}).dispose;
+        const teamCatalogue=createCanonicalCatalogue(dataClient);
+        const api = createProfileApi({client,validatedUser,current,teamCatalogue});
+        return mountProfile({document,api,validatedUser,current,catalogue:teamCatalogue,projects:createStudioProjects({client,validatedUser,current}),onSignOut:()=>guard.signOut()}).dispose;
       }
       // Open the user's own draft directly. Device-wide legacy drafts are
       // neither imported nor deleted as a side effect of opening a board.

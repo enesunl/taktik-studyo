@@ -1,3 +1,4 @@
+import {createTeamChoice,syncTeamChoice} from './team-choice.js';
 import {needsOnboarding,onboardingDestination} from './onboarding.js';
 
 const steps = [
@@ -37,12 +38,7 @@ export function mountOnboarding({document,window,api,catalogue,current}) {
     next.disabled=busy||finished||(step===4&&selected===undefined);
     next.textContent=busy?'Kaydediliyor…':step===4?"Taktik Stüdyo'ya Başla →":step===0?'Başla →':'Devam →';
     root.setAttribute('aria-busy',String(busy||initializing));
-    for(const choice of choices){
-      choice.input.disabled=busy||finished;
-      choice.input.checked=selected===choice.slug;
-      choice.check.textContent=choice.input.checked?'✓ Seçildi':'';
-      choice.label.setAttribute('data-selected',String(choice.input.checked));
-    }
+    for(const choice of choices)syncTeamChoice(choice,selected,busy||finished);
   }
   function artwork(){
     const art=el('div','onboarding-art onboarding-art-'+step);art.setAttribute('aria-hidden','true');
@@ -65,18 +61,12 @@ export function mountOnboarding({document,window,api,catalogue,current}) {
   function picker(){
     const fieldset=el('fieldset','onboarding-teams');fieldset.append(el('legend',null,'Süper Lig · Favori takımın'));
     const list=el('div','onboarding-team-grid');choices=[];
-    function option(slug,name,color,color2){
-      const label=el('label','onboarding-team'),input=el('input');input.type='radio';input.name='onboarding-team';input.value=slug??'';
-      const mark=el('span','onboarding-team-color');mark.setAttribute('aria-hidden','true');
-      // Colors originate in the canonical service's strict hex validation.
-      if(color){mark.style.setProperty('--club-primary',color);mark.style.setProperty('--club-secondary',color2||color);}
-      const check=el('span','onboarding-team-check');check.setAttribute('aria-hidden','true');
-      label.append(input,mark,el('span','onboarding-team-name',name),check);
-      listen(input,'change',()=>{if(!active()||busy||finished)return;selected=slug;message.textContent='';controls();},viewOff);
-      choices.push({slug,label,input,check});list.append(label);
+    for(const team of [...(teams||[]),null]){
+      const choice=createTeamChoice({document,team,prefix:'onboarding-team'});
+      listen(choice.input,'change',()=>{if(!active()||busy||finished)return;selected=choice.slug;message.textContent='';controls();},viewOff);
+      choices.push(choice);list.append(choice.label);
     }
-    for(const team of teams||[])option(team.id,team.name,team.color,team.color2);
-    option(null,'Favori takımım yok');fieldset.append(list);visual.append(fieldset);
+    fieldset.append(list);visual.append(fieldset);
     const status=el('p','onboarding-catalogue-status',loadingTeams?'Takımlar yükleniyor…':teamError?'Takımlar şu anda yüklenemedi. Takım seçmeden de devam edebilirsin.':'');
     status.setAttribute('role','status');status.setAttribute('aria-live','polite');visual.append(status);
     if(teamError){

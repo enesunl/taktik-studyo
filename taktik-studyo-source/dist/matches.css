@@ -21,3 +21,5 @@
 .route-nav a[aria-current=page]{text-decoration:underline;text-underline-offset:6px}
 @media(max-width:600px){.matches-shell{padding:28px 18px}.round-controls{padding:16px 12px}.match-card{grid-template-columns:minmax(0,1fr) 24px 74px;gap:8px;padding:16px 12px}.match-team{font-size:14px;gap:8px}.match-state{font-size:12px}.round-heading{gap:24px}.round-heading h2{font-size:18px}}
 .match-scorers{list-style:none;padding:0;margin:8px 0 0;font-size:12px;line-height:1.6;color:var(--text-secondary);overflow-wrap:anywhere}.match-scorers li{margin:2px 0}
+.match-favorite-label{grid-column:1/-1;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--text-secondary)}
+.match-card-favorite{border-inline-start:3px solid var(--text-secondary)}

@@ -181,7 +181,8 @@ test('profile markup has accessible labels, status, keyboard submit and no extra
   assert.match(html,/href="\/calismalarim">Tüm çalışmalarımı gör/);assert.match(html,/href="\/haftanin-ilk-11i">İlk 11 Oluştur/);
   assert.match(html,/id="profileInitials"[^>]+aria-hidden="true"/);assert.doesNotMatch(html,/profile-quick|Çalışma kısayolları|Yeni stüdyo çalışması/);
   assert.match(html,/href="\/studyo.html">Taktik Tahtasını Aç/);assert.match(html,/href="\/mac-studyosu">Maç Stüdyosunu Aç/);
-  assert.equal((html.match(/<h1\b/g)||[]).length,1);assert.doesNotMatch(html,/subscription|weekly_xi_history|favorite_team|profileFavorite|profile-favorite|FUTBOL TERCİHİ|Yakında/);
+  assert.equal((html.match(/<h1\b/g)||[]).length,1);assert.doesNotMatch(html,/subscription|weekly_xi_history|Yakında/);
+  assert.match(html,/<section id="profileFavorite" class="profile-favorite" aria-label="Futbol tercihi"><\/section>/);
 });
 
 
