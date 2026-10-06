@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createProfileApi} from '../src/lib/profile-api.js';
+import {createCanonicalCatalogue} from '../src/lib/catalogue-canonical.js';
 import {preferenceColumns,normalizeFavoriteTeamSlug} from '../src/lib/profile-preferences.js';
 import {CURRENT_ONBOARDING_VERSION,needsOnboarding,onboardingDestination,onboardingRedirect} from '../src/lib/onboarding.js';
 import {A,B,row,profileClient,deferred,tick} from './helpers/profile-fixture.mjs';
@@ -71,4 +72,44 @@ test('account changes at read/catalogue/write boundaries discard stale results, 
   for(const c of f.calls.filter(c=>c.table==='profiles'))assert.deepEqual(c.filters,[['id',A]]);
  }
  const f=profileClient(()=>({data:{...fresh(),id:B}}));assert.equal((await createProfileApi({client:f.client,validatedUser:{id:A},current:()=>true}).loadPreferences()).error.code,'state_changed');
+});
+
+test('separate canonical transport validates both preference methods; Auth/Profile database receives profiles queries only',async()=>{
+ let stored=fresh();
+ const profile=profileClient(c=>{
+  assert.equal(c.table,'profiles');
+  if(c.kind==='update')stored={...stored,...c.values,...(c.values.onboarding_version?{onboarding_completed_at:'2026-10-05T00:00:00Z'}:{})};
+  return {data:stored};
+ });
+ const catalogue=profileClient(c=>{
+  assert.equal(c.table,'catalogue_teams');assert.equal(c.kind,'select');assert.equal(c.columns,'id');
+  assert.deepEqual(c.filters[1],['catalogue_active',true]);
+  return {data:c.filters[0][1]==='galatasaray'?{id:'galatasaray'}:null};
+ });
+ const api=createProfileApi({client:profile.client,validatedUser:{id:A},current:()=>true,teamCatalogue:createCanonicalCatalogue(catalogue.client)});
+ for(const method of [slug=>api.setFavoriteTeam(slug),slug=>api.completeOnboarding({favoriteTeamSlug:slug})]){
+  assert.equal((await method(' GALATASARAY ')).ok,true);
+  assert.equal(profile.calls.at(-1).values.favorite_team_slug,'galatasaray');
+  const writes=profile.calls.filter(c=>c.kind==='update').length;
+  for(const slug of ['inactive-team','unknown-team','bsd-125','fotmob-125','123','Galatasaray SK','https://club.test'])assert.equal((await method(slug)).error.code,'invalid_favorite_team');
+  assert.equal(profile.calls.filter(c=>c.kind==='update').length,writes);
+  const reads=catalogue.calls.length;assert.equal((await method(null)).ok,true);assert.equal(catalogue.calls.length,reads);
+ }
+});
+
+test('independent catalogue failure and account switch fail closed before profile writes; null still works',async()=>{
+ for(const mode of ['failure','switch']){
+  let current=true;const pending=deferred();
+  const profile=profileClient(c=>{assert.equal(c.table,'profiles');return {data:{...fresh(),...c.values}};});
+  const api=createProfileApi({client:profile.client,validatedUser:{id:A},current:()=>current,teamCatalogue:{hasActiveTeam:()=>pending.promise}});
+  const result=api.completeOnboarding({favoriteTeamSlug:'galatasaray'});await tick();
+  if(mode==='switch'){current=false;pending.resolve(true);}else pending.resolve(false);
+  assert.equal((await result).error.code,mode==='switch'?'state_changed':'invalid_favorite_team');
+  assert.equal(profile.calls.some(c=>c.kind==='update'),false);
+ }
+ const profile=profileClient(()=>({data:fresh()}));
+ const api=createProfileApi({client:profile.client,validatedUser:{id:A},current:()=>true,teamCatalogue:{hasActiveTeam(){throw Error('private transport failure');}}});
+ assert.deepEqual(await api.setFavoriteTeam('galatasaray'),{ok:false,error:{code:'onboarding_save_failed'}});
+ assert.equal(profile.calls.some(c=>c.kind==='update'),false);
+ assert.equal((await api.completeOnboarding({favoriteTeamSlug:null})).ok,true);
 });

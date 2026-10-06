@@ -8,7 +8,7 @@ import {A,B,profileClient} from './helpers/profile-fixture.mjs';
 const migration=name=>readFileSync(new URL('../supabase/migrations/'+name+'.sql',import.meta.url),'utf8');
 const O1='20261004234326_profile_onboarding_foundation';
 // Real SQL in in-memory Postgres only. No env, network, hosted Auth or production connection.
-test('O1 real SQL migration/backfill/defaults, own-profile service writes, grants and RLS',async t=>{
+test('O1.1 real SQL without catalogue tables: migration/backfill/defaults, own-profile writes, grants and RLS',async t=>{
  const db=new PGlite();
  async function as(owner,run,role='authenticated'){
   await db.query("select set_config('request.jwt.claim.sub',$1,false)",[owner||'']);await db.exec('set role '+role);
@@ -20,13 +20,20 @@ test('O1 real SQL migration/backfill/defaults, own-profile service writes, grant
    create schema auth;create table auth.users(id uuid primary key);
    create function auth.uid() returns uuid language sql stable set search_path='' as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
    grant usage on schema auth to anon,authenticated;grant execute on function auth.uid() to anon,authenticated;`);
-  for(const name of ['20260913063249_football_backend','20260920102243_profiles_ownership','20260925035438_catalogue_identity_foundation'])await db.exec(migration(name));
+  for(const name of ['20260913063249_football_backend','20260920102243_profiles_ownership'])await db.exec(migration(name));
   await db.query('insert into auth.users(id) values ($1),($2)',[A,B]);
   await db.query("insert into public.profiles(id,username,display_name,created_at,updated_at) values($1,'Existing','Old name','2026-09-01','2026-09-02')",[B]);
-  await db.exec("insert into public.catalogue_teams(id,display_name,short_name,color_primary,color_secondary,catalogue_active) values ('galatasaray','Galatasaray','GS','#a51935','#efb62a',true),('fenerbahce','Fenerbahçe','FB','#19294d','#f3d233',true),('inactive','Inactive','I','#111111','#eeeeee',false)");
   const before=(await db.query('select * from public.profiles')).rows[0];
   const policies=(await db.query("select * from pg_policies where tablename='profiles' order by policyname")).rows;
+  assert.equal((await db.query("select to_regclass('public.catalogue_teams') as relation")).rows[0].relation,null);
   await db.exec(migration(O1));
+  await t.test('migration succeeds with no canonical tables, mappings or functions; only Auth FK remains',async()=>{
+   assert.equal((await db.query("select to_regclass('public.catalogue_teams') as relation")).rows[0].relation,null);
+   assert.equal((await db.query("select count(*)::int as n from pg_tables where schemaname='public' and (tablename like 'catalogue_%' or tablename like '%provider_ids')")).rows[0].n,0);
+   assert.equal((await db.query("select count(*)::int as n from pg_proc where proname like 'catalogue_%'")).rows[0].n,0);
+   const fks=(await db.query("select confrelid::regclass::text as target from pg_constraint where conrelid='public.profiles'::regclass and contype='f'")).rows;
+   assert.deepEqual(fks,[{target:'auth.users'}]);
+  });
   await t.test('only migration-time profiles are backfilled; identity and timestamps preserved',async()=>{
    const old=(await db.query('select * from public.profiles where id=$1',[B])).rows[0];assert.equal(old.onboarding_version,1);assert.ok(old.onboarding_completed_at);assert.equal(old.favorite_team_slug,null);assert.equal(needsOnboarding(old),false);
    for(const k of Object.keys(before))assert.deepEqual(old[k],before[k]);
@@ -38,14 +45,18 @@ test('O1 real SQL migration/backfill/defaults, own-profile service writes, grant
   });
   // SDK-shaped adapter executes only bounded parameterized SQL under A's real RLS.
   const f=profileClient(async c=>as(A,async()=>{
-   const allowed=['id','username','display_name','created_at','updated_at','favorite_team_slug','onboarding_completed_at','onboarding_version','catalogue_active'];
-   const col=k=>{assert(allowed.includes(k));return '"'+k+'"';};assert(['profiles','catalogue_teams'].includes(c.table));
+   const allowed=['id','username','display_name','created_at','updated_at','favorite_team_slug','onboarding_completed_at','onboarding_version'];
+   const col=k=>{assert(allowed.includes(k));return '"'+k+'"';};assert.equal(c.table,'profiles');
    const params=[];const bind=v=>{params.push(v);return '$'+params.length;};const columns=c.columns.split(',').map(col).join(',');
    let sql=c.kind==='update'?'update public.'+c.table+' set '+Object.entries(c.values).map(([k,v])=>col(k)+'='+bind(v)).join(','):'select '+columns+' from public.'+c.table;
    sql+=' where '+c.filters.map(([k,v])=>col(k)+'='+bind(v)).join(' and ');if(c.kind==='update')sql+=' returning '+columns;
    try{return {data:JSON.parse(JSON.stringify((await db.query(sql,params)).rows[0]||null))};}catch(e){return {error:{code:e.code}};}
   }));
-  const api=createProfileApi({client:f.client,validatedUser:{id:A},current:()=>true});
+  // Independent canonical service test double. The profile database deliberately
+  // contains no catalogue. Application membership and SQL format are distinct.
+  const teamChecks=[];
+  const teamCatalogue={async hasActiveTeam(slug){teamChecks.push(slug);return ['galatasaray','fenerbahce'].includes(slug);}};
+  const api=createProfileApi({client:f.client,validatedUser:{id:A},current:()=>true,teamCatalogue});
   await t.test('service completes with normalized active team and preserves profile fields',async()=>{
    const r=await api.completeOnboarding({favoriteTeamSlug:' GALATASARAY '});assert.equal(r.ok,true);assert.equal(r.profile.favorite_team_slug,'galatasaray');assert.equal(needsOnboarding(r.profile),false);
    const p=await api.load();assert.equal(p.profile.username,'NewUser');assert.equal(p.profile.display_name,'New name');
@@ -55,10 +66,22 @@ test('O1 real SQL migration/backfill/defaults, own-profile service writes, grant
    const repeat=await api.completeOnboarding();assert.equal(repeat.ok,true);assert.equal(repeat.profile.onboarding_completed_at,completed);assert.equal(repeat.profile.onboarding_version,1);
    await api.save({username:'Edited',display_name:'Edited name'});assert.equal((await api.loadPreferences()).profile.onboarding_completed_at,completed);
   });
-  await t.test('service and database reject inactive/unknown/provider identities; timestamp and reset writes denied',async()=>{
-   for(const slug of ['inactive','unknown','125','fotmob-125'])assert.equal((await api.setFavoriteTeam(slug)).error.code,'invalid_favorite_team');
+  await t.test('service rejects inactive/unknown/provider identities; SQL only enforces slug format and completion rules',async()=>{
+   const writes=f.calls.filter(c=>c.kind==='update').length;
+   for(const slug of ['inactive','unknown','125','bsd-125','fotmob-125']){
+    assert.equal((await api.setFavoriteTeam(slug)).error.code,'invalid_favorite_team');
+    assert.equal((await api.completeOnboarding({favoriteTeamSlug:slug})).error.code,'invalid_favorite_team');
+   }
+   assert.equal(f.calls.filter(c=>c.kind==='update').length,writes);
+   assert(teamChecks.includes('inactive')&&teamChecks.includes('unknown'));
    await as(A,async()=>{
-    for(const slug of ['inactive','unknown','125'])await assert.rejects(()=>db.query('update public.profiles set favorite_team_slug=$1 where id=$2',[slug,A]),e=>e.code==='23514');
+    // Direct SQL intentionally accepts unknown/inactive but well-formed product
+    // slugs. The database does not assert current league membership anymore.
+    for(const slug of ['inactive','unknown',' GALATASARAY ',null]){
+     const r=await db.query('update public.profiles set favorite_team_slug=$1 where id=$2 returning favorite_team_slug',[slug,A]);
+     assert.equal(r.rows[0].favorite_team_slug,slug===null?null:slug.trim().toLowerCase());
+    }
+    for(const slug of ['', '125','bsd-125','fotmob-125','a/b','a b','a\nb','équipe','a'.repeat(81),'https://team.test'])await assert.rejects(()=>db.query('update public.profiles set favorite_team_slug=$1 where id=$2',[slug,A]),e=>e.code==='23514');
     await assert.rejects(()=>db.query('update public.profiles set onboarding_version=0 where id=$1',[A]),e=>e.code==='23514');
     await denied(()=>db.query('update public.profiles set onboarding_completed_at=now() where id=$1',[A]));
    });

@@ -14,7 +14,7 @@ export function normalizeProfile(input) {
 
 // validatedUser comes only from the protected guard's successful getUser result.
 // current binds this API instance to that mount generation, not a mutable user id.
-export function createProfileApi({client,validatedUser,current}) {
+export function createProfileApi({client,validatedUser,current,teamCatalogue}) {
   const id = validatedUser?.id;
   const active = () => typeof id === 'string' && current();
   const preflight = () => !id ? failure('unauthenticated') : !active() ? failure('state_changed') : null;
@@ -68,5 +68,5 @@ export function createProfileApi({client,validatedUser,current}) {
       return raced.profile ? await updateOwn() : failure('username_conflict');
     } catch {return failure(active() ? 'profile_save_failed' : 'state_changed');}
   }
-  return Object.freeze({load,save,...createProfilePreferences({client,validatedUser,current})});
+  return Object.freeze({load,save,...createProfilePreferences({client,validatedUser,current,teamCatalogue})});
 }

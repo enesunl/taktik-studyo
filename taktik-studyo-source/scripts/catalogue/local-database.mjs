@@ -1,5 +1,5 @@
 import {PGlite} from '@electric-sql/pglite';
-import {readFileSync} from 'node:fs';
+import {readFileSync,mkdirSync} from 'node:fs';
 import {syncLocal,readCanonicalState} from './sync.mjs';
 const read=p=>readFileSync(new URL('../../'+p,import.meta.url),'utf8');
 export function cleanCatalogueInput(){
@@ -10,6 +10,9 @@ export function cleanCatalogueInput(){
 }
 export async function openCatalogueDatabase(dataDir,{populate=true}={}){
  // PGlite has no remote database URL or linked Supabase path.
+ // NodeFS creates only its leaf directory; clean checkouts need parents too.
+ // Preserve PGlite's in-memory/browser storage modes used by isolated tests.
+ if(dataDir&&!/^(memory|idb|opfs-ahp):\/\//.test(dataDir))mkdirSync(dataDir.startsWith('file://')?dataDir.slice(7):dataDir,{recursive:true});
  const db=new PGlite(dataDir);
  await db.exec('create table if not exists public.d3_local_versions(version text primary key)');
  const versions=new Set((await db.query('select version from public.d3_local_versions')).rows.map(r=>r.version));

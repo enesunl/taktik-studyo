@@ -15,7 +15,9 @@ export function profileClient(handler = () => ({data:row(),error:null})) {
       let pending;
       const run = () => pending ||= Promise.resolve().then(() => {calls.push(call);return handler(call);});
       const query = {
-        select(columns){call.columns=columns;return query;},
+        select(columns,options){call.columns=columns;if(options)call.options=options;return query;},
+        order(column,options){(call.orders??=[]).push([column,options]);return query;},
+        range(from,to){call.range=[from,to];return query;},
         eq(column,value){call.filters.push([column,value]);return query;},
         insert(values){call.kind='insert';call.values=values;return query;},
         update(values){call.kind='update';call.values=values;return query;},

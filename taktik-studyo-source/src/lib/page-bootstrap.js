@@ -1,3 +1,5 @@
+import {mountOnboarding} from './onboarding-ui.js';
+import {createCanonicalCatalogue} from './catalogue-canonical.js';
 import {createOnboardingGate} from './onboarding.js';
 import {mountWeeklyXI} from './weekly-xi-ui.js';
 import {createStudioProjects} from './studio-projects.js';
@@ -41,13 +43,21 @@ export function startPage({auth,document,window,backend,client}) {
       content.hidden = !ready; content.inert = !ready; status.hidden = ready;
       retry.hidden = login.hidden = state === 'pending';
       message.textContent = state === 'pending' ? 'Oturum doğrulanıyor…'
+        : state === 'page_error' ? 'Sayfa verileri şu anda yüklenemedi. Tekrar dene.'
         : state === 'logout_error' ? 'Çıkış yapılamadı. Tekrar deneyebilir veya giriş sayfasına gidebilirsin.'
         : 'Oturum şu anda doğrulanamadı. Biraz sonra tekrar dene.';
     },
     async mount(scope,current,validatedUser) {
-      if (route.page === 'onboarding') return () => {}; // O1 protected development placeholder; O2 owns the UI.
       const catalogue=backend.catalogue,canonical=catalogue?.canonical;
       const dataClient=canonical?catalogue.dataClient:client;
+      // Account projects use the Auth database; only sports data/overrides use the catalogue transport.
+      if (route.page === 'onboarding') {
+        // Read the active catalogue through its existing runtime transport,
+        // while preference persistence stays on the Auth/Profile client.
+        const teamCatalogue=createCanonicalCatalogue(dataClient);
+        return mountOnboarding({document,window,current,catalogue:teamCatalogue,
+          api:createProfileApi({client,validatedUser,current,teamCatalogue})}).dispose;
+      }
       if((canonical&&['studio','comparison','match-studio','match'].includes(route.page))||route.page==='weekly-xi'){
         await backend.loadCatalogue();if(!current())return;
       }
@@ -58,9 +68,9 @@ export function startPage({auth,document,window,backend,client}) {
       }
       const owned=dispose=>()=>{dispose?.();playerOverrides?.dispose();};
       if (route.page === 'weekly-xi') return owned(mountWeeklyXI({document,window,current,userId:validatedUser.id,catalogue,playerOverrides,matchesApi:createMatchesApi({client,current,location:window.location})}).dispose);
-      if (route.page === 'projects') return mountStudioProjects({document,window,current,api:createStudioProjects({client:dataClient,validatedUser,current})}).dispose;
+      if (route.page === 'projects') return mountStudioProjects({document,window,current,api:createStudioProjects({client,validatedUser,current})}).dispose;
       if (route.page === 'match-studio') {
-        return owned(mountMatchStudio({document,window,current,playerOverrides,userId:validatedUser.id,projects:createStudioProjects({client:dataClient,validatedUser,current}),api:createMatchDetailApi({client,current,location:window.location,identity:canonical?catalogue:null})}).dispose);
+        return owned(mountMatchStudio({document,window,current,playerOverrides,userId:validatedUser.id,projects:createStudioProjects({client,validatedUser,current}),api:createMatchDetailApi({client,current,location:window.location,identity:canonical?catalogue:null})}).dispose);
       }
       if (route.page === 'match') {
         return owned(mountMatchDetail({document,window,current,playerOverrides,api:createMatchDetailApi({client,current,location:window.location,identity:canonical?catalogue:null})}).dispose);
@@ -70,7 +80,7 @@ export function startPage({auth,document,window,backend,client}) {
       }
       if (route.page === 'profile') {
         const api = createProfileApi({client,validatedUser,current});
-        return mountProfile({document,api,validatedUser,current,projects:createStudioProjects({client:dataClient,validatedUser,current}),onSignOut:()=>guard.signOut()}).dispose;
+        return mountProfile({document,api,validatedUser,current,projects:createStudioProjects({client,validatedUser,current}),onSignOut:()=>guard.signOut()}).dispose;
       }
       // Open the user's own draft directly. Device-wide legacy drafts are
       // neither imported nor deleted as a side effect of opening a board.

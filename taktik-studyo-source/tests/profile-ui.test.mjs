@@ -203,14 +203,19 @@ test('hero prefers display name then username; verified email occurs once even f
  }
 });
 
-test('canonical mode retains the original profile client and edits despite unavailable local catalogue/projects',async()=>{
+test('canonical mode reads empty account projects and edits profile through Auth client despite unavailable catalogue',async()=>{
  const f=routeFixture(),localTables=[];let teamRequests=0;
+ f.handler=c=>c.table==='studio_projects'?(c.options?.head?{data:null,count:0}:{data:[]}):{data:row()};
  f.options.backend.catalogue={canonical:true,dataClient:{from(table){localTables.push(table);throw Error('Local data unavailable');}},loadTeams(){teamRequests++;throw Error('No team request allowed');}};
  const page=startPage(f.options);await page.ready;await tick();
  const fields=f.mounts[0].fields;assert.equal(fields['#profileName'].textContent,'Görünen ad');assert.equal(fields['#profileStatus'].textContent,'');assert.equal(fields['#profileEdit'].disabled,false);
- assert.equal(teamRequests,0);assert.equal(localTables.includes('profiles'),false);assert(localTables.every(t=>t==='studio_projects'));
+ assert.equal(teamRequests,0);assert.deepEqual(localTables,[]);
+ assert.equal(fields['#profileEmpty'].hidden,false);assert.equal(fields['#profileCountTotal'].textContent,'0');
+ const projectReads=f.requests.filter(c=>c.table==='studio_projects');assert.equal(projectReads.length,3);
+ assert.equal(projectReads.filter(c=>c.options?.head&&c.options.count==='exact').length,2);
+ assert(projectReads.every(c=>!c.columns.split(',').includes('snapshot')&&!c.columns.split(',').includes('mode')));
  await fields['#profileEdit'].emit('click');fields['#profileDisplayName'].value='Saved Name';
  f.handler=c=>({data:c.kind==='update'?{...row(),...c.values}:row()});
  await fields.form.emit('submit');assert.equal(fields['#profileName'].textContent,'Saved Name');assert.equal(fields.form.hidden,true);assert.equal(fields['#profileReadOnly'].hidden,false);
- assert(f.requests.some(c=>c.kind==='update'));assert.equal(f.requests.filter(c=>c.columns===preferenceColumns).length,1);for(const c of f.requests.filter(c=>c.columns!==preferenceColumns))assert.equal(c.columns,'id,username,display_name,created_at,updated_at');assert.equal(teamRequests,0);page.dispose();
+ assert(f.requests.some(c=>c.kind==='update'));assert.equal(f.requests.filter(c=>c.columns===preferenceColumns).length,1);for(const c of f.requests.filter(c=>c.table==='profiles'&&c.columns!==preferenceColumns))assert.equal(c.columns,'id,username,display_name,created_at,updated_at');assert.equal(teamRequests,0);page.dispose();
 });

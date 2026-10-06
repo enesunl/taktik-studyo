@@ -1,6 +1,49 @@
 project_id = "taktik-studyo"
 
+[api]
+enabled = true
+port = 54321
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+
+[db.seed]
+# The canonical catalogue has its own local PGlite source. No legacy seed.
+enabled = false
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324
+
 [auth]
+enabled = true
+site_url = "http://localhost:4173"
+additional_redirect_urls = ["http://localhost:4173/auth-callback.html", "http://localhost:4173/sifre-yenile.html"]
+enable_signup = true
+minimum_password_length = 12
+
+[auth.email]
+enable_signup = true
+enable_confirmations = true
+
+[auth.email.template.confirmation]
+subject = "Taktik Stüdyo — Yerel e-posta doğrulama"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Taktik Stüdyo — Yerel parola sıfırlama"
+content_path = "./supabase/templates/recovery.html"
+
+[analytics]
+enabled = false
+
+[edge_runtime]
 enabled = false
 
 [functions.lineups]

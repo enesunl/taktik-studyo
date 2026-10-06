@@ -33,23 +33,23 @@ test('missing session, session error, stale session lookup and local errors fail
   const pending=api.load();active=false;wait.resolve({data:{session:{access_token:'qa-session-only'}}});
   assert.deepEqual(await pending,{ok:false,error:{code:'state_changed'}});assert.equal(requests,0);
 });
-test('local server validates bearer through the configured hosted Auth GET before provider/cache access',async()=>{
+test('local server validates bearer through the local Auth GET before provider/cache access',async()=>{
   const calls=[];let loads=0;
-  const handler=createLocalMatches({url:'https://abcdefghijklmnopqrst.supabase.co',key:'sb_publishable_testonly',token:'test-only',port:4173,
+  const handler=createLocalMatches({url:'http://127.0.0.1:54321',key:'sb_publishable_testonly',token:'test-only',port:4173,
     fetchImpl:async(url,options)=>{calls.push({url:String(url),options});return Response.json({id:'u',email_confirmed_at:'2026-09-21',is_anonymous:false});},
     load:async()=>{loads++;return season;}});
   const req=()=>new Request('http://localhost:4173/__local/matches',{headers:{Authorization:'Bearer qa-session-only',Origin:'http://localhost:4173'}});
   assert.equal((await handler(req())).status,200);assert.equal((await handler(req())).status,200);assert.equal(loads,1);assert.equal(calls.length,2);
-  for(const {url,options} of calls){assert.equal(url,'https://abcdefghijklmnopqrst.supabase.co/auth/v1/user');assert.equal(options.method,'GET');assert.equal(new Headers(options.headers).get('Authorization'),'Bearer qa-session-only');}
+  for(const {url,options} of calls){assert.equal(url,'http://127.0.0.1:54321/auth/v1/user');assert.equal(options.method,'GET');assert.equal(new Headers(options.headers).get('Authorization'),'Bearer qa-session-only');}
   assert.equal((await handler(new Request('http://localhost:4173/__local/matches'))).status,401);
   assert.equal((await handler(new Request('http://localhost:4173/__local/matches?url=https://evil.test',{headers:{Authorization:'Bearer qa-session-only'}}))).status,400);
 });
 test('local server denies invalid/unconfirmed/anonymous users and refuses service-role configuration',async()=>{
   for(const value of [{id:'u'},{id:'u',email_confirmed_at:'yes',is_anonymous:true},null]){
-    const handler=createLocalMatches({url:'https://abcdefghijklmnopqrst.supabase.co',key:'sb_publishable_testonly',token:'test-only',port:4173,
+    const handler=createLocalMatches({url:'http://127.0.0.1:54321',key:'sb_publishable_testonly',token:'test-only',port:4173,
       fetchImpl:async()=>Response.json(value??{message:'private'},{status:value?200:401}),load(){throw Error('No BSD');}});
     assert.equal((await handler(new Request('http://localhost:4173/__local/matches',{headers:{Authorization:'Bearer qa-session-only'}}))).status,401);
   }
   assert.throws(()=>createLocalMatches({url:'https://evil.test',key:'sb_publishable_testonly',token:'test-only',port:4173}));
-  assert.throws(()=>createLocalMatches({url:'https://abcdefghijklmnopqrst.supabase.co',key:'sb_secret_testonly',token:'test-only',port:4173}));
+  assert.throws(()=>createLocalMatches({url:'http://127.0.0.1:54321',key:'sb_secret_testonly',token:'test-only',port:4173}));
 });

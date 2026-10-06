@@ -47,6 +47,29 @@ test('M5 private project migration: real SQL ownership, grants, CAS and constrai
   await db.query('insert into auth.users values ($1),($2)',[owner,other]);const before=await unchanged();
   await db.exec('alter default privileges in schema public grant all on tables to public,anon,authenticated');
   await db.exec(migration('20260923135716_studio_projects.sql'));
+  await t.test('service creates free/match rows which profile summary sees; empty and foreign-owner summaries stay empty',async()=>{
+   const calls=[],api=createStudioProjects({client:sqlClient(db,calls),validatedUser:{id:owner},current:()=>true});
+   await as(owner,async()=>{
+    assert.deepEqual((await api.getWorkspaceSummary()).counts,{total:0,free:0,match:0});
+    for(const [pid,mode]of [[id,'free'],[copyId,'match']]){
+     const r=await api.createProject({id:pid,title:'Local '+mode,snapshot:snapshot(mode)});
+     assert.equal(r.ok,true);assert.equal(r.project.studio_mode,mode);
+     const row=(await db.query('select user_id,title,studio_mode from public.studio_projects where id=$1',[pid])).rows[0];
+     assert.deepEqual(row,{user_id:owner,title:'Local '+mode,studio_mode:mode});
+    }
+    const summary=await api.getWorkspaceSummary();assert.equal(summary.ok,true);
+    assert.deepEqual(summary.counts,{total:2,free:1,match:1});assert.deepEqual(summary.projects.map(p=>p.id),[copyId,id]);
+    assert(summary.projects.every(p=>!Object.hasOwn(p,'snapshot')));
+    const renamed=await api.renameProject({id,revision:1,title:'Local renamed'});assert.equal(renamed.ok,true);
+    assert.equal((await api.getWorkspaceSummary()).projects[0].id,id);
+   });
+   await as(other,async()=>{
+    const apiB=createStudioProjects({client:sqlClient(db,[]),validatedUser:{id:other},current:()=>true});
+    assert.deepEqual((await apiB.getWorkspaceSummary()).counts,{total:0,free:0,match:0});
+    assert.equal((await apiB.renameProject({id,revision:2,title:'Other'})).ok,false);
+   });
+   await as(owner,async()=>{await db.query('delete from public.studio_projects where id in ($1,$2)',[id,copyId]);});
+  });
   await t.test('existing security unchanged and minimal grants override permissive defaults',async()=>{
    assert.deepEqual(await unchanged(),before);
    for(const role of ['anon','authenticated'])for(const privilege of ['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','TRIGGER','REFERENCES']){

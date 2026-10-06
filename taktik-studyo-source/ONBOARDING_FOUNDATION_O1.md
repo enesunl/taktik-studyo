@@ -1,5 +1,20 @@
 # O1 — Onboarding ve favori takım temeli
 
+O1.1 güncellemesi: aşağıdaki şema/servis sözleşmesi fiziksel canonical DB'den
+bağımsızdır. Önceki FK (`catalogue_teams(id)`, ON DELETE SET NULL) ve
+`profile_onboarding_write()` içindeki aktif katalog SELECT'i kaldırıldı.
+Provider tablolarına, katalog fonksiyonlarına veya katalog trigger'larına başka
+bağımlılık yoktu. Slug normalizasyonu ve completion timestamp/version kuralları
+için mevcut profile trigger korunur. Henüz uygulanmamış migration'ın adı ve
+version'ı değiştirilmedi; yeni migration oluşturulmadı.
+
+O1.1 doğrulaması: canonical tablo olmadan gerçek bellek içi SQL/RLS testleri
+dahil 582/582 test ve 9 board regression grubu başarılı. `npm run build` ve
+`git diff --check` başarılı; backend bundle yalnızca build ile üretildi.
+Hosted veya persistent local DB'ye migration uygulanmadı. O2 görsel UI'si ve
+P1 profil davranışı korunur. Aşağıdaki O1 ilk-faz sonuçları tarihsel kayıttır;
+O2 deneyimi ayrıca ONBOARDING_EXPERIENCE_O2.md içinde açıklanır.
+
 O1 yalnızca veri/servis/routing temelidir. Görsel onboarding, takım seçici, profil
 renkleri veya maç/stüdyo sıralaması yoktur. Production'a uygulanmadı.
 
@@ -28,8 +43,9 @@ seçimi de değişmedi. Auth/bootstrap P1 kolon listesi O1'e bağımlı değildi
 ## Migration
 
 `supabase/migrations/20261004234326_profile_onboarding_foundation.sql`
-CLI tarafından oluşturuldu (filename UTC). Bağımlılıklar: profiles_ownership ve
-catalogue_identity_foundation. Yeni kolonlar:
+CLI tarafından oluşturuldu (filename UTC). O1.1 sonrası yalnız mevcut
+profiles_ownership altyapısına bağımlıdır; canonical katalog şeması gerekmez.
+Henüz uygulanmamış migration yerinde güncellendi. Yeni kolonlar:
 
 - favorite_team_slug TEXT NULL (varsayılan NULL)
 - onboarding_completed_at TIMESTAMPTZ NULL (varsayılan NULL)
@@ -45,16 +61,18 @@ ve tekrar çalışan otomatik backfill yoktur. Migration tek uygulamalıdır; te
 profilini hiç oluşturmamış eski Auth hesapları bu profil-satırı backfill'inin
 kapsamında değildir; bu davranış mevcut profiles satırları şartına uygundur.
 
-favorite_team_slug canonical catalogue_teams(id)'ye FK, ON DELETE SET NULL'dır.
-Kimlik ürün slug'ıdır (galatasaray, fenerbahce vb.); provider mapping tabloları
-ayrıdır. 18 takım listesini gömen CHECK yoktur. Yalnızca slug format CHECK'i ve
-v0/NULL veya v1/timestamp tutarlılık CHECK'i vardır. O2/O3 veya v2 politikası yok.
+favorite_team_slug artık herhangi bir katalog tablosuna FK değildir. Kimlik ürün
+slug'ıdır (galatasaray, fenerbahce vb.). NULL veya C collation ile
+`^[a-z][a-z0-9-]{0,79}$` biçimi kabul edilir; `bsd-` / `fotmob-` prefix'leri
+reddedilir. 18 takım listesi veya lig üyeliği CHECK'i yoktur. v0/NULL veya
+v1/timestamp tutarlılık CHECK'i korunur. Katalogdaki silme/pasifleştirme artık
+profili otomatik değiştirmez; üyelik doğrulaması uygulama servisindedir.
 
 Yeni kolonlara authenticated SELECT; yalnız favorite_team_slug ve
 onboarding_version kolonlarına UPDATE verilir. Yeni INSERT grant yoktur,
 onboarding_completed_at doğrudan client tarafından yazılamaz. SECURITY INVOKER,
-search_path='' kullanan private trigger aktif canonical üyeliğini kontrol eder,
-normalizasyon yapar ve 0→1 geçişinde timestamp üretir. Sürüm düşürmek yasaktır.
+search_path='' kullanan private trigger slug normalizasyonu yapar ve 0→1
+geçişinde timestamp üretir; hiçbir katalog tablosu sorgulamaz. Sürüm düşürmek yasaktır.
 Tekrarlanan completion timestamp'i değiştirmez. Trigger'ın PUBLIC/anon/
 authenticated EXECUTE yetkileri kapalıdır; mevcut RLS policy'leri değişmez.
 
@@ -85,8 +103,14 @@ P1 profile save ile önce normal profil oluşturulmalıdır.
 Slug trim/lowercase normalize edilir; kontroller, provider ID biçimleri ve
 geçersiz format reddedilir. `createCanonicalCatalogue.hasActiveTeam` sadece
 catalogue_teams.id ve catalogue_active sorgular. Oyuncu veya provider verisi
-çekilmez. Browser kontrolü tek başına güvenlik değildir: migration'ın DB trigger
-kontrolü, FK ve ownership RLS doğrudan API isteklerini de sınırlar.
+çekilmez. `teamCatalogue` bağımlılığı ayrı bir canonical kaynaktan sağlanabilir;
+verilmezse mevcut client'ın canonical okuyucusu kullanılır. O2 bootstrap, picker
+ve üyelik doğrulamasına aynı runtime katalog servisini verir; profil okumaları ve
+yazmaları daima Auth/Profile client'ında kalır. Bilinmeyen/pasif slug ve katalog
+hatası non-null preference yazımını engeller; null katalog sorgusu gerektirmez.
+DB yalnız format ve ownership doğrular: doğrudan yetkili API isteği biçimi doğru
+ama mevcut katalogda bulunmayan bir slug kaydedebilir. Bu O1.1 sözleşmesinin
+bilinçli sonucudur; favori takım bir yetkilendirme kaynağı değildir.
 
 ## Şema uyumu ve routing
 
@@ -120,7 +144,9 @@ normal hedef sayfaya ulaştıktan sonra onboarding guard devreye girer.
 Migration yalnızca tests/onboarding-database.test.mjs içinde in-memory PGlite'a
 uygulanır. auth.users/auth.uid() minimal SQL test fixture'larıdır, gerçek Auth
 sunucusu değildir. Profile API test adaptörü JSON/HTTP timestamp biçimini ve
-aynı SQL role/ownership sınırlarını kullanır. Mevcut local catalogue DB loader'a
+aynı SQL role/ownership sınırlarını kullanır. O1.1 SQL testi canonical tablolar,
+provider mapping tabloları ve katalog fonksiyonları olmadan çalışır. Üyelik
+kontrolleri ayrı servis testlerinde doğrulanır. Mevcut local catalogue DB loader'a
 profiles migration eklenmedi; çalışan hosted profillerin kaynağı değiştirilmedi.
 
 Normal localhost kurulumu hâlâ eski hosted şemayı kullanıyorsa O1 durumu

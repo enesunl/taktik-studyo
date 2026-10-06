@@ -1,12 +1,16 @@
 -- O1 LOCAL/TEST ONLY. Production application requires separate approval.
--- Depends on profiles_ownership and catalogue_identity_foundation.
+-- Depends on profiles_ownership only. Catalogue membership is validated by
+-- the application service; the profile database enforces identity format.
 begin;
 alter table public.profiles
-  add column favorite_team_slug text references public.catalogue_teams(id) on delete set null,
+  add column favorite_team_slug text,
   add column onboarding_completed_at timestamptz,
   add column onboarding_version integer not null default 0,
   add constraint profiles_favorite_slug_format check (
-    favorite_team_slug is null or favorite_team_slug ~ '^[a-z][a-z0-9-]{0,79}$'
+    favorite_team_slug is null or (
+      favorite_team_slug collate "C" ~ '^[a-z][a-z0-9-]{0,79}$'
+      and favorite_team_slug collate "C" !~ '^(bsd|fotmob)-'
+    )
   ),
   add constraint profiles_onboarding_state_valid check (
     (onboarding_version = 0 and onboarding_completed_at is null)
@@ -32,10 +36,6 @@ begin
   if new.favorite_team_slug is distinct from old.favorite_team_slug
      and new.favorite_team_slug is not null then
     new.favorite_team_slug := lower(btrim(new.favorite_team_slug) collate "C");
-    if not exists (select 1 from public.catalogue_teams
-      where id = new.favorite_team_slug and catalogue_active) then
-      raise exception 'Invalid favorite team' using errcode = '23514';
-    end if;
   end if;
   if new.onboarding_version < old.onboarding_version or new.onboarding_version not in (0,1) then
     raise exception 'Invalid onboarding version' using errcode = '23514';

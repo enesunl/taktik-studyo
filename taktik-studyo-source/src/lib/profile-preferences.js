@@ -11,12 +11,12 @@ export function normalizeFavoriteTeamSlug(value) {
   return /^[a-z][a-z0-9-]{0,79}$/.test(slug) && !/^(bsd|fotmob)-/.test(slug) ? slug : undefined;
 }
 
-// Same validated owner and client as P1. Never switch to the local catalogue DB.
-export function createProfilePreferences({client,validatedUser,current}) {
+// Profile reads/writes always use P1's client. Membership can be provided by a
+// separate canonical catalogue service; no profile data goes to that database.
+export function createProfilePreferences({client,validatedUser,current,teamCatalogue=createCanonicalCatalogue(client)}) {
   const id=validatedUser?.id;
   const active=()=>typeof id==='string'&&current();
   const preflight=()=>!id?fail('unauthenticated'):!active()?fail('state_changed'):!client?fail('auth_unavailable'):null;
-  const catalogue=createCanonicalCatalogue(client);
   function result(response,code,allowMissing=false) {
     if(!active())return fail('state_changed');
     if(response.error)return fail(missingSchema(response.error)?'onboarding_unavailable':code);
@@ -43,7 +43,7 @@ export function createProfilePreferences({client,validatedUser,current}) {
       const own=await loadPreferences();if(!own.ok)return own;
       if(!own.profile)return fail('profile_incomplete');
       if(slug!==null){
-        const valid=await catalogue.hasActiveTeam(slug);
+        const valid=await teamCatalogue.hasActiveTeam(slug);
         if(!active())return fail('state_changed');
         if(!valid)return fail('invalid_favorite_team');
       }

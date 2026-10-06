@@ -27,6 +27,7 @@ export function createProtectedPage({auth, storage, path, mount, show, navigate,
     const id = identity(), turn = generation;
     if (!id) {navigate(loginUrl(path)); return;}
     const current = () => !stopped && !signingOut && turn === generation && identity() === id;
+    let authVerified = false;
     try {
       let verified;
       validations++;
@@ -46,6 +47,7 @@ export function createProtectedPage({auth, storage, path, mount, show, navigate,
         return;
       }
       if (verified.user?.id !== id) {show('error'); return;}
+      authVerified = true;
       const validatedUser = Object.freeze({id,email:verified.user.email || null});
       if (beforeMount) {
         const redirect = await beforeMount({validatedUser,current});
@@ -53,14 +55,14 @@ export function createProtectedPage({auth, storage, path, mount, show, navigate,
         if (redirect) {navigate(redirect);return;}
       }
       const next = drafts ? createUserDraftScope({userId:id,storage,isCurrent:current}) : null;
-      if (drafts && !next) {show('error'); return;}
+      if (drafts && !next) {show('page_error'); return;}
       scope = next;
       // Only an empty shell/import decision is visible until mount completes.
       show('ready');
       const unmount = await mount(next,current,validatedUser);
       if (!current()) {unmount?.(); return;}
       cleanup = unmount;
-    } catch {if (current()) {clear(); show('error');}}
+    } catch {if (current()) {clear(); show(authVerified ? 'page_error' : 'error');}}
   }
   async function start() {
     clear();

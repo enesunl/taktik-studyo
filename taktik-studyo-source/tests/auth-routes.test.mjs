@@ -101,6 +101,26 @@ test('validation mismatch and transient errors fail closed; invalid sessions red
   }
 });
 
+test('verified Auth plus mount failure is a page error, preserves session, and retries with fresh validation',async()=>{
+  const f=guarded();let signouts=0,capturedScope;
+  f.options.auth.signOut=async()=>{signouts++;return {ok:true};};
+  f.options.mount=async scope=>{capturedScope=scope;throw Error('private catalogue error');};
+  const guard=createProtectedPage(f.options);
+  await guard.start();assert.equal(f.shows.at(-1),'page_error');assert(!f.shows.includes('error'));
+  assert.equal(capturedScope.isActive(),false);assert.equal(signouts,0);assert.equal(f.auth.getState().user.id,A);assert.deepEqual(f.navigations,[]);
+  guard.dispose();
+  let attempts=0;const g=guarded();g.options.mount=async()=>{if(++attempts===1)throw Error('catalogue');return ()=>{};};
+  const retryGuard=createProtectedPage(g.options);await retryGuard.start();await retryGuard.retry();
+  assert.equal(g.shows.at(-1),'ready');assert.equal(g.validations.length,2);assert.equal(attempts,2);retryGuard.dispose();
+});
+
+test('actual Auth validation failures keep the Auth error state and never mount',async()=>{
+  for(const throws of [false,true]){
+    const f=guarded();f.options.auth.validateUser=async()=>{if(throws)throw Error('private Auth failure');return {ok:false,error:{code:'user_validation_failed'}};};
+    await f.guard.start();assert.equal(f.shows.at(-1),'error');assert(!f.shows.includes('page_error'));assert.equal(f.mounts.length,0);f.guard.dispose();
+  }
+});
+
 test('account switch disposes A immediately before B validation; stale results ignored',async()=>{
   const f=guarded();await f.guard.start();const a=f.mounts[0],wait=deferred();
   f.options.auth.validateUser=()=>{assert.equal(a.disposed,true);return wait.promise;};

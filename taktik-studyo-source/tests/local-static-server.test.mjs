@@ -9,7 +9,7 @@ import {resolvePage} from '../src/lib/page-routes.js';
 test('local HTTP server serves every protected alias, including Çalışmalarım, without Auth or provider requests', {timeout:15000}, async()=>{
   const portProbe=createServer();portProbe.listen(0,'127.0.0.1');await once(portProbe,'listening');
   const port=portProbe.address().port;await new Promise(resolve=>portProbe.close(resolve));
-  const server=spawn(process.execPath,[fileURLToPath(new URL('../scripts/serve-local.cjs',import.meta.url)),String(port)],{stdio:['ignore','pipe','pipe']});
+  const server=spawn(process.execPath,[fileURLToPath(new URL('./helpers/local-server-process.cjs',import.meta.url)),String(port)],{stdio:['ignore','pipe','pipe']});
   const exited=once(server,'exit');let startupTimer;
   try{
     await new Promise((resolve,reject)=>{
@@ -18,6 +18,12 @@ test('local HTTP server serves every protected alias, including Çalışmalarım
       server.stdout.on('data',chunk=>{if(chunk.toString().includes('Taktik Studyo:'))resolve();});
     });
     const origin='http://127.0.0.1:'+port;
+    for(const asset of ['/backend.js','/%62ackend.js','/BACKEND.JS','/backend.js?cache=test']){
+      const response=await fetch(origin+asset);assert.equal(response.status,200);
+      const js=await response.text();assert(js.includes('http://127.0.0.1:54321'));
+      assert(!js.includes('zwhoailuklwtxaaawfaq'));
+    }
+    for(const asset of ['/backend.js.','/backend.js%20','/backend.js::$DATA'])assert.equal((await fetch(origin+asset)).status,403);
     for(const path of ['/hos-geldin','/studyo','/karsilastirma','/profil','/maclar','/mac','/mac-studyosu','/calismalarim']){
       assert.equal(resolvePage(new URL(path,origin)).kind,'protected');
       const alias=await fetch(origin+path+'?test=route'),html=await fetch(origin+path+'.html');

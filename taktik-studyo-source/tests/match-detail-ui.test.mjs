@@ -67,17 +67,17 @@ for(const path of ['/mac','/mac.html'])test(path+' shares protected Auth bootstr
   }
 });
 test('installed SDK builds only production matches?id; local transport only same-origin matches?id',async()=>{
-  const urls=[];const client=createClient('https://abcdefghijklmnopqrst.supabase.co','sb_publishable_testonly',{accessToken:async()=>'test-jwt',global:{fetch:async(url)=>{urls.push(String(url));return Response.json(detail());}}});
-  const api=createMatchDetailApi({client,current:()=>true,location:new URL('https://taktikstudyo.com/mac')});assert.equal((await api.load('215997')).ok,true);assert.deepEqual(urls,['https://abcdefghijklmnopqrst.supabase.co/functions/v1/matches?id=215997']);
+  const urls=[];const client=createClient('http://127.0.0.1:54321','sb_publishable_testonly',{accessToken:async()=>'test-jwt',global:{fetch:async(url)=>{urls.push(String(url));return Response.json(detail());}}});
+  const api=createMatchDetailApi({client,current:()=>true,location:new URL('https://taktikstudyo.com/mac')});assert.equal((await api.load('215997')).ok,true);assert.deepEqual(urls,['http://127.0.0.1:54321/functions/v1/matches?id=215997']);
   const local=createMatchDetailApi({client:{auth:{getSession:async()=>({data:{session:{access_token:'test-jwt'}}})}},current:()=>true,location:new URL('http://localhost:4173/mac'),fetchImpl:async(url)=>{urls.push(url);return Response.json(detail());}});
   assert.equal((await local.load('215997')).ok,true);assert.equal(urls[1],'/__local/matches?id=215997');
 });
-test('local M2 requires hosted getUser verification before detail load; anonymous denied',async()=>{
+test('local M2 requires local getUser verification before detail load; anonymous denied',async()=>{
   const requests=[];let loads=0;
-  const handler=createLocalMatches({url:'https://abcdefghijklmnopqrst.supabase.co',key:'sb_publishable_testonly',token:'test-only',port:4173,
+  const handler=createLocalMatches({url:'http://127.0.0.1:54321',key:'sb_publishable_testonly',token:'test-only',port:4173,
     fetchImpl:async(url)=>{requests.push(String(url));return Response.json({id:'u',email_confirmed_at:'yes'});},loadDetail:async({id})=>{assert.equal(id,'215997');loads++;return detail();}});
   assert.equal((await handler(new Request('http://localhost:4173/__local/matches?id=215997'))).status,401);assert.equal(loads,0);
-  const res=await handler(new Request('http://localhost:4173/__local/matches?id=215997',{headers:{Authorization:'Bearer test-jwt'}}));assert.equal(res.status,200);assert.equal(loads,1);assert.deepEqual(requests,['https://abcdefghijklmnopqrst.supabase.co/auth/v1/user']);
+  const res=await handler(new Request('http://localhost:4173/__local/matches?id=215997',{headers:{Authorization:'Bearer test-jwt'}}));assert.equal(res.status,200);assert.equal(loads,1);assert.deepEqual(requests,['http://127.0.0.1:54321/auth/v1/user']);
 });
 test('detail API maps SDK/local status errors, rejects mismatched response and discards stale result',async()=>{
   for(const [status,code] of [[400,'INVALID_MATCH_ID'],[401,'UNAUTHORIZED'],[404,'MATCH_NOT_FOUND'],[503,'PROVIDER_UNAVAILABLE']]){
