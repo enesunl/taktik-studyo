@@ -3,10 +3,11 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
 const studio=readFileSync(new URL('../dist/studyo.html',import.meta.url),'utf8');
-test('Studio right column contains a single bench followed by the compact player editor',()=>{
+test('Studio right column hosts Tactical Tools, hides the legacy bench and retains the compact player editor',()=>{
  const lineup=studio.split('<div class="studio-lineup">')[1].split('<footer>')[0];
  assert.match(lineup,/^<section id="boardPanel"/);
- assert.match(lineup,/<\/section><div class="studio-controls"><section class="squad-panel" id="squadPanel">/);
+ assert.match(lineup,/<\/section><div class="studio-controls"><section id="tacticalToolsPanel" class="tactics-panel"/);
+ assert.match(lineup,/<section class="squad-panel" id="squadPanel" hidden>/);
  assert.match(lineup,/<\/section><section class="panel player-panel">/);
  for(const id of ['squadPanel','squadList','squadCount','squadSource','playerForm','rosterSelect']){
   assert.equal(studio.split('id="'+id+'"').length-1,1,id+' must not be duplicated');
@@ -15,7 +16,7 @@ test('Studio right column contains a single bench followed by the compact player
  assert.doesNotMatch(studio,/class="studio-sidebar"/);
 });
 
-test('Studio drawing palette shares its trigger anchor and preserves accessible controls',()=>{
+test('Studio template retains reusable drawing controls for relocation to the permanent tools panel',()=>{
  const actions=studio.split('<div class="board-actions">')[1].split('<details class="studio-formations">')[0];
  assert.match(actions,/id="drawingToggle"[^>]*aria-expanded="false"/);
  assert.match(actions,/id="drawingTools"[^>]*role="group"[^>]*hidden/);

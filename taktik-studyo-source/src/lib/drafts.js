@@ -1,4 +1,4 @@
-import { stateValid } from './validation.js';
+import {boardDraftValid as stateValid} from './board-draft.js';
 export const DRAFT_VERSION = 1;
 export const DRAFT_BYTES = 1048576;
 export function readDraft(storage, key) {

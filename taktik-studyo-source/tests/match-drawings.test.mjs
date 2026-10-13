@@ -25,6 +25,10 @@ test('default Select, one pressed tool, accessible controls and Escape return pl
   const f=fixture();assert.equal(f.board.getDrawings().tool,'select');assert.equal(f.input.tabIndex,-1);
   fire(f.input,'pointerdown',f.at(.2,.3));fire(f.input,'pointerup',f.at(.6,.7));assert.equal(f.objects().length,0);
   assert.equal(f.find('match-tactical-trigger'),undefined);assert.equal(f.find('match-tactical-tray').hidden,false);
+  for(const [label,key,value] of [['Saha genişliği','width','1000'],['Saha yüksekliği','height','800']]){
+    const slider=f.nodes().find(n=>n.attrs['aria-label']===label);assert.ok(slider);assert.equal(slider.type,'range');
+    slider.value=value;fire(slider,'input');assert.equal(f.pitch.attrs['--match-pitch-'+key],value+'px');
+  }
   for(const tool of ['movement-arrow','pass-arrow','zone']){
     f.choose('tool',tool);assert.equal(f.board.getDrawings().tool,tool);
     assert.equal(f.nodes().filter(n=>n.dataset.tool&&n.attrs['aria-pressed']==='true').length,1);

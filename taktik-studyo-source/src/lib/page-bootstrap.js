@@ -1,3 +1,4 @@
+import {mountBoardTacticalTools,drawingStrokes} from './board-tactical-tools.js';
 import {loadFavoriteTeam} from './favorite-team.js';
 import {mountOnboarding} from './onboarding-ui.js';
 import {createCanonicalCatalogue} from './catalogue-canonical.js';
@@ -92,7 +93,7 @@ export function startPage({auth,document,window,backend,client}) {
       await backend.loadCatalogue();
       if (!current()) {playerOverrides?.dispose();return;}
       return owned(route.page === 'studio'
-        ? window.TAKTIK_APP.mountStudio(document.getElementById('studioRoot'),scope,playerOverrides)
+        ? window.TAKTIK_APP.mountStudio(document.getElementById('studioRoot'),scope,playerOverrides,{mount:mountBoardTacticalTools,strokes:drawingStrokes})
         : window.TAKTIK_COMPARISON.mount(scope,playerOverrides));
     },
   });

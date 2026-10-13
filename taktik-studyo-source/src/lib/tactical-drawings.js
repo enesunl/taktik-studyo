@@ -50,17 +50,19 @@ export function normalizeDrawingObjects(rows){
   }
   return result;
 }
-export function createDrawingHistory(initial=[]){
-  let objects=normalizeDrawingObjects(initial),undo=[],redo=[];
+export function createDrawingHistory(initial=[],legacy){
+  let objects=normalizeDrawingObjects(initial),strokes=clone(legacy||[]),undo=[],redo=[];
   if(!objects)throw Error('Invalid drawings');
-  function commit(next){undo.push(objects);if(undo.length>HISTORY_LIMIT)undo.shift();objects=next;redo=[];return true;}
+  const checkpoint=()=>({objects,strokes});
+  function commit(next,nextStrokes=strokes){undo.push(checkpoint());if(undo.length>HISTORY_LIMIT)undo.shift();objects=next;strokes=nextStrokes;redo=[];return true;}
   return Object.freeze({
-    snapshot:()=>({objects:clone(objects),undoCount:undo.length,redoCount:redo.length}),
+    snapshot:()=>({objects:clone(objects),...(legacy?{legacy:clone(strokes)}:{}),undoCount:undo.length,redoCount:redo.length}),
     add(object){if(!object||objects.length>=OBJECT_LIMIT)return false;return commit([...objects,clone(object)]);},
     erase(id){const next=objects.filter(o=>o.id!==id);return next.length!==objects.length&&commit(next);},
-    clear(){return objects.length>0&&commit([]);},
-    undo(){if(!undo.length)return false;redo.push(objects);objects=undo.pop();return true;},
-    redo(){if(!redo.length)return false;undo.push(objects);objects=redo.pop();return true;},
+    eraseLegacy(index){return index>=0&&index<strokes.length&&commit(objects,strokes.filter((_,i)=>i!==index));},
+    clear(){return (objects.length>0||strokes.length>0)&&commit([],[]);},
+    undo(){if(!undo.length)return false;redo.push(checkpoint());({objects,strokes}=undo.pop());return true;},
+    redo(){if(!redo.length)return false;undo.push(checkpoint());({objects,strokes}=redo.pop());return true;},
   });
 }
 

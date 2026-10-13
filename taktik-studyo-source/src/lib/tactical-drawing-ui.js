@@ -5,8 +5,9 @@ import {createStudioPreferences,SIZE_BOUNDS} from './studio-preferences.js';
 const TOOLS=[['select','Seç','Seç / Oyuncu taşı'],['movement-arrow','Koşu','Koşu oku'],['pass-arrow','Pas','Pas oku'],['line','Çizgi','Düz çizgi'],['freehand','Kalem','Serbest çizim'],['zone','Alan','Alan çiz'],['circle','Çember','Çember çiz'],['eraser','Sil','Çizimi sil']];
 const COLOR_LABELS={white:'Beyaz',yellow:'Sarı',red:'Kırmızı',blue:'Mavi'},WIDTH_LABELS={thin:'İnce',medium:'Orta',thick:'Kalın'};
 
-export function mountTacticalDrawings({root,pitch,toolbarHost,document,utils,current,onMode,getPreferenceStorage,initial={},onChange=()=>{}}){
-  const history=createDrawingHistory(initial.drawings||[]),listeners=[],toolButtons=new Map(),colorButtons=new Map(),widthButtons=new Map();
+export function mountTacticalDrawings({root,pitch,toolbarHost,document,utils,current,onMode,getPreferenceStorage,initial={},onChange=()=>{},hitLegacy=()=>-1,onPitchSize=()=>{},showPitchSizeControls=true}){
+  let history=createDrawingHistory(initial.drawings||[],initial.legacy);
+  const listeners=[],toolButtons=new Map(),colorButtons=new Map(),widthButtons=new Map();
   let tool='select',color='yellow',width='medium',disposed=false,cancelGesture=null,nextId=0;
   const usedIds=new Set((initial.drawings||[]).map(o=>o.id));while(usedIds.has('draw-'+(nextId+1)))nextId++;
   const active=()=>!disposed&&current();
@@ -31,7 +32,7 @@ export function mountTacticalDrawings({root,pitch,toolbarHost,document,utils,cur
     for(const [value,b]of toolButtons)b.setAttribute('aria-pressed',String(tool===value));
     for(const [value,b]of colorButtons)b.setAttribute('aria-pressed',String(color===value));
     for(const [value,b]of widthButtons)b.setAttribute('aria-pressed',String(width===value));
-    const snapshot=history.snapshot();undo.disabled=!snapshot.undoCount;redo.disabled=!snapshot.redoCount;clear.disabled=!snapshot.objects.length;
+    const snapshot=history.snapshot();undo.disabled=!snapshot.undoCount;redo.disabled=!snapshot.redoCount;clear.disabled=!snapshot.objects.length&&!snapshot.legacy?.length;
     pitch.classList.toggle('is-drawing',tool!=='select');input.tabIndex=tool==='select'?-1:0;
   }
   function paint(){objects.replaceChildren(...history.snapshot().objects.map(o=>renderDrawing(document,o)));refresh();}
@@ -50,12 +51,12 @@ export function mountTacticalDrawings({root,pitch,toolbarHost,document,utils,cur
   }
   for(const value of Object.keys(DRAWING_WIDTHS))widthButtons.set(value,button(WIDTH_LABELS[value],WIDTH_LABELS[value]+' çizgi','width',value,()=>{cancelGesture?.();width=value;refresh();}));
   const sizeInputs={};
-  for(const [key,label]of [['width','Saha genişliği'],['height','Saha yüksekliği']]){
+  for(const [key,label]of (showPitchSizeControls?[['width','Saha genişliği'],['height','Saha yüksekliği']]:[])){
     const row=node('label','match-size-label',label),slider=node('input');slider.type='range';slider.min=SIZE_BOUNDS[key][0];slider.max=SIZE_BOUNDS[key][1];slider.step=10;slider.setAttribute('aria-label',label);
     const value=node('output');row.append(slider,value);pitchGroup.append(row);sizeInputs[key]={slider,value};
     listen(slider,'input',()=>{if(active()){cancelGesture?.();sizePreference.setSize({...sizePreference.getSize(),[key]:Number(slider.value)});onChange();}});
   }
-  const sizePreference=createStudioPreferences({getStorage:getPreferenceStorage,initialSize:initial.pitch,persistSize:!initial.pitch,onSize(size){for(const key of ['width','height']){pitch.style.setProperty('--match-pitch-'+key,size[key]+'px');sizeInputs[key].slider.value=String(size[key]);sizeInputs[key].value.textContent=size[key]+' px';}}});
+  const sizePreference=createStudioPreferences({getStorage:getPreferenceStorage,initialSize:initial.pitch,persistSize:!initial.pitch,onSize(size){onPitchSize(size);for(const key of ['width','height']){pitch.style.setProperty('--match-pitch-'+key,size[key]+'px');if(sizeInputs[key]){sizeInputs[key].slider.value=String(size[key]);sizeInputs[key].value.textContent=size[key]+' px';}}}});
   const pitchLabel=node('label','match-pitch-color-label','Saha rengi'),picker=node('input','match-pitch-color'),pitchValue=node('span','match-pitch-color-value'),resetPitch=node('button','match-tactical-button','Varsayılana Dön');
   picker.type='color';picker.setAttribute('aria-label','Saha rengi');resetPitch.type='button';resetPitch.title='Varsayılan saha boyutlarına ve rengine dön';
   pitchLabel.append(picker,pitchValue);pitchGroup.append(pitchLabel,resetPitch);
@@ -88,7 +89,7 @@ export function mountTacticalDrawings({root,pitch,toolbarHost,document,utils,cur
       if(ev.type!=='pointerup'||!active())return;
       if(type==='eraser'){
         const bounds=pitch.getBoundingClientRect(),id=hitDrawing(history.snapshot().objects,endPoint,8,bounds);
-        if(id){history.erase(id);paint();onChange();notice.textContent='Çizim silindi.';}
+        if(id?history.erase(id):history.eraseLegacy(hitLegacy(history.snapshot().legacy||[],endPoint,bounds))){paint();onChange();notice.textContent='Çizim silindi.';}
       }else{
         const value=object(false);if(!value)return;
         if(history.add(value)){usedIds.add(value.id);nextId++;while(usedIds.has('draw-'+(nextId+1)))nextId++;paint();onChange();notice.textContent='Çizim eklendi.';}
@@ -111,6 +112,16 @@ export function mountTacticalDrawings({root,pitch,toolbarHost,document,utils,cur
   return Object.freeze({
     getPitch:()=>({...sizePreference.getSize(),color:preference.get()}),
     getTool:()=>tool,
+    captureHistory:()=>history,
+    restoreContext(nextHistory,pitchState){
+      if(!active())return;
+      cancelGesture?.();history=nextHistory;tool='select';onMode(tool);
+      // Include historical IDs too: a new action after Undo must not reuse one.
+      for(const o of history.snapshot().objects)usedIds.add(o.id);
+      while(usedIds.has('draw-'+(nextId+1)))nextId++;
+      sizePreference.setSize(pitchState);preference.set(pitchState.color);paint();notice.textContent='';
+    },
+    setTool,
     getState:()=>({tool,color,width,...history.snapshot()}),
     cancel:()=>cancelGesture?.(),
     dispose(){if(disposed)return;disposed=true;cancelGesture?.();for(const off of listeners)off();toolbarHost.replaceChildren();layer.replaceChildren();preview.replaceChildren();},
