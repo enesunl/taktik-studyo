@@ -80,7 +80,7 @@ const server = http.createServer(async (req, res) => {
   // Match the existing dist/_redirects route without changing application code.
   if (pathname === '/' || pathname.startsWith('/lineup/')) pathname = '/index.html';
   // Mirror the exact extensionless protected routes served by static hosting.
-  if (['/hos-geldin','/haftanin-ilk-11i','/studyo','/karsilastirma','/profil','/maclar','/mac','/mac-studyosu','/calismalarim'].includes(pathname)) pathname += '.html';
+  if (['/ilk-11lerim','/hos-geldin','/haftanin-ilk-11i','/studyo','/karsilastirma','/profil','/maclar','/mac','/mac-studyosu','/calismalarim'].includes(pathname)) pathname += '.html';
   const file = path.resolve(root, '.' + pathname);
   // Check the resolved path too: percent-encoded asset names must never expose
   // the hosted production bundle from dist.

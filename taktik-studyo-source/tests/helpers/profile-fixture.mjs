@@ -45,7 +45,7 @@ export class ProfileNode {
 export function profileDocument(base = {getElementById(){}}) {
   const root = new ProfileNode(), mounts = [];
   const template = {content:{cloneNode(){
-    const fields = Object.fromEntries(['form','#profileUsername','#profileDisplayName','#profileEmail','#profileStatus','#profileSave','#profileRetry','#profileName','#profileInitials','#profileEdit','#profileSignOut','#profileStats','#profileRecent','#profileEmpty','#profileProjectsStatus','#profileProjectsRetry','#profileCountTotal','#profileCountFree','#profileCountMatch','#profileAccount','#profileAccountEdit','#profileCancel','#profileReadOnly','#profileReadUsername','#profileReadDisplayName','#profileReadEmail'].map(key=>[key,new ProfileNode()]));
+    const fields = Object.fromEntries(['form','#profileUsername','#profileDisplayName','#profileEmail','#profileStatus','#profileSave','#profileRetry','#profileName','#profileInitials','#profileEdit','#profileSignOut','#profileStats','#profileRecent','#profileEmpty','#profileProjectsStatus','#profileProjectsRetry','#profileCountTotal','#profileCountFree','#profileCountMatch','#profileAccount','#profileAccountEdit','#profileCancel','#profileReadOnly','#profileReadUsername','#profileReadDisplayName','#profileReadEmail','#profileWeeklySaved','#profileWeeklyStatus'].map(key=>[key,new ProfileNode()]));
     fields.form.hidden=true;fields.form.inert=true;
     const fragment={fields};mounts.push(fragment);return fragment;
   }}};

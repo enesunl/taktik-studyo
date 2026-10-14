@@ -56,11 +56,11 @@ test('route resolution preserves root share precedence, exact v4 rejection and l
   assert.deepEqual(route('/?lineup='+A),{kind:'shared',id:A});
   assert.deepEqual(route('/lineup/'+B+'?lineup='+A),{kind:'shared',id:A});
   for(const url of ['/?lineup=','/?lineup=abc','/?lineup='+A+'&lineup='+A,'/lineup/not-a-uuid','/lineup/']) assert.equal(route(url).kind,'share_error');
-  for(const path of ['/studyo.html','/karsilastirma.html','/profil.html'])assert.equal(route(path).kind,'protected');
+  for(const path of ['/studyo.html','/profil.html'])assert.equal(route(path).kind,'protected');
 });
 
 test('safe next accepts exact paths only; duplicates and encoded external tricks default to studio',async()=>{
-  for(const path of ['/studyo.html','/karsilastirma.html','/profil.html']){
+  for(const path of ['/studyo.html','/profil.html']){
     assert.equal(loginDestination('?next='+encodeURIComponent(path)),path);
     assert.equal(new URL(loginUrl(path),'https://example.test').searchParams.get('next'),path);
   }
@@ -205,8 +205,8 @@ function bootFixture(path,initial=state(A)){
   return {...f,nodes,storage,calls,options};
 }
 
-test('studio/comparison open directly with own drafts, never prompting, importing or deleting legacy data',async()=>{
-  for(const path of ['/studyo.html','/karsilastirma.html'])for(const existing of [false,true]){
+test('studio opens directly with own drafts, never prompting, importing or deleting legacy data',async()=>{
+  for(const path of ['/studyo.html'])for(const existing of [false,true]){
     const f=bootFixture(path);
     for(const slot of ['main','left','right']){
       writeDraft(f.storage,legacyDraftKeys[slot],validDraft);
@@ -234,8 +234,8 @@ test('profile route is guarded and never fetches catalogue even when profile cli
   }
 });
 
-test('legacy data never creates a startup prompt; only server-confirmed users can open studio/comparison',async()=>{
-  for(const path of ['/studyo.html','/karsilastirma.html'])for(const confirmed of [false,true]){
+test('legacy data never creates a startup prompt; only server-confirmed users can open studio',async()=>{
+  for(const path of ['/studyo.html'])for(const confirmed of [false,true]){
     const f=bootFixture(path),real=fixture({initial:session});f.options.auth=real.auth;
     real.userResult={data:{user:{...user,email_confirmed_at:confirmed?user.email_confirmed_at:undefined}}};
     real.client.auth.signOut=async options=>{assert.deepEqual(options,{scope:'local'});real.emit('SIGNED_OUT',null);return {error:null};};
@@ -258,7 +258,7 @@ test('public shared bootstrap ignores all Auth APIs for logged-out and logged-in
 });
 
 test('static shells hide protected contents and deterministic defer order leaves engine definitions idle',()=>{
-  for(const file of ['studyo','karsilastirma','profil']){
+  for(const file of ['studyo','profil']){
     const html=readFileSync(new URL('../dist/'+file+'.html',import.meta.url),'utf8');
     assert.match(html,/id="protectedContent"[^>]*hidden inert/);assert.match(html,/id="guardMessage" role="status"/);
     assert.equal(/<button id="profileSignOut"/.test(html),file==='profil');
@@ -274,7 +274,7 @@ test('actual backend bundle defers routes to DOMContentLoaded; landing/profile a
   const built=await build({entryPoints:[fileURLToPath(new URL('../src/backend-entry.js',import.meta.url))],bundle:true,write:false,format:'iife',target:'es2022',
     define:{__SUPABASE_URL__:'""',__SUPABASE_PUBLISHABLE_KEY__:'""',__TURNSTILE_SITE_KEY__:'""',__AUTH_TURNSTILE_SITE_KEY__:'""'},
     plugins:[{name:'test-auth',setup(b){b.onLoad({filter:/[\\/]lib[\\/]auth\.js$/},()=>({contents:'export const auth=globalThis.testAuth;'}));}}]});
-  for(const path of ['/','/studyo.html','/karsilastirma.html','/profil.html','/?lineup='+A,'/?lineup=invalid']){
+  for(const path of ['/','/studyo.html','/profil.html','/?lineup='+A,'/?lineup=invalid']){
     const url=new URL(path,'https://taktikstudyo.com'),f=bootFixture(url.pathname),events=new Node();
     f.options.window.location.search=url.search;
     let initializes=0,catalogues=0;

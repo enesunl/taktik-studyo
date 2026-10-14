@@ -24,7 +24,7 @@ test('local HTTP server serves every protected alias, including Çalışmalarım
       assert(!js.includes('zwhoailuklwtxaaawfaq'));
     }
     for(const asset of ['/backend.js.','/backend.js%20','/backend.js::$DATA'])assert.equal((await fetch(origin+asset)).status,403);
-    for(const path of ['/hos-geldin','/studyo','/karsilastirma','/profil','/maclar','/mac','/mac-studyosu','/calismalarim']){
+    for(const path of ['/ilk-11lerim','/haftanin-ilk-11i','/hos-geldin','/studyo','/profil','/maclar','/mac','/mac-studyosu','/calismalarim']){
       assert.equal(resolvePage(new URL(path,origin)).kind,'protected');
       const alias=await fetch(origin+path+'?test=route'),html=await fetch(origin+path+'.html');
       assert.equal(alias.status,200,path);assert.equal(html.status,200,path+'.html');
@@ -32,6 +32,10 @@ test('local HTTP server serves every protected alias, including Çalışmalarım
       const body=await alias.text();assert.equal(body,await html.text());
       assert.match(body,/id="protectedContent"[^>]*hidden inert/);
       if(path==='/calismalarim')assert.match(body,/id="studioProjectsContent"/);
+    }
+    for(const path of ['/karsilastirma','/karsilastirma.html']){
+      const response=await fetch(origin+path);assert.equal(response.status,200);
+      assert.match(await response.text(),/http-equiv="refresh" content="0;url=\/studyo\.html"/);
     }
     const head=await fetch(origin+'/calismalarim',{method:'HEAD'});assert.equal(head.status,200);assert.equal(await head.text(),'');
     assert.equal((await fetch(origin+'/not-a-page')).status,404);

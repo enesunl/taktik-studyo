@@ -79,10 +79,20 @@ const fold=value=>String(value).toLocaleLowerCase('tr').normalize('NFKD').replac
 export const searchWeeklyPlayers=(players,query)=>{const terms=fold(query).trim().split(/\s+/).filter(Boolean);return players.filter(p=>terms.every(t=>fold(p.name+' '+p.teamName).includes(t)));};
 
 // One explicitly saved XI per account and catalogue source, on this browser only.
-export function createWeeklyStore({userId,source,storage,current}){
+export function createWeeklyStore({userId,source,storage,current,now=Date.now}){
  const key=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(userId||'')&&['legacy','canonical'].includes(source)?`taktik:weekly-xi:${userId}:${source}:v1`:null;
  return {
-  read(){if(!key||!current())return {ok:false};try{const raw=storage.getItem(key);if(raw===null)return {ok:true,state:null};if(raw.length>50000)return {ok:false};const state=weeklySnapshot(JSON.parse(raw));return state?{ok:true,state}:{ok:false};}catch{return {ok:false};}},
-  write(value){if(!key||!current())return false;const state=weeklySnapshot(value);if(!state)return false;try{storage.setItem(key,JSON.stringify(state));return true;}catch{return false;}},
+  source,
+  read(){
+   if(!key||!current())return {ok:false};
+   try{
+    const raw=storage.getItem(key);if(raw===null)return {ok:true,state:null};if(raw.length>50000)return {ok:false};
+    const value=JSON.parse(raw),state=weeklySnapshot(value);
+    if(!state)return {ok:false};
+    const timestamp=typeof value.savedAt==='string'?Date.parse(value.savedAt):NaN;
+    return {ok:true,state,entry:{id:source,updatedAt:Number.isFinite(timestamp)?new Date(timestamp).toISOString():null}};
+   }catch{return {ok:false};}
+  },
+  write(value){if(!key||!current())return false;const state=weeklySnapshot(value);if(!state)return false;try{storage.setItem(key,JSON.stringify({...state,savedAt:new Date(now()).toISOString()}));return true;}catch{return false;}},
  };
 }

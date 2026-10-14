@@ -9,7 +9,15 @@ export class BoardNode extends MatchNode {
     this.classList={add:name=>this.toggle(name,true),remove:name=>this.toggle(name,false),toggle:(name,on)=>this.toggle(name,on)};
   }
   toggle(name,on){const values=new Set((this.className||'').split(' ').filter(Boolean));on?values.add(name):values.delete(name);this.className=[...values].join(' ');}
-  set innerHTML(value){if(!value.startsWith('<svg viewBox="0 0 64 64" aria-hidden="true"'))throw Error('Unsafe HTML');this.markup=value;}
+  set innerHTML(value){
+    if(!value.startsWith('<svg viewBox="0 0 64 64" aria-hidden="true"'))throw Error('Unsafe HTML');this.markup=value;
+    const svg=new BoardNode('svg');svg.setAttribute('viewBox','0 0 64 64');
+    for(const match of value.matchAll(/<path\s+([^>]+)\/>/g)){const path=new BoardNode('path');for(const attr of match[1].matchAll(/([\w-]+)="([^"]*)"/g))path.setAttribute(attr[1],attr[2]);svg.append(path);}this.replaceChildren(svg);
+  }
+  querySelector(selector){const walk=n=>n.children.flatMap(c=>[c,...walk(c)]);return walk(this).find(n=>selector.startsWith('.')?(n.className||n.attrs.class||'').split(' ').includes(selector.slice(1)):n.tagName===selector)||null;}
+  removeAttribute(key){delete this.attrs[key];}
+  cloneNode(deep){const copy=new BoardNode(this.tagName);copy.attrs={...this.attrs};copy.textContent=this.textContent;copy.className=this.className;if(deep)copy.append(...this.children.map(c=>c.cloneNode(true)));return copy;}
+  getContext(){return {font:'',measureText:s=>({width:Array.from(s).length*6})};}
   get innerHTML(){return this.markup;}
   getBoundingClientRect(){return {left:30,top:100,width:1000,height:625};}
   setPointerCapture(id){this.capture=id;}

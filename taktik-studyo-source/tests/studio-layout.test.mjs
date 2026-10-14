@@ -39,5 +39,5 @@ test('Studio composition does not introduce controls into public shares or Compa
  assert.doesNotMatch(shared,/studio-formations|squadPanel|formationList|<select\b/);
  const comparison=readFileSync(new URL('../dist/karsilastirma.html',import.meta.url),'utf8');
  assert.doesNotMatch(comparison,/studio-workspace|studio-lineup|studio-formations/);
- assert.match(comparison,/id="leftFormation"/);assert.match(comparison,/id="rightFormation"/);
+ assert.match(comparison,/http-equiv="refresh" content="0;url=\/studyo\.html"/);assert.doesNotMatch(comparison,/leftFormation|rightFormation|comparison\.js/);
 });

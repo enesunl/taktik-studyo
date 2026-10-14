@@ -58,3 +58,28 @@
 .profile-favorite-status{font-size:12px;color:var(--text-secondary);line-height:1.6}
 .profile-favorite-status:empty{display:none}
 @media(max-width:540px){.profile-favorite-row{grid-template-columns:1fr auto}.profile-favorite-row>span:first-child{grid-column:1/-1}.profile-team-grid{grid-template-columns:1fr}}
+
+/* Local saved Weekly XI entries use the same compact editorial rhythm. */
+.profile-weekly{display:block}
+.profile-weekly>.profile-section-heading{margin-bottom:12px}
+.profile-weekly-entry{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:16px;padding:16px 0;border-top:1px solid var(--border);color:var(--text-primary);text-decoration:none}
+.profile-weekly-entry h3{margin:0 0 5px;font-size:15px}.profile-weekly-entry p{margin:0;font-size:12px;color:var(--text-secondary)}
+.profile-weekly-entry time{font-size:12px;color:var(--text-secondary)}.profile-weekly-entry>span{font-size:13px;font-weight:700}
+.profile-weekly-entry:hover{color:var(--selected-text);background:var(--selected-bg)}
+@media(max-width:600px){.profile-weekly-entry{grid-template-columns:minmax(0,1fr) auto;gap:8px}.profile-weekly-entry time{grid-column:1;grid-row:2}.profile-weekly-entry>span{grid-column:2;grid-row:1/3}}
+
+/* Account: one label/value/action rhythm, including favourite team and session. */
+#profileAccount{--account-label:140px;padding:28px 0 12px;max-width:none}
+#profileAccount>.profile-account-heading{display:flex;justify-content:space-between;align-items:center;margin:24px 0 12px}
+#profileAccount .profile-account-rows{margin:0;display:grid;gap:0}
+#profileAccount .profile-account-rows>div{display:grid;grid-template-columns:var(--account-label) minmax(0,1fr);gap:16px;padding:12px 0;border-bottom:1px solid var(--border)}
+#profileAccount dt,#profileAccount dd{margin:0;overflow-wrap:anywhere}
+#profileAccount dt{font-size:13px;color:var(--text-secondary)}
+#profileAccount .profile-favorite{border-top:0;padding:24px 0;margin:0;border-bottom:1px solid var(--border)}
+#profileAccount .profile-favorite h3{margin:0 0 12px}
+#profileAccount .profile-favorite-row{grid-template-columns:var(--account-label) minmax(0,1fr) auto;gap:16px}
+#profileAccount .profile-session-row{display:grid;grid-template-columns:var(--account-label) minmax(0,1fr);gap:16px;align-items:center;padding:20px 0 0;margin:0;border:0}
+#profileAccount .profile-session-row button{justify-self:end}
+#profileAccount button{min-height:36px;padding:7px 12px;font-size:13px}
+@media(max-width:540px){#profileAccount{--account-label:110px;padding:24px 0 12px}#profileAccount .profile-favorite-row{grid-template-columns:var(--account-label) minmax(0,1fr)}#profileAccount .profile-favorite-row>span:first-child{grid-column:auto}#profileAccount .profile-favorite-row>button{grid-column:2;justify-self:start}#profileAccount .profile-account-rows>div{gap:10px}}
+#weeklyCollection>div>section{margin:28px 0}#weeklyCollection h2{font-size:18px}

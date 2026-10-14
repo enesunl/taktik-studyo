@@ -1,9 +1,13 @@
+import {shortPlayerLabel} from './player-label.js';
 import {mountBoardTacticalTools,drawingStrokes} from './board-tactical-tools.js';
 import {loadFavoriteTeam} from './favorite-team.js';
 import {mountOnboarding} from './onboarding-ui.js';
 import {createCanonicalCatalogue} from './catalogue-canonical.js';
 import {createOnboardingGate} from './onboarding.js';
 import {mountWeeklyXI} from './weekly-xi-ui.js';
+import {createWeeklyStore} from './weekly-xi.js';
+import {createWeeklyLineups} from './weekly-lineups.js';
+import {mountWeeklyCollection} from './weekly-lineups-ui.js';
 import {createStudioProjects} from './studio-projects.js';
 import {mountStudioProjects} from './studio-projects-ui.js';
 import {resolvePage} from './page-routes.js';
@@ -20,6 +24,7 @@ import {createPlayerOverrides} from './player-overrides.js';
 
 export function startPage({auth,document,window,backend,client}) {
   const route = resolvePage(window.location);
+  if(route.kind === 'retired') {window.location.replace(route.destination);return;}
   if (route.kind === 'shared' || route.kind === 'share_error') {
     // No Auth initialization, validation, profile bootstrap or user draft scope.
     return window.TAKTIK_APP.mountShared(route);
@@ -34,7 +39,7 @@ export function startPage({auth,document,window,backend,client}) {
   const retry = document.getElementById('guardRetry'), login = document.getElementById('guardLogin');
   const logout = document.getElementById('signOut');
   let storage;
-  const drafts = route.page === 'studio' || route.page === 'comparison';
+  const drafts = route.page === 'studio';
   if (drafts) {
     try {storage = window.localStorage;} catch {storage = {getItem(){return null;},setItem(){throw Error('Storage unavailable');}};}
   }
@@ -42,9 +47,10 @@ export function startPage({auth,document,window,backend,client}) {
     beforeMount:client?createOnboardingGate({path:route.path,createApi:(validatedUser,current)=>createProfileApi({client,validatedUser,current})}):undefined,
     show(state) {
       const ready = state === 'ready';
+      status.setAttribute('data-state',state);status.setAttribute('aria-busy',String(state==='pending'));
       content.hidden = !ready; content.inert = !ready; status.hidden = ready;
       retry.hidden = login.hidden = state === 'pending';
-      message.textContent = state === 'pending' ? 'Oturum doğrulanıyor…'
+      message.textContent = state === 'pending' ? 'Sayfa hazırlanıyor…'
         : state === 'page_error' ? 'Sayfa verileri şu anda yüklenemedi. Tekrar dene.'
         : state === 'logout_error' ? 'Çıkış yapılamadı. Tekrar deneyebilir veya giriş sayfasına gidebilirsin.'
         : 'Oturum şu anda doğrulanamadı. Biraz sonra tekrar dene.';
@@ -60,16 +66,20 @@ export function startPage({auth,document,window,backend,client}) {
         return mountOnboarding({document,window,current,catalogue:teamCatalogue,
           api:createProfileApi({client,validatedUser,current,teamCatalogue})}).dispose;
       }
-      if((canonical&&['studio','comparison','match-studio','match'].includes(route.page))||route.page==='weekly-xi'){
-        await backend.loadCatalogue();if(!current())return;
-      }
       let playerOverrides=null;
-      if(['studio','comparison','match-studio','match','weekly-xi'].includes(route.page)){
-        playerOverrides=createPlayerOverrides({client:dataClient,validatedUser,current,internalOnly:!!canonical});await playerOverrides.load();
+      if(['studio','match-studio','match','weekly-xi'].includes(route.page)){
+        playerOverrides=createPlayerOverrides({client:dataClient,validatedUser,current,internalOnly:!!canonical});
+        // Both depend on the validated identity, not on each other's results.
+        // Join before mount so the first XI already includes personal overrides.
+        const needsCatalogue=canonical||['studio','weekly-xi'].includes(route.page);
+        try {await Promise.all([needsCatalogue?backend.loadCatalogue():Promise.resolve(),playerOverrides.load()]);}
+        catch(error){playerOverrides.dispose();throw error;}
         if(!current()){playerOverrides.dispose();return;}
       }
       const owned=dispose=>()=>{dispose?.();playerOverrides?.dispose();};
-      if (route.page === 'weekly-xi') return owned(mountWeeklyXI({document,window,current,userId:validatedUser.id,catalogue,playerOverrides,matchesApi:createMatchesApi({client,current,location:window.location})}).dispose);
+      const weeklyRecords=createWeeklyLineups({client,validatedUser,current});
+      if (route.page === 'weekly-collection') return mountWeeklyCollection({document,current,api:weeklyRecords}).dispose;
+      if (route.page === 'weekly-xi') return owned(mountWeeklyXI({document,window,current,userId:validatedUser.id,catalogue,playerOverrides,records:weeklyRecords,matchesApi:createMatchesApi({client,current,location:window.location})}).dispose);
       if (route.page === 'projects') return mountStudioProjects({document,window,current,api:createStudioProjects({client,validatedUser,current})}).dispose;
       if (route.page === 'match-studio') {
         return owned(mountMatchStudio({document,window,current,playerOverrides,userId:validatedUser.id,projects:createStudioProjects({client,validatedUser,current}),api:createMatchDetailApi({client,current,location:window.location,identity:canonical?catalogue:null})}).dispose);
@@ -85,16 +95,14 @@ export function startPage({auth,document,window,backend,client}) {
       if (route.page === 'profile') {
         const teamCatalogue=createCanonicalCatalogue(dataClient);
         const api = createProfileApi({client,validatedUser,current,teamCatalogue});
-        return mountProfile({document,api,validatedUser,current,catalogue:teamCatalogue,projects:createStudioProjects({client,validatedUser,current}),onSignOut:()=>guard.signOut()}).dispose;
+        let weeklyStorage;try{weeklyStorage=window.localStorage;}catch{}
+        const weeklyStores=['canonical','legacy'].map(source=>createWeeklyStore({userId:validatedUser.id,source,storage:weeklyStorage,current}));
+        return mountProfile({document,api,validatedUser,current,weeklyRecords,weeklyStores,eventTarget:window,catalogue:teamCatalogue,projects:createStudioProjects({client,validatedUser,current}),onSignOut:()=>guard.signOut()}).dispose;
       }
       // Open the user's own draft directly. Device-wide legacy drafts are
       // neither imported nor deleted as a side effect of opening a board.
       if (!current()) {playerOverrides?.dispose();return;}
-      await backend.loadCatalogue();
-      if (!current()) {playerOverrides?.dispose();return;}
-      return owned(route.page === 'studio'
-        ? window.TAKTIK_APP.mountStudio(document.getElementById('studioRoot'),scope,playerOverrides,{mount:mountBoardTacticalTools,strokes:drawingStrokes})
-        : window.TAKTIK_COMPARISON.mount(scope,playerOverrides));
+      return owned(window.TAKTIK_APP.mountStudio(document.getElementById('studioRoot'),scope,playerOverrides,{mount:mountBoardTacticalTools,strokes:drawingStrokes},shortPlayerLabel));
     },
   });
   const signOut = () => {void guard.signOut();}, tryAgain = () => {void guard.retry();};

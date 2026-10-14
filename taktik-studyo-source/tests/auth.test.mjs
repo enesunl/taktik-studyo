@@ -154,7 +154,7 @@ test('cleanup during restore invalidates pending work and permits clean reinitia
 });
 
 test('safe redirects use exact root-relative whitelist, reject all encoded/external variants', () => {
-  for (const path of ['/studyo.html', '/karsilastirma.html', '/profil.html']) assert.equal(safeInternalRedirect(path), path);
+  for (const path of ['/studyo.html', '/profil.html']) assert.equal(safeInternalRedirect(path), path);
   for (const path of [null, undefined, 1, {}, '', '/', '/unknown', 'studyo.html',
     'https://evil.example', 'http://evil.example', '//evil.example', '\\evil.example', '/\\evil.example',
     'javascript:alert(1)', 'data:text/html,x', '%2f%2fevil.example', '/%2f%2fevil.example',

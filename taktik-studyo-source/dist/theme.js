@@ -5,7 +5,8 @@
   try{saved=localStorage.getItem(key);}catch{}
   try{media=matchMedia('(prefers-color-scheme: dark)');}catch{}
   let explicit=valid(saved),theme=explicit?saved:media?.matches?'dark':'light';
-  function apply(value){
+  function apply(value,animate=false){
+    for(const b of document.querySelectorAll('[data-theme-toggle]'))b.setAttribute('data-theme-animate',String(animate));
     theme=value;document.documentElement.dataset.theme=value;
     document.documentElement.style.colorScheme=value;
     for(const b of document.querySelectorAll('[data-theme-toggle]')){
@@ -19,7 +20,7 @@
   document.addEventListener('DOMContentLoaded',()=>{
     apply(theme);
     for(const b of document.querySelectorAll('[data-theme-toggle]'))b.addEventListener('click',()=>{
-      explicit=true;apply(theme==='dark'?'light':'dark');try{localStorage.setItem(key,theme);}catch{}
+      explicit=true;apply(theme==='dark'?'light':'dark',true);try{localStorage.setItem(key,theme);}catch{}
     });
   },{once:true});
   media?.addEventListener?.('change',()=>{if(!explicit)apply(media.matches?'dark':'light');});

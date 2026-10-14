@@ -111,7 +111,7 @@ test('installed SDK missing-session self-cleanup and explicit local logout both 
 });
 
 test('protected HTML labels contain the exact accessible Turkish spelling',()=>{
-  for(const file of ['studyo','karsilastirma','profil']){
+  for(const file of ['studyo','profil']){
     const html=readFileSync(new URL('../dist/'+file+'.html',import.meta.url),'utf8');
     assert.match(html,/aria-label="Oturum doğrulama"/);assert.doesNotMatch(html,/Oturum do\?rulama/);
   }

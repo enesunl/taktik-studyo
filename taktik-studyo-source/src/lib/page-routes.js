@@ -1,6 +1,8 @@
+import {safeInternalRedirect} from './auth-redirects.js';
 // Preserve the public share parser: query wins over legacy path; lowercase v4 only.
 export function resolvePage(location) {
   const path = location.pathname || '/', params = new URLSearchParams(location.search || '');
+  if (path === '/karsilastirma' || path === '/karsilastirma.html') return {kind:'retired',destination:'/studyo.html'};
   if (path === '/' || path === '/index.html' || path.startsWith('/lineup/')) {
     const query = params.has('lineup');
     if (query || path.startsWith('/lineup/')) {
@@ -13,7 +15,8 @@ export function resolvePage(location) {
   }
   // Static hosts can serve/rewrite links to extensionless HTML paths. Keep the
   // aliases exact and retain canonical .html paths for the safe-next allowlist.
-  const canonicalPath = {'/hos-geldin':'/hos-geldin.html','/haftanin-ilk-11i':'/haftanin-ilk-11i.html','/calismalarim':'/calismalarim.html','/studyo':'/studyo.html','/karsilastirma':'/karsilastirma.html','/profil':'/profil.html','/maclar':'/maclar.html','/mac':'/mac.html','/mac-studyosu':'/mac-studyosu.html'}[path] || path;
-  const protectedPages = {'/hos-geldin.html':'onboarding','/haftanin-ilk-11i.html':'weekly-xi','/calismalarim.html':'projects','/studyo.html':'studio','/karsilastirma.html':'comparison','/profil.html':'profile','/maclar.html':'matches','/mac.html':'match','/mac-studyosu.html':'match-studio'};
-  return protectedPages[canonicalPath] ? {kind:'protected',page:protectedPages[canonicalPath],path:canonicalPath} : {kind:'auth'};
+  const canonicalPath = {'/ilk-11lerim':'/ilk-11lerim.html','/hos-geldin':'/hos-geldin.html','/haftanin-ilk-11i':'/haftanin-ilk-11i.html','/calismalarim':'/calismalarim.html','/studyo':'/studyo.html','/profil':'/profil.html','/maclar':'/maclar.html','/mac':'/mac.html','/mac-studyosu':'/mac-studyosu.html'}[path] || path;
+  const protectedPages = {'/ilk-11lerim.html':'weekly-collection','/hos-geldin.html':'onboarding','/haftanin-ilk-11i.html':'weekly-xi','/calismalarim.html':'projects','/studyo.html':'studio','/profil.html':'profile','/maclar.html':'matches','/mac.html':'match','/mac-studyosu.html':'match-studio'};
+  const destination=canonicalPath==='/haftanin-ilk-11i.html'?safeInternalRedirect(canonicalPath+(location.search||''))||canonicalPath:canonicalPath;
+  return protectedPages[canonicalPath] ? {kind:'protected',page:protectedPages[canonicalPath],path:destination} : {kind:'auth'};
 }

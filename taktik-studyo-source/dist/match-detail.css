@@ -15,3 +15,5 @@
 @media(max-width:650px){.center-columns{grid-template-columns:1fr;gap:28px}.match-summary,.center-section{padding:20px 16px}.center-scoreboard{gap:10px}.center-team{font-size:14px;flex-direction:column;gap:8px}.center-team .team-marker{height:18px;width:24px}.center-score{font-size:26px}.stat-values{grid-template-columns:42px minmax(0,1fr) 42px}.match-studio-entry{flex-wrap:wrap}.incident-list>li{gap:10px;grid-template-columns:55px minmax(0,1fr)}}
 
 .match-studio-entry>a{background:var(--action-bg);color:var(--lime);border-radius:7px;padding:13px 20px;text-decoration:none;font-weight:700}.match-studio-entry>a:hover{background:#2c4033}
+
+.match-player .match-player-name{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;overflow-wrap:anywhere;line-height:1.15;max-height:2.3em;max-width:100%;overflow:hidden;text-align:center}

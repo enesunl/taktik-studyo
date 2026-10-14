@@ -35,7 +35,7 @@ test('production tree contains no old portrait assets and roster has no remote p
  assert.equal(files.filter(f=>/^faces[\\/].+/.test(f)).length,0);
  const roster=readFileSync(new URL('rosters.js',dist),'utf8');
  assert.doesNotMatch(roster,/photoSource|images\.fotmob\.com|playerimages/);
- const css=readFileSync(new URL('styles.css',dist),'utf8')+readFileSync(new URL('comparison.css',dist),'utf8');
+ const css=readFileSync(new URL('styles.css',dist),'utf8');
  assert.doesNotMatch(css,/player-face|face-fallback|squad-avatar|player-disc/);
  assert.match(css,/\.jersey-body\{fill:var\(--team\)/);
  assert.match(css,/\.jersey-accent\{fill:var\(--team2\)/);

@@ -5,6 +5,7 @@
 .route-nav a,.hero-actions>a,.guard-status a,.profile-shell>a{color:var(--ink);text-decoration:none;font-weight:600}
 .route-nav button,.guard-status button,.legacy-prompt button{font:inherit;border:1px solid var(--border);border-radius:7px;padding:9px 14px;background:var(--bg-surface);color:var(--ink);cursor:pointer}
 .route-nav a:hover,.hero-actions>a:hover,.profile-shell>a:hover{text-decoration:underline}
+.route-nav a[aria-current=page]{text-decoration:underline;text-decoration-color:var(--text-secondary);text-underline-offset:6px}
 .route-header :focus-visible,.landing-main :focus-visible,.guard-status :focus-visible,.legacy-prompt :focus-visible,.profile-shell :focus-visible{outline:3px solid var(--focus);outline-offset:5px}
 .landing-main{display:grid;grid-template-columns:1.1fr 1fr;align-items:center;gap:8%;max-width:1240px;margin:auto;padding:80px 5% 55px;min-height:calc(100vh - 165px)}
 .hero-kicker{font-size:12px;letter-spacing:2px;color:var(--text-secondary);font-weight:650}
@@ -36,3 +37,7 @@
 .profile-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,280px);gap:28px;align-items:stretch;margin:24px 0}.profile-layout #profileContent{min-width:0}.profile-layout .profile-card{max-width:none;margin:0}.profile-account{display:flex;flex-direction:column;gap:28px;padding:20px;border:1px solid var(--border);border-radius:12px;background:var(--bg-surface);min-width:0}.profile-account nav{display:grid;gap:8px}.profile-account a,.profile-account button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;box-sizing:border-box;padding:13px 12px;border:1px solid transparent;border-radius:7px;background:var(--control-bg);color:var(--text-primary);font-family:inherit;font-size:14px;font-weight:600;line-height:1.5;text-decoration:none;text-align:left}.profile-account button{font-family:inherit;cursor:pointer}.profile-account button:disabled{color:var(--text-secondary);cursor:default}.profile-account small{font-size:11px;font-weight:400}.profile-account .profile-logout{margin-top:auto;background:transparent;color:var(--error);border-color:var(--border)}.profile-account a:hover,.profile-account .profile-logout:hover{background:var(--control-hover)}
 @media(max-width:700px){.profile-layout{grid-template-columns:minmax(0,1fr);gap:18px}.profile-account{gap:24px}.profile-card{padding:22px}}
 @media(max-width:700px){.route-header{padding-inline:20px}.route-nav,.route-nav>span{gap:14px;font-size:13px}.landing-main{grid-template-columns:1fr;gap:45px;padding:42px 24px}.hero-description{font-size:18px}.hero-field{max-width:310px;width:85%;justify-self:center;transform:rotate(2deg)}.hero-copy h1{letter-spacing:-1px}.hero-footnote{margin-top:28px}}
+
+/* The public navigation/shell stays visible while protected content stays inert. */
+.guard-status[data-state=pending]{max-width:1510px;margin:0 auto;padding:12px 4%;border:0;border-radius:0;background:none;box-shadow:none;min-height:0;color:var(--text-secondary);font-size:12px}
+.guard-status[data-state=pending] p{margin:0}

@@ -111,7 +111,7 @@ test('upcoming center enables Studio and clearly labels probable lineups',async(
   const root=f.nodes.matchDetailContent;assert.match(textOf(root),/Muhtemel 11/);assert.match(textOf(root),/yerel tahmini/);const button=allNodes(root).find(n=>n.textContent==='Maçı Stüdyoda Aç');assert.equal(button.href,'/mac-studyosu?id=216231');page.dispose();
 });
 test('authenticated navigation uses Profile as the only account hub',()=>{
-  for(const name of ['index','studyo','karsilastirma','profil','maclar','mac','mac-studyosu','calismalarim']){
+  for(const name of ['index','studyo','profil','maclar','mac','mac-studyosu','calismalarim']){
     const html=read('dist/'+name+'.html');assert.match(html,/href="\/mac-studyosu"[^>]*>Stüdyo/);
     assert.match(html,/href="\/studyo.html"[^>]*>Taktik Tahtası/);
     assert.equal((html.match(/id="(?:profileSignOut|signOut)"/g)||[]).length,name==='profil'?1:0);

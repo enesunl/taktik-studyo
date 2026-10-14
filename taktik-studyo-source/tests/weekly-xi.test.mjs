@@ -111,7 +111,7 @@ for(const source of ['legacy','canonical'])test('weekly XI '+source+' UI: empty 
  fire(nodes(f,'weekly-slot')[0],'click');assert.equal(one(f,'weekly-picker').open,true);
  const search=allNodes(f.root).find(n=>n.type==='search');assert(search.focused);
  search.value='ismail';fire(search,'input');assert.equal(nodes(f,'weekly-result').length,1);assert(textOf(one(f,'weekly-result')).includes('Fenerbahçe'));
- fire(one(f,'weekly-result'),'click');assert.equal(one(f,'weekly-picker').open,false);assert.equal(nodes(f,'weekly-plus').length,10);assert.equal(nodes(f,'weekly-player-name')[0].textContent,'İsmail Yüksek');
+ fire(one(f,'weekly-result'),'click');assert.equal(one(f,'weekly-picker').open,false);assert.equal(nodes(f,'weekly-plus').length,10);assert.equal(nodes(f,'weekly-player-name')[0].textContent,'Yüksek');
  fire(nodes(f,'weekly-slot')[1],'click');const duplicate=nodes(f,'weekly-result').find(n=>n.dataset.playerId===model.players[1].id);assert.equal(duplicate.disabled,true);fire(duplicate,'click');assert.equal(nodes(f,'weekly-plus').length,10);
  search.value='galata';fire(search,'input');fire(one(f,'weekly-result'),'click');assert.equal(nodes(f,'weekly-plus').length,9);
  const formation=allNodes(f.root).find(n=>n.tagName==='select');formation.value='3-4-3';fire(formation,'change');assert.equal(nodes(f,'weekly-player-name').length,2);
@@ -134,7 +134,7 @@ test('weekly override is presentation-only; safe text render, empty search, stal
  let current=true,off=0;
  const f=fixture({current:()=>current,playerOverrides:{key:id=>'internal:'+id,effective:(_key,p)=>({...p,name:'<img onerror=bad> Custom',number:9}),subscribe:()=>()=>{off++;}}}),page=mountWeeklyXI(f.options);
  fire(nodes(f,'weekly-slot')[0],'click');const search=allNodes(f.root).find(n=>n.type==='search');search.value='missing';fire(search,'input');assert.equal(nodes(f,'weekly-result').length,0);
- search.value='custom';fire(search,'input');fire(one(f,'weekly-result'),'click');assert.equal(nodes(f,'weekly-player-name')[0].textContent,'<img onerror=bad> Custom');
+ search.value='custom';fire(search,'input');assert(textOf(one(f,'weekly-result')).includes('<img onerror=bad> Custom'));fire(one(f,'weekly-result'),'click');assert(nodes(f,'weekly-slot')[0].title.includes('<img onerror=bad> Custom'));assert.equal(nodes(f,'weekly-player-name')[0].textContent,'Custom');
  fire(one(f,'weekly-save'),'click');const stored=JSON.parse([...f.storage.data.values()][0]);assert.equal(stored.slots[0].player.name,'Victor Osimhen');
  const previous=[...f.storage.data.values()][0];current=false;fire(one(f,'weekly-save'),'click');assert.equal([...f.storage.data.values()][0],previous);page.dispose();assert.equal(off,1);
 });
@@ -158,7 +158,7 @@ test('weekly static shell is protected, has both route mappings and primary navi
  assert.match(read('dist/haftanin-ilk-11i.html'),/id="protectedContent"[^>]*hidden inert/);
  assert.match(read('dist/haftanin-ilk-11i.html'),/weekly-xi.css/);assert.doesNotMatch(read('dist/haftanin-ilk-11i.html'),/rosters.js/);
  assert.match(read('dist/_redirects'),/\/haftanin-ilk-11i \/haftanin-ilk-11i.html 200/);
- for(const file of ['index','studyo','karsilastirma','profil','maclar','mac','mac-studyosu','calismalarim'])assert.match(read('dist/'+file+'.html'),/href="\/haftanin-ilk-11i"/);
+ for(const file of ['index','studyo','profil','maclar','mac','mac-studyosu','calismalarim'])assert.match(read('dist/'+file+'.html'),/href="\/haftanin-ilk-11i"/);
 });
 
 test('weekly editorial controls replace/remove safely, preserve canonical identity and return focus',()=>{
@@ -171,7 +171,7 @@ test('weekly editorial controls replace/remove safely, preserve canonical identi
  assert.equal(allNodes(f.root).find(n=>n.id==='weeklyPickerTitle').textContent,'LB için oyuncu seç');
  const search=allNodes(f.root).find(n=>n.type==='search');assert.equal(search.placeholder,'Oyuncu ara…');assert(search.focused);
  search.value='ismail';fire(search,'input');assert.match(textOf(one(f,'weekly-result')),/Fenerbahçe · 5 · CM/);fire(one(f,'weekly-result'),'click');
- assert.equal(nodes(f,'weekly-player-name')[0].textContent,'İsmail Yüksek');assert.equal(nodes(f,'weekly-role')[1].textContent,'LB');assert(nodes(f,'weekly-slot')[1].focused);
+ assert.equal(nodes(f,'weekly-player-name')[0].textContent,'Yüksek');assert.equal(nodes(f,'weekly-role')[1].textContent,'LB');assert(nodes(f,'weekly-slot')[1].focused);
  fire(one(f,'weekly-save'),'click');const saved=JSON.parse([...f.storage.data.values()][0]);
  assert.equal(saved.slots[1].player.id,model.players[1].id);assert.equal(saved.slots[1].player.specificPosition,'CM');assert.equal(saved.slots[1].role,'LB');assert.equal(saved.version,2);
  assert.doesNotMatch(JSON.stringify(saved),/fotmob|athleteId|providerId/i);
@@ -211,7 +211,7 @@ test('weekly composition separates artwork from controls; long names stay availa
  const f=fixture(),longName='A very long footballer name for readable title and accessible player labeling';
  f.options.catalogue={...f.options.catalogue,model:{...model,players:model.players.map((p,i)=>i===0?{...p,name:longName}:p)}};
  const page=mountWeeklyXI(f.options),b=pickFirst(f);
- assert(b.title.includes(longName));assert(b.attrs['aria-label'].includes(longName));assert.equal(one(f,'weekly-player-name').textContent,longName);
+ assert(b.title.includes(longName));assert(b.attrs['aria-label'].includes(longName));assert.equal(one(f,'weekly-player-name').textContent,'labeling');
  const composition=one(f,'weekly-workspace');assert.equal(composition.dataset.composition,'weekly-xi');
  assert.equal(allNodes(composition).some(n=>n.className==='weekly-controls'),false);
  assert.equal(one(f,'weekly-toolbar').dataset.editControl,'true');assert.equal(one(f,'weekly-slot-actions').dataset.editControl,'true');

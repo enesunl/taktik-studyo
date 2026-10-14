@@ -226,22 +226,9 @@ console.log('PASS: bench drop substitutes at target slot, invalid drops do nothi
  assert.deepEqual(editorModes,['edit']);
  assert.deepEqual(benchModes,[true]);
  assert.equal(control(routedRoot,'activeTeam').textContent,readDraft(storage,userDraftKey(userA,'main')).team.name);
- document.getElementById('comparisonLink').listeners.click();assert.match(document.getElementById('comparisonLink').href,/^karsilastirma.html\?sol=/);
  control(routedRoot,'resetPositions').onclick?.();
- stopStudio();assert.equal(routedRoot.children.length,0);assert.equal(document.getElementById('comparisonLink').listeners.click,undefined);routedScope.dispose();
- document.getElementById('boardTemplate').content=new Element();
- Object.defineProperty(Element.prototype,'options',{get(){return this.children;}});
- context.location={search:''};vm.runInContext(fs.readFileSync(dir+'comparison.js','utf8'),context);
- assert.equal(document.getElementById('leftBoard').children.length,0,'comparison definition cannot auto-mount');
- const comparisonScope=createUserDraftScope({userId:userB,storage});
- const stopComparison=context.window.TAKTIK_COMPARISON.mount({context:slot=>scopedContext(comparisonScope,slot)});
- assert.deepEqual(editorModes,['edit','edit','edit']);context.window.createTacticsBoard=createBoard;
- assert.deepEqual(benchModes,[true,true,true]);
- assert.equal(document.getElementById('leftFormation').value,'3-4-3');assert.equal(document.getElementById('rightFormation').value,'4-2-3-1');
- document.getElementById('leftFormation').value='4-4-2';document.getElementById('leftFormation').listeners.change();flush();
- assert.equal(readDraft(storage,userDraftKey(userB,'left')).formation,'4-4-2');assert.equal(readDraft(storage,userDraftKey(userB,'right')).formation,'4-2-3-1');
- comparisonScope.dispose();stopComparison();
- assert.equal(document.getElementById('leftBoard').children.length,0);assert.equal(document.getElementById('leftTeam').listeners.change,undefined);
- console.log('PASS: studio/comparison route mount APIs restore user drafts, preserve independent controls and clean up without automatic bootstrap.');
+ stopStudio();assert.equal(routedRoot.children.length,0);routedScope.dispose();
+ context.window.createTacticsBoard=createBoard;
+ console.log('PASS: Studio route mount API restores user drafts, preserves controls and clean up without automatic bootstrap.');
 
 })().catch(error=>{console.error(error);process.exitCode=1;});

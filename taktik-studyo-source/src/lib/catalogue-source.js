@@ -9,7 +9,7 @@ export function createCatalogueSource({config,client,window,fetchImpl}){
  const source=config?.source??'legacy';if(!['legacy','canonical'].includes(source))throw catalogueError('catalogue_malformed');
  const canonical=source==='canonical',dataClient=canonical?createLocalCatalogueClient({auth:client?.auth,origin:window.location.origin,fetchImpl}):client;
  const reader=canonical?createCanonicalCatalogue(dataClient):createCatalogue(client);
- let data,defaults={},pending;
+ let data,defaults={},pending,defaultsReady=null;
  function install(model,legacy){
   data=model;
   // Classic board wire model keeps its strict snapshot shape; canonical metadata
@@ -18,7 +18,7 @@ export function createCatalogueSource({config,client,window,fetchImpl}){
   window.TAKTIK_ROSTERS=canonical?{teams:Object.fromEntries(model.teams.map(t=>[t.name,{identity:'internal',teamId:t.id,players:model.players.filter(p=>p.teamId===t.id).map(p=>({...p,position:p.positionGroup}))}]))}:{...window.TAKTIK_ROSTERS,teams:legacy.rosters};
   if(canonical)window.TAKTIK_CATALOGUE_RUNTIME=api;
  }
- const api={source,canonical,dataClient:canonical?dataClient:undefined,get model(){return data;},
+ const api={source,canonical,dataClient:canonical?dataClient:undefined,get model(){return data;},get defaultsReady(){return defaultsReady;},
   validateMatch(match){
    const people=['home','away'].flatMap(side=>['lineups','studioLineups'].flatMap(kind=>['starters','substitutes'].flatMap(group=>match[kind]?.[side]?.[group]||[])));
    for(const e of [...(match.incidents||[]),...(match.substitutions||[])])people.push(...[e.player,e.incoming,e.outgoing].filter(Boolean));
@@ -31,8 +31,11 @@ export function createCatalogueSource({config,client,window,fetchImpl}){
    if(pending)return pending;
    pending=(async()=>{
     if(!canonical&&!client)return;
+    // Recent confirmed XIs can require multiple provider detail calls. The
+    // catalogue is sufficient for a usable board; enrichment never remounts it.
+    if(canonical&&!defaultsReady)defaultsReady=dataClient.request('defaults').then(context=>{if(!context.error&&context.data)defaults=context.data;}).catch(()=>{});
     const result=await reader.load();
-    if(canonical){const context=await dataClient.request('defaults');if(context.error)throw catalogueError(context.error.code);defaults=context.data;install(result);}
+    if(canonical){install(result);}
     else install({teams:result.teams.map((t,i)=>({id:t.id,name:t.name,shortName:t.short,color:t.color,color2:t.color2,sortOrder:i,catalogueActive:true})),players:result.teams.flatMap(t=>result.rosters[t.name].players.map(p=>({id:p.id,teamId:t.id,name:p.name,number:p.number,positionGroup:p.position,specificPosition:null,catalogueActive:true})))},result);
     return data;
    })().catch(e=>{pending=null;throw e;});return pending;

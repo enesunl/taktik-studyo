@@ -178,7 +178,7 @@ test('profile markup has accessible labels, status, keyboard submit and no extra
   assert.doesNotMatch(html,/avatar_url|type="password"|type="email"/);
   const ui=readFileSync(new URL('../src/lib/profile-ui.js',import.meta.url),'utf8');assert.doesNotMatch(ui,/innerHTML|localStorage|sessionStorage/);
   const api=readFileSync(new URL('../src/lib/profile-api.js',import.meta.url),'utf8');assert.doesNotMatch(api,/\.upsert\(|\.updateUser\(|\.eq\('username'/);
-  assert.match(html,/href="\/calismalarim">Tüm çalışmalarımı gör/);assert.match(html,/href="\/haftanin-ilk-11i">İlk 11 Oluştur/);
+  assert.match(html,/href="\/calismalarim">Tüm çalışmalarımı gör/);assert.match(html,/href="\/ilk-11lerim">Hepsini gör/);
   assert.match(html,/id="profileInitials"[^>]+aria-hidden="true"/);assert.doesNotMatch(html,/profile-quick|Çalışma kısayolları|Yeni stüdyo çalışması/);
   assert.match(html,/href="\/studyo.html">Taktik Tahtasını Aç/);assert.match(html,/href="\/mac-studyosu">Maç Stüdyosunu Aç/);
   assert.equal((html.match(/<h1\b/g)||[]).length,1);assert.doesNotMatch(html,/subscription|weekly_xi_history|Yakında/);

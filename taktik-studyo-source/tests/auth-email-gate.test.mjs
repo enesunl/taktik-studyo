@@ -59,7 +59,7 @@ function route(f,path) {
 }
 
 test('all three protected routes block unconfirmed restore before profile/catalogue/scope/import/board',async()=>{
-  for(const path of ['/studyo.html','/karsilastirma.html','/profil.html']){
+  for(const path of ['/studyo.html','/profil.html']){
     const f=setup(session);f.userResult={data:{user:unconfirmed}};const r=route(f,path);await r.page.ready;await tick();
     assert.deepEqual(r.calls,{catalogue:0,board:0,storage:0,legacy:0,navigate:[loginUrl(path)+'&reason=email_not_confirmed']});
     assert.equal(r.document.mounts.length,0);assert.equal(r.nodes.protectedContent.hidden,true);assert.equal(f.calls.select.length,0);

@@ -46,8 +46,26 @@ test('system changes follow only without explicit choice; cross-tab values are v
 test('blocked storage and missing media query cannot block initialization/toggle',()=>{
   const f=theme({blocked:true,noMedia:true});assert.equal(f.current(),'light');f.ready();f.buttons[0].click();assert.equal(f.current(),'dark');assert.equal(f.network(),0);
 });
+
+test('toggle presentation follows pre-paint theme, transitions only on explicit clicks across reload/navigation',()=>{
+ const css=readFileSync(new URL('../dist/theme.css',import.meta.url),'utf8');
+ assert.match(css,/:root\[data-theme=dark\] \.theme-toggle\{background-position:39px center!important\}/);
+ assert.match(css,/:root\[data-theme=dark\] \.theme-toggle::after/);
+ assert.match(css,/\.theme-toggle\[data-theme-animate=true\]\{transition:background-position \.18s ease\}/);
+ assert.doesNotMatch(css,/\.theme-toggle\[aria-pressed=true\]\{background-position/);
+ for(const saved of ['dark','light']){
+  const store=new Map([['taktik:theme:v1',saved]]);
+  for(const route of ['Home','Studio','Taktik Tahtası','Weekly XI','Profile','Home','refresh']){
+   const f=theme({store});assert.equal(f.current(),saved,route);
+   f.ready();assert(f.buttons.every(b=>b.attrs['aria-pressed']===String(saved==='dark')&&b.attrs['data-theme-animate']==='false'));
+   f.buttons[0].click();assert(f.buttons.every(b=>b.attrs['data-theme-animate']==='true'));assert.notEqual(f.current(),saved);
+   f.storage(saved);assert.equal(f.current(),saved);assert(f.buttons.every(b=>b.attrs['data-theme-animate']==='false'));
+   store.set('taktik:theme:v1',saved);
+  }
+ }
+});
 test('every HTML entry includes synchronous pre-CSS theme init, shared tokens and a labeled native toggle',()=>{
-  const files=readdirSync(new URL('../dist/',import.meta.url)).filter(f=>f.endsWith('.html'));assert.equal(files.length,15);assert.ok(files.includes('hos-geldin.html'));assert.ok(files.includes('haftanin-ilk-11i.html'));
+  const files=readdirSync(new URL('../dist/',import.meta.url)).filter(f=>f.endsWith('.html')&&f!=='karsilastirma.html');assert.equal(files.length,15);assert.ok(files.includes('hos-geldin.html'));assert.ok(files.includes('haftanin-ilk-11i.html'));
   for(const file of files){
     const html=readFileSync(new URL('../dist/'+file,import.meta.url),'utf8'),head=html.split('</head>')[0];
     assert.equal((head.match(/src="theme.js"/g)||[]).length,1,file);assert.match(head,/<script src="theme.js"><\/script>/);

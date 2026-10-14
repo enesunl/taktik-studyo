@@ -66,7 +66,7 @@ test('all requested full-eleven formations project exact slot positions without 
   let state=changeWeeklyFormation(emptyWeeklyXI(),shape);for(let i=0;i<11;i++)state=pickWeeklyPlayer(state,i,{...player,id:player.id.slice(0,-2)+String(i).padStart(2,'0'),name:'Oyuncu '+i});
   state=moveWeeklySlot(state,0,53.5,88);const before=JSON.stringify(state),svg=graphic(f,state);
   assert.equal(allNodes(svg).filter(n=>n.tagName==='path').length,22);
-  assert(allNodes(svg).some(n=>n.tagName==='svg'&&n.attrs.x===String(510+53.5*9-32)));
+  assert(allNodes(svg).some(n=>n.tagName==='g'&&n.attrs.transform===`translate(${53.5*7.36} ${88*7.5})`));
   assert.equal(JSON.stringify(state),before);
  }
 });

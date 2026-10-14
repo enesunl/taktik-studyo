@@ -83,7 +83,7 @@ test('real SDK login persists a session that a fresh controller restores and val
   } finally {await (reload||login).dispose();}
 });
 
-for (const path of ['/studyo.html','/profil.html','/karsilastirma.html','/studyo','/profil','/karsilastirma']) {
+for (const path of ['/studyo.html','/profil.html','/studyo','/profil']) {
   test(`persisted-session protected bootstrap reaches server validation and ready: ${path}`,{timeout:3000},async()=>{
     const f = sdkFixture(), page = pageFixture(f,path);
     const mounted = startPage(page.options);
@@ -127,7 +127,7 @@ test('logout during pending server validation closes locally and never mounts st
 });
 
 test('pretty protected aliases map to canonical safe-next paths without broad path matching',()=>{
-  for(const [alias,page] of [['/studyo','studio'],['/profil','profile'],['/karsilastirma','comparison']]) {
+  for(const [alias,page] of [['/studyo','studio'],['/profil','profile']]) {
     assert.deepEqual(resolvePage({pathname:alias}),{kind:'protected',page,path:alias+'.html'});
     for(const path of [alias+'/extra',alias+'-evil',alias.toUpperCase(),'/%'+alias.slice(1),'/evil'+alias])
       assert.notEqual(resolvePage({pathname:path}).kind,'protected');

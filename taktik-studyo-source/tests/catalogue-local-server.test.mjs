@@ -12,7 +12,7 @@ test('D3 explicit local switch serves canonical config, removes legacy scripts/a
  try{
   await new Promise((resolve,reject)=>{timer=setTimeout(()=>reject(Error('Canonical local startup timed out')),5000);server.once('error',reject);server.once('exit',()=>reject(Error('Canonical local exited early')));server.stdout.on('data',s=>{if(s.toString().includes('Taktik Studyo:'))resolve();});});
   const origin='http://127.0.0.1:'+port;
-  for(const path of ['/studyo','/karsilastirma','/mac-studyosu','/mac']){
+  for(const path of ['/studyo','/mac-studyosu','/mac']){
    const html=await (await fetch(origin+path)).text();assert.match(html,/\/__local\/catalogue-config.js/);assert.doesNotMatch(html,/<script src="rosters.js"|tff\.org|Takım listesi:/);assert.match(html,/hidden inert/);
   }
   const config=await(await fetch(origin+'/__local/catalogue-config.js')).text();assert.equal(config,'window.TAKTIK_CATALOGUE_CONFIG=Object.freeze({source:"canonical"});');

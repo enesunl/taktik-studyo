@@ -66,9 +66,7 @@ test('wider classic pitches keep drag positions normalized, with independent boa
  const moved=a.board.getState().players[5];assert.ok(Math.abs(moved.x-p.x-5)<.00001);assert.ok(Math.abs(moved.y-p.y-5)<.00001);
  assert.equal(JSON.stringify(b.board.getState()),other);assert.ok(a.board.getState().players.every(p=>p.x>=9&&p.x<=91&&p.y>=9&&p.y<=92));
 });
-test('Comparison and expanded workspace keep top selectors, equal responsive sizing and contained scrolling',()=>{
- const html=read('dist/karsilastirma.html'),css=read('dist/comparison.css'),expanded=read('dist/styles.css');
- assert.doesNotMatch(html,/Dizilişini kur|data-control="formationList"|data-control="customFormation"/);assert.match(html,/id="leftFormation"/);assert.match(html,/id="rightFormation"/);
- assert.match(read('dist/comparison.js'),/benchOnly:true/);assert.match(css,/max-width:516px/);assert.match(css,/container-type:inline-size/);assert.match(css,/\.comparison-scroll\{overflow-x:auto/);assert.match(css,/grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\)/);
+test('expanded workspace keeps responsive sizing and contained scrolling',()=>{
+ const expanded=read('dist/styles.css');
  assert.match(expanded,/max-width:802px/);assert.match(expanded,/height:96dvh/);assert.match(expanded,/\.expanded-center\{min-height:0;overflow:hidden/);assert.match(expanded,/5\.8dvh/);assert.match(expanded,/overscroll-behavior:contain/);
 });

@@ -19,7 +19,7 @@
 .weekly-slots{position:absolute;inset:0}.weekly-slot{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;width:var(--slot-width,18%);max-width:116px;padding:2px 0;border:0;background:transparent;color:#f2f7ed;cursor:pointer;min-height:60px}
 .weekly-plus{display:grid;place-items:center;width:clamp(34px,4vw,48px);height:clamp(34px,4vw,48px);border-radius:50%;border:1px solid #d4edb790;background:#102b205c;font-size:30px;line-height:1;font-weight:300;transition:background .15s,transform .15s}
 .weekly-slot:hover .weekly-plus,.weekly-slot:focus-visible .weekly-plus{background:var(--action-text);color:var(--action-bg);border-color:var(--action-text);transform:scale(1.08)}.weekly-slot-group:hover .player-jersey,.weekly-slot-group:focus-within .player-jersey{outline:1px solid #dfedcf99;outline-offset:3px;border-radius:6px}
-.weekly-role{font-size:10px;font-weight:750;letter-spacing:1px;color:#dfedcf}.weekly-slot .player-jersey{width:44px;height:44px;margin:0}.weekly-player-name{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;line-height:18px;font-weight:700;background:#102b20d9;padding:0 4px;border-radius:3px}
+.weekly-role{font-size:10px;font-weight:750;letter-spacing:1px;color:#dfedcf}.weekly-slot .player-jersey{width:44px;height:44px;margin:0}.weekly-player-name{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;line-height:18px;font-weight:600;background:#102d20d9;padding:3px 6px;border-radius:4px;color:#fff}
 .weekly-count{display:block;text-align:center;padding-top:12px;letter-spacing:2px;font-size:10px;font-weight:750;color:var(--text-secondary)}
 /* Decorative composition is isolated from toolbar, modal and edit controls. */
 .weekly-poster{position:relative;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;min-width:0;padding:22px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
@@ -52,3 +52,18 @@
 .week-xi-export-surface>svg{display:block;width:100%;height:auto}
 .weekly-preview :focus-visible{outline:3px solid var(--focus);outline-offset:3px}
 @media(max-width:600px){.weekly-preview{padding:16px 8px}.weekly-preview-controls{gap:8px}.weekly-preview-controls h2{width:100%;font-size:16px}.weekly-preview-status{font-size:12px}}
+
+/* Shared vector pitch is the visual surface; buttons remain accessible controls. */
+.weekly-pitch{background:none;border:0;aspect-ratio:736/750}
+.weekly-pitch-visual{position:absolute;inset:0;pointer-events:none}
+.weekly-pitch-visual>svg{display:block;width:100%;height:100%}
+.weekly-pitch .weekly-markings{display:none}
+.weekly-slot[data-filled=true]>.player-jersey,.weekly-slot[data-filled=true]>.weekly-player-name,.weekly-slot[data-filled=true]>.weekly-role{visibility:hidden}
+.weekly-slot[data-filled=true]{aspect-ratio:116/100;min-height:0}
+.weekly-slot:focus-visible{outline:2px solid #dfedcf;border-radius:8px}
+.weekly-player-name{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;overflow-wrap:anywhere;line-height:1.15;max-height:2.3em}
+.weekly-record-details{display:flex;align-items:end;gap:14px;flex-wrap:wrap;margin:0 0 20px;font-size:12px}
+.weekly-record-details label{display:grid;gap:6px;min-width:0;color:var(--text-secondary)}
+.weekly-record-details input{width:130px;max-width:100%;padding:8px;border:1px solid var(--border);border-radius:5px;background:var(--bg-surface);color:var(--text-primary)}
+.weekly-record-details label:first-child input{width:230px}.weekly-record-details button{padding:8px;border:0;border-bottom:1px solid var(--border);background:none;color:var(--text-primary)}
+@media(max-width:540px){.weekly-record-details label:first-child{width:100%}.weekly-record-details label:first-child input{width:100%}}

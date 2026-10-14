@@ -1,3 +1,4 @@
+import {weeklyRecordLink} from './weekly-lineups-ui.js';
 import {mountProfileFavorite} from './profile-favorite-ui.js';
 
 const messages = {
@@ -15,7 +16,7 @@ export function profileInitials(name){
   return letters.normalize('NFD').replace(/\p{M}/gu,'').toLocaleUpperCase('en-US')||'TS';
 }
 
-export function mountProfile({document,api,validatedUser,current,projects,onSignOut,catalogue}) {
+export function mountProfile({document,api,validatedUser,current,projects,onSignOut,catalogue,weeklyRecords,weeklyStores=[],eventTarget}) {
   const root = document.getElementById('profileContent');
   root.replaceChildren(document.getElementById('profileTemplate').content.cloneNode(true));
   const form = root.querySelector('form'), username = root.querySelector('#profileUsername');
@@ -42,6 +43,30 @@ export function mountProfile({document,api,validatedUser,current,projects,onSign
   };
   apply(null);
   const node=(tag,text)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;};
+  const weekly=root.querySelector('#profileWeeklySaved'),weeklyStatus=root.querySelector('#profileWeeklyStatus');
+  function loadWeekly(){
+    if(!active()||!weekly)return;
+    if(weeklyRecords)return loadServerWeekly();
+    weekly.replaceChildren();let failed=false;
+    for(const store of weeklyStores){
+      const result=store.read();if(!result.ok){failed=true;continue;}if(!result.state)continue;
+      const {state,entry}=result,open=node('a'),copy=node('div');open.className='profile-weekly-entry';
+      open.href='/haftanin-ilk-11i?saved='+entry.id;
+      copy.append(node('h3','Kaydedilmiş ilk 11'),node('p',state.formation+' · '+state.slots.filter(s=>s.player).length+'/11 oyuncu'));
+      const time=node('time',entry.updatedAt?new Intl.DateTimeFormat('tr-TR',{dateStyle:'medium',timeStyle:'short'}).format(new Date(entry.updatedAt)):'Kayıt tarihi mevcut değil');
+      if(entry.updatedAt)time.setAttribute('datetime',entry.updatedAt);
+      open.setAttribute('aria-label',state.formation+' dizilişindeki kaydedilmiş ilk 11’i aç');
+      open.append(copy,time,node('span','Aç →'));weekly.append(open);
+    }
+    weeklyStatus.textContent=failed?'Bu tarayıcıdaki bazı kayıtlar okunamadı.':weekly.children.length?'':'Henüz kaydedilmiş bir ilk 11’in yok.';
+  }
+  async function loadServerWeekly(){
+    weekly.replaceChildren();weeklyStatus.textContent='Kadrolar yükleniyor…';
+    let r;try{r=await weeklyRecords.list(0,4);}catch{}if(!active())return;
+    if(!r?.ok){weeklyStatus.textContent='Kaydedilmiş ilk 11’ler şu anda yüklenemedi. Hepsini gör bağlantısından tekrar deneyebilirsin.';return;}
+    weekly.replaceChildren(...r.records.map(row=>weeklyRecordLink(document,row)));
+    weeklyStatus.textContent=r.records.length?'':'Henüz hesabına kaydedilmiş bir ilk 11’in yok.';
+  }
   async function loadProjects(){
     if(!active()||projectsBusy)return;projectsBusy=true;stats.hidden=true;empty.hidden=true;recent.replaceChildren();projectRetry.hidden=true;
     recent.setAttribute('aria-busy','true');projectStatus.textContent='Çalışmalar yükleniyor…';
@@ -103,6 +128,7 @@ export function mountProfile({document,api,validatedUser,current,projects,onSign
   function dispose() {
     if (disposed) return;
     favorite?.dispose();
+    eventTarget?.removeEventListener('storage',loadWeekly);
     disposed = true; form.hidden = true; form.inert = true; apply(null); email.textContent = ''; status.textContent = '';
     form.removeEventListener('submit',submit); retry.removeEventListener('click',load);
     edit.removeEventListener('click',editProfile);accountEdit.removeEventListener('click',editProfile);cancel.removeEventListener('click',cancelEdit);logout.removeEventListener('click',signOut);projectRetry.removeEventListener('click',loadProjects);
@@ -112,6 +138,7 @@ export function mountProfile({document,api,validatedUser,current,projects,onSign
   edit.addEventListener('click',editProfile);accountEdit.addEventListener('click',editProfile);cancel.addEventListener('click',cancelEdit);logout.addEventListener('click',signOut);projectRetry.addEventListener('click',loadProjects);
   const favoriteRoot=root.querySelector('#profileFavorite');
   const favorite=favoriteRoot&&catalogue?mountProfileFavorite({document,root:favoriteRoot,initials,api,catalogue,current:active}):null;
-  const ready = Promise.all([load(),loadProjects()]);
+  const ready = Promise.all([load(),loadProjects(),loadWeekly()]);
+  eventTarget?.addEventListener('storage',loadWeekly);
   return {ready,favoriteReady:favorite?.ready,dispose};
 }

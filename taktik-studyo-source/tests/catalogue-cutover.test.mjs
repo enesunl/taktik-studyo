@@ -57,18 +57,12 @@ test('D4 clean room: no old catalogue, aliases or roster script; actual SQL and 
    p.listeners.pointerdown({button:0,currentTarget:p,clientX:100,clientY:100,pointerId:1});p.listeners.pointermove({clientX:120,clientY:90});p.listeners.pointerup({type:'pointerup',clientX:120,clientY:90});
    assert.notEqual(left.board.getState().players[1].x,start);assert.equal(JSON.stringify(right.board.getState()),before);assert.doesNotMatch(control(left.root,'squadSource').textContent,/FotMob|TFF/);
   });
-  await t.test('actual Comparison mount uses canonical IDs in two isolated scoped boards',()=>{
-   const nodes={},document=classic.context.document;document.getElementById=id=>nodes[id]??=new Element();
-   nodes.boardTemplate={content:{cloneNode:()=>new Element()}};
-   for(const id of ['leftTeam','rightTeam','leftFormation','rightFormation'])Object.defineProperty(document.getElementById(id),'options',{get(){return this.children;}});
-   classic.context.location={search:''};const boards=[],original=classic.context.window.createTacticsBoard;
-   classic.context.window.createTacticsBoard=(root,opts)=>{const board=original(root,opts);boards.push(board);return board;};
+  await t.test('canonical scoped boards still restore isolated legacy left/right drafts',()=>{
    const scope=createUserDraftScope({userId:owner,storage:{getItem(){return null;},setItem(){}},isCurrent:()=>true});
-   vm.runInContext(readFileSync(new URL('../dist/comparison.js',import.meta.url),'utf8'),classic.context);
-   const dispose=classic.context.window.TAKTIK_COMPARISON.mount(scope);
-   assert.equal(boards.length,2);assert(boards.every(b=>b.getState().players.every(p=>internalPlayerId(p.athleteId))));
-   const before=JSON.stringify(boards[1].getState());boards[0].selectTeam('Beşiktaş');assert.equal(JSON.stringify(boards[1].getState()),before);
-   dispose();scope.dispose();classic.context.window.createTacticsBoard=original;
+   const boards=['left','right'].map(slot=>classic.create({draftContext:scope.context(slot)}).board);
+   assert(boards.every(b=>b.getState().players.every(p=>internalPlayerId(p.athleteId))));
+   const before=JSON.stringify(boards[1].getState());boards[0].selectTeam('Fenerbahçe');assert.equal(JSON.stringify(boards[1].getState()),before);
+   scope.dispose();assert.throws(()=>boards[0].getState());assert.throws(()=>boards[1].getState());
   });
   await t.test('Free Studio selector and Match Studio page mount canonical players; no rosters.js dependency',async()=>{
    const f=matchBoardDocument('/mac-studyosu'),rt=make(f.window);await rt.load();
