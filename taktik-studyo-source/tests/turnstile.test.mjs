@@ -21,5 +21,8 @@ test('Edge factory has no default verification bypass and reports only readiness
  const handler=createHandler({client:{rpc(){throw Error('must not write')}},origins:[origin],publicKey:'public-test',rateSalt:'test-only'});
  const preflight=await handler(new Request(origin,{method:'OPTIONS',headers:{origin}}));assert.equal(preflight.headers.get('X-Sharing-Ready'),'false');
  const payload={team_name:'Test',formation:'4-3-3',lineup_data:{team:{name:'Test',short:'T',color:'#123456',color2:'#abcdef'},customized:false,players:Array.from({length:11},(_,id)=>({id,x:50,y:50,role:'MO',name:'Test',number:id+1,renamed:false}))},drawing_data:[]};
- const result=await handler(new Request(origin,{method:'POST',headers:{origin,apikey:'public-test','content-type':'application/json'},body:JSON.stringify(payload)}));assert.equal(result.status,403);
+ const result=await handler(new Request(origin,{method:'POST',headers:{origin,apikey:'public-test','content-type':'application/json'},body:JSON.stringify(payload)}));assert.equal(result.status,401);
+ // ACCOUNT1: a verified user still cannot write without the default-deny bot verification.
+ const verified=createHandler({client:{rpc(){throw Error('must not write')}},origins:[origin],publicKey:'public-test',rateSalt:'test-only',authenticate:async()=>({id:'11111111-1111-4111-8111-111111111111',email_confirmed_at:'2026-10-14T00:00:00Z'})});
+ const denied=await verified(new Request(origin,{method:'POST',headers:{origin,apikey:'public-test','content-type':'application/json',authorization:'Bearer jwt'},body:JSON.stringify(payload)}));assert.equal(denied.status,403);
 });

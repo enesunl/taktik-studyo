@@ -22,8 +22,9 @@ test('strict share validation rejects unknown fields, bad types, duplicates, coo
 test('Edge handler validates bytes, types, origins, methods and public app key before writing',async()=>{
   let writes=0,limited=false;
   const id='01234567-89ab-4cde-8fab-0123456789ab';
-  const handler=createHandler({client:{rpc:async()=>{writes++;return {data:limited?null:id,error:null};}},origins:['https://app.test'],publicKey:'sb_publishable_test',rateSalt:'server-test-salt',verifyBot:async()=>true,sharingReady:true});
-  const send=(body,headers={},method='POST')=>handler(new Request('https://db.test/functions/v1/lineups',{method,headers:{origin:'https://app.test',apikey:'sb_publishable_test','content-type':'application/json',...headers},body:method==='POST'?body:undefined}));
+  const handler=createHandler({client:{rpc:async(name,args)=>{assert.equal(args.owner,'11111111-1111-4111-8111-111111111111');writes++;return {data:limited?null:id,error:null};}},origins:['https://app.test'],publicKey:'sb_publishable_test',rateSalt:'server-test-salt',verifyBot:async()=>true,sharingReady:true,
+    authenticate:async token=>token==='jwt'?{id:'11111111-1111-4111-8111-111111111111',email_confirmed_at:'2026-10-14T00:00:00Z'}:token==='unconfirmed'?{id:'22222222-2222-4222-8222-222222222222',email_confirmed_at:null}:null});
+  const send=(body,headers={},method='POST')=>handler(new Request('https://db.test/functions/v1/lineups',{method,headers:{origin:'https://app.test',apikey:'sb_publishable_test','content-type':'application/json',authorization:'Bearer jwt',...headers},body:method==='POST'?body:undefined}));
   assert.equal((await send(JSON.stringify(toShare(fixture())))).status,201);assert.equal(writes,1);
   assert.equal((await send('{bad')).status,400);
   assert.equal((await send(JSON.stringify({...toShare(fixture()),admin:true}))).status,400);
@@ -33,6 +34,8 @@ test('Edge handler validates bytes, types, origins, methods and public app key b
   assert.equal((await send('{}',{origin:'https://evil.test'})).status,403);
   assert.equal((await send('{}',{apikey:'wrong'})).status,401);
   assert.equal((await send(null,{},'DELETE')).status,405);assert.equal(writes,1);
+  for(const authorization of ['','Bearer','Bearer bad','Bearer unconfirmed','Basic jwt'])assert.equal((await send(JSON.stringify(toShare(fixture())),{authorization})).status,401,authorization);
+  assert.equal(writes,1);
   limited=true;assert.equal((await send(JSON.stringify(toShare(fixture())))).status,429);
 });
 test('catalogue maps existing models and caches concurrent calls without N+1',async()=>{

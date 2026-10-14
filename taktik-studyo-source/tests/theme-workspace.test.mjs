@@ -65,7 +65,7 @@ test('toggle presentation follows pre-paint theme, transitions only on explicit 
  }
 });
 test('every HTML entry includes synchronous pre-CSS theme init, shared tokens and a labeled native toggle',()=>{
-  const files=readdirSync(new URL('../dist/',import.meta.url)).filter(f=>f.endsWith('.html')&&f!=='karsilastirma.html');assert.equal(files.length,15);assert.ok(files.includes('hos-geldin.html'));assert.ok(files.includes('haftanin-ilk-11i.html'));
+  const files=readdirSync(new URL('../dist/',import.meta.url)).filter(f=>f.endsWith('.html')&&f!=='karsilastirma.html');assert.equal(files.length,20);for(const page of ['kvkk-aydinlatma-metni','gizlilik-politikasi','kullanim-kosullari','cerez-politikasi','iletisim'])assert.ok(files.includes(page+'.html'),page);assert.ok(files.includes('hos-geldin.html'));assert.ok(files.includes('haftanin-ilk-11i.html'));
   for(const file of files){
     const html=readFileSync(new URL('../dist/'+file,import.meta.url),'utf8'),head=html.split('</head>')[0];
     assert.equal((head.match(/src="theme.js"/g)||[]).length,1,file);assert.match(head,/<script src="theme.js"><\/script>/);

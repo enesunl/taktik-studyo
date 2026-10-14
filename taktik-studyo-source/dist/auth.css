@@ -18,4 +18,12 @@ a { color: var(--text-primary); text-underline-offset: 4px; }
 .message { line-height: 1.6; color: var(--notice); overflow-wrap: anywhere; }
 .message:empty, .profile-message:empty { display: none; }
 noscript { display: block; margin-top: 16px; line-height: 1.5; }
+/* LEGAL1: privacy notice, separate Terms checkbox and legal links. */
+.legal-notice { margin: 22px 0 10px; }
+.terms-field { display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: start; gap: 10px; margin: 0; }
+.terms-field input { width: 20px; height: 20px; margin: 1px 0 0; padding: 0; accent-color: var(--focus); }
+.terms-field label { margin: 0; font-weight: 500; font-size: .9rem; line-height: 1.5; }
+.legal-links { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); font-size: .78rem; }
+.legal-links a { color: var(--text-secondary); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 @media (max-width: 400px) { .auth-card { padding: 24px; } }

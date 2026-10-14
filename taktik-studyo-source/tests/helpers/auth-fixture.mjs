@@ -47,6 +47,8 @@ export function pageFixture(page = 'callback', search = '?token_hash=fake-token-
   if (page !== 'callback') fields.authForm = element();
   fields.email.value = credentials.email; fields.password.value = credentials.password;
   fields.passwordConfirmation.value = credentials.password; fields.username.value = credentials.username;
+  // Register pages include the LEGAL1 Terms checkbox; fixtures model a user who accepted it.
+  if (page === 'register') {fields.termsAccepted = element(); fields.termsAccepted.checked = true;}
   const events = element(), historyCalls = [], calls = [];
   const f = {fields,events,calls,state:{status:'signed_out',user:null}};
   f.api = {async initialize(){return {ok:true};},getState:() => f.state,

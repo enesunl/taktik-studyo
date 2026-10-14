@@ -21,8 +21,9 @@ import {createMatchDetailApi} from './match-detail.js';
 import {mountMatchDetail} from './match-detail-ui.js';
 import {mountMatchStudio} from './match-studio-ui.js';
 import {createPlayerOverrides} from './player-overrides.js';
+import {clearUserData} from './account-delete.js';
 
-export function startPage({auth,document,window,backend,client}) {
+export function startPage({auth,document,window,backend,client,accountDeletion}) {
   const route = resolvePage(window.location);
   if(route.kind === 'retired') {window.location.replace(route.destination);return;}
   if (route.kind === 'shared' || route.kind === 'share_error') {
@@ -97,7 +98,17 @@ export function startPage({auth,document,window,backend,client}) {
         const api = createProfileApi({client,validatedUser,current,teamCatalogue});
         let weeklyStorage;try{weeklyStorage=window.localStorage;}catch{}
         const weeklyStores=['canonical','legacy'].map(source=>createWeeklyStore({userId:validatedUser.id,source,storage:weeklyStorage,current}));
-        return mountProfile({document,api,validatedUser,current,weeklyRecords,weeklyStores,eventTarget:window,catalogue:teamCatalogue,projects:createStudioProjects({client,validatedUser,current}),onSignOut:()=>guard.signOut()}).dispose;
+        // ACCOUNT1: runs only after the server confirmed the verified deletion. Stop the guard first so it
+        // cannot redirect to login, end the local session, clear this user's keys, then go Home.
+        const onDeleted=async()=>{
+          const userId=validatedUser.id;guard.dispose();
+          try{await auth.signOut();}catch{}
+          let local,session;try{local=window.localStorage;session=window.sessionStorage;}catch{}
+          clearUserData({storage:local,sessionStorage:session,userId});
+          window.location.replace('/');
+        };
+        return mountProfile({document,api,validatedUser,current,weeklyRecords,weeklyStores,eventTarget:window,catalogue:teamCatalogue,projects:createStudioProjects({client,validatedUser,current}),onSignOut:()=>guard.signOut(),
+          accountDeletion:accountDeletion?{deleteAccount:accountDeletion.deleteAccount,onDeleted}:undefined}).dispose;
       }
       // Open the user's own draft directly. Device-wide legacy drafts are
       // neither imported nor deleted as a side effect of opening a board.

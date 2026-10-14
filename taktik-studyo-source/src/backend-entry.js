@@ -9,6 +9,7 @@ import { mountAuthPage } from './lib/auth-ui.js';
 import { mountRecoveryPage } from './lib/recovery-ui.js';
 import { startPage } from './lib/page-bootstrap.js';
 import { resolvePage } from './lib/page-routes.js';
+import { createAccountDeletion } from './lib/account-delete.js';
 const authPage = document.body?.dataset.authPage;
 if (['login','register','callback','forgot','reset'].includes(authPage)) {
   const mount = ['forgot','reset'].includes(authPage) ? mountRecoveryPage : mountAuthPage;
@@ -57,8 +58,11 @@ window.TAKTIK_BACKEND={
     if(!supabase)throw new Error('Paylaşım henüz etkin değil.');
     if(typeof token!=='string'||!token||token.length>2048)throw new Error('Önce güvenlik doğrulamasını tamamla.');
     const body=prepareShare(state);
+    // ACCOUNT1: shares are owned by the signed-in account; the server derives the owner from this JWT.
+    let access=null;try{access=(await supabase.auth.getSession()).data?.session?.access_token||null;}catch{}
+    if(!access)throw new Error('Paylaşmak için giriş yapmalısın.');
     const response=await fetch(publicConfig.url+'/functions/v1/lineups',{
-      method:'POST',headers:{'Content-Type':'application/json',apikey:publicConfig.key,'x-bot-token':token},body,signal:AbortSignal.timeout(12000)
+      method:'POST',headers:{'Content-Type':'application/json',apikey:publicConfig.key,Authorization:'Bearer '+access,'x-bot-token':token},body,signal:AbortSignal.timeout(12000)
     });
     if(!response.ok)throw new Error(response.status===429?'Çok sık paylaşım yapıldı. Biraz sonra tekrar dene.':'Kadro paylaşılamadı.');
     const result=await response.json();
@@ -78,7 +82,8 @@ if (!authPage && document.body) {
   // Classic defer scripts finish in document order before DOMContentLoaded.
   // Auth callback/recovery sanitization above stays synchronous, before any await.
   let lifecycle;
-  const start = () => {lifecycle?.dispose?.();lifecycle=startPage({auth,document,window,backend:window.TAKTIK_BACKEND,client:supabase});};
+  const start = () => {lifecycle?.dispose?.();lifecycle=startPage({auth,document,window,backend:window.TAKTIK_BACKEND,client:supabase,
+    accountDeletion:supabase?createAccountDeletion({client:supabase,url:publicConfig.url,key:publicConfig.key}):null});};
   if (document.readyState === 'loading' || document.readyState === 'interactive')
     document.addEventListener('DOMContentLoaded',start,{once:true});
   else start();

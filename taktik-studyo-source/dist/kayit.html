@@ -25,11 +25,18 @@
       <p id="passwordHint" class="hint">En az 12 karakter. Şifre yöneticini kullanabilirsin.</p>
       <label for="passwordConfirmation">Şifre tekrar</label>
       <input id="passwordConfirmation" name="passwordConfirmation" type="password" autocomplete="new-password" minlength="12" required>
+      <!-- LEGAL1: privacy notice is information only (not consent); Terms acceptance is a separate, unchecked, required control. -->
+      <p id="privacyNotice" class="hint legal-notice">Kişisel verilerin, hesabını oluşturmak ve hizmeti sunmak amacıyla <a href="/kvkk-aydinlatma-metni.html" target="_blank" rel="noopener">KVKK Aydınlatma Metni<span class="sr-only"> (yeni sekmede açılır)</span></a> ve <a href="/gizlilik-politikasi.html" target="_blank" rel="noopener">Gizlilik Politikası<span class="sr-only"> (yeni sekmede açılır)</span></a>’nda açıklandığı şekilde işlenir.</p>
+      <div class="terms-field">
+        <input id="termsAccepted" name="termsAccepted" type="checkbox" required aria-describedby="privacyNotice">
+        <label for="termsAccepted"><a href="/kullanim-kosullari.html" target="_blank" rel="noopener">Kullanım Koşulları<span class="sr-only"> (yeni sekmede açılır)</span></a>’nı okudum ve kabul ediyorum.</label>
+      </div>
       <button id="authSubmit" type="submit" disabled>Kayıt Ol</button>
     </form>
     <p id="authMessage" class="message" role="alert" aria-live="polite" aria-atomic="true"></p>
     <p id="profileMessage" class="profile-message" role="status" aria-live="polite"></p>
     <p class="footnote">Zaten hesabın var mı? <a href="giris.html">Giriş Yap</a></p>
+    <nav class="legal-links" aria-label="Yasal metinler"><a href="/kvkk-aydinlatma-metni.html">KVKK</a><a href="/gizlilik-politikasi.html">Gizlilik</a><a href="/kullanim-kosullari.html">Kullanım Koşulları</a><a href="/cerez-politikasi.html">Çerezler</a><a href="/iletisim.html">İletişim</a></nav>
     <noscript>Kayıt olabilmek için JavaScript'i etkinleştir.</noscript>
   </main>
 </body>

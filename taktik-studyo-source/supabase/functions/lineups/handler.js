@@ -15,7 +15,8 @@ export async function readJson(request) {
   if(!shareValid(data))throw new RequestError(400);
   return data;
 }
-export function createHandler({client, origins, publicKey, rateSalt, sharingReady=false, verifyBot=async()=>false}) {
+// ACCOUNT1: POST requires a confirmed user JWT; the owner is taken only from the verified token.
+export function createHandler({client, origins, publicKey, rateSalt, sharingReady=false, verifyBot=async()=>false, authenticate=async()=>null}) {
   return async request=>{
     const origin=request.headers.get('origin');
     const headers={'Content-Type':'application/json','Cache-Control':'no-store','Vary':'Origin','X-Content-Type-Options':'nosniff'};
@@ -23,7 +24,7 @@ export function createHandler({client, origins, publicKey, rateSalt, sharingRead
     if(!origin || !origins.includes(origin))return reply(403,{error:'İstek kabul edilmedi.'});
     headers['Access-Control-Allow-Origin']=origin;
     headers['Access-Control-Allow-Methods']='GET, POST, OPTIONS';
-    headers['Access-Control-Allow-Headers']='apikey, content-type, x-bot-token';
+    headers['Access-Control-Allow-Headers']='apikey, authorization, content-type, x-bot-token';
     headers['Access-Control-Expose-Headers']='X-Sharing-Ready';
     headers['X-Sharing-Ready']=String(sharingReady);
     if(request.method==='OPTIONS')return new Response(null,{status:204,headers});
@@ -43,6 +44,11 @@ export function createHandler({client, origins, publicKey, rateSalt, sharingRead
         return reply(200,payload);
       }
       if(url.search)throw new RequestError(400);
+      const authorization=request.headers.get('authorization')||'';
+      if(!/^Bearer \S+$/.test(authorization))return reply(401,{error:'Paylaşmak için giriş yapmalısın.'});
+      let owner=null;
+      try{const user=await authenticate(authorization.slice(7));if(user?.id&&!user.is_anonymous&&user.email_confirmed_at)owner=user.id;}catch{}
+      if(!owner)return reply(401,{error:'Paylaşmak için giriş yapmalısın.'});
       const payload=await readJson(request);
       if(!await verifyBot(request))return reply(403,{error:'İstek kabul edilmedi.'});
       if(!rateSalt)throw new Error('Rate limiter not configured');
@@ -51,7 +57,7 @@ export function createHandler({client, origins, publicKey, rateSalt, sharingRead
       const address=(request.headers.get('x-forwarded-for')||'unknown').split(',')[0].trim().slice(0,128);
       const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(rateSalt+':'+new Date().toISOString().slice(0,10)+':'+address));
       const bucket=Array.from(new Uint8Array(digest),v=>v.toString(16).padStart(2,'0')).join('');
-      const result=await client.rpc('create_shared_lineup',{payload,client_bucket:bucket});
+      const result=await client.rpc('create_shared_lineup',{payload,client_bucket:bucket,owner});
       if(result.error)throw new Error('Database unavailable');
       if(!result.data){headers['Retry-After']='600';return reply(429,{error:'Paylaşım sınırına ulaşıldı.'});}
       return reply(201,{public_id:result.data});

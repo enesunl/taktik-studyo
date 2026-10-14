@@ -83,3 +83,25 @@
 #profileAccount button{min-height:36px;padding:7px 12px;font-size:13px}
 @media(max-width:540px){#profileAccount{--account-label:110px;padding:24px 0 12px}#profileAccount .profile-favorite-row{grid-template-columns:var(--account-label) minmax(0,1fr)}#profileAccount .profile-favorite-row>span:first-child{grid-column:auto}#profileAccount .profile-favorite-row>button{grid-column:2;justify-self:start}#profileAccount .profile-account-rows>div{gap:10px}}
 #weeklyCollection>div>section{margin:28px 0}#weeklyCollection h2{font-size:18px}
+/* ACCOUNT1: Profile → Hesap → Tehlikeli Bölge and the account deletion dialog (shared theme tokens). */
+.profile-danger{border-top:1px solid var(--border);margin-top:24px;padding-top:20px}
+.profile-danger:empty{display:none}
+.profile-danger-title{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--error);margin:0 0 8px}
+.profile-danger .profile-help{margin:0 0 14px}
+.profile-card .profile-danger-button{font:inherit;font-weight:700;padding:10px 16px;border:1px solid var(--error);border-radius:7px;background:transparent;color:var(--error);cursor:pointer}
+.profile-card .profile-danger-button:hover:not(:disabled){background:var(--error);color:var(--bg-surface)}
+.profile-card .profile-danger-button:disabled{opacity:.5;cursor:not-allowed}
+.profile-danger-button:focus-visible,.account-delete-dialog :focus-visible{outline:3px solid var(--focus);outline-offset:3px}
+.account-delete-dialog{max-width:520px;width:calc(100% - 32px);box-sizing:border-box;max-height:calc(100vh - 32px);overflow:auto;padding:24px;border:1px solid var(--border);border-top:4px solid var(--error);border-radius:12px;color:var(--text-primary);background:var(--bg-surface);box-shadow:var(--shadow)}
+.account-delete-dialog::backdrop{background:#0b1410b3}
+.account-delete-dialog h2{font:800 22px/1.25 Manrope,Arial,sans-serif;margin:0 0 8px}
+.account-delete-dialog h3{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-secondary);margin:18px 0 6px}
+.account-delete-dialog ul{margin:0;padding-left:20px;font-size:14px;line-height:1.6}
+.account-delete-intro{margin:0;font-size:14px;line-height:1.6;color:var(--text-secondary)}
+.profile-card .account-delete-form label{display:block;margin:16px 0 6px;font-size:14px;font-weight:600}
+.profile-card .account-delete-form input{box-sizing:border-box;width:100%;min-width:0;font:inherit;font-size:15px;padding:10px 12px;border:1px solid var(--border);border-radius:7px;background:var(--control-bg);color:var(--text-primary)}
+.account-delete-status{min-height:1.4em;margin:14px 0 0;font-size:14px;line-height:1.5;color:var(--error)}
+.account-delete-status:empty{min-height:0}
+.account-delete-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;margin-top:18px}
+.profile-card .account-delete-actions button:not(.profile-danger-button){font:inherit;padding:10px 16px;border:1px solid var(--border);border-radius:7px;background:var(--control-bg);color:var(--text-primary);cursor:pointer}
+@media(max-width:560px){.account-delete-actions{flex-direction:column-reverse}.account-delete-actions button{width:100%}}

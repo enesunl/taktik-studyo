@@ -12,6 +12,8 @@ const origins=parseAllowedOrigins(Deno.env.get('ALLOWED_ORIGINS'));
 const botSecret=Deno.env.get('TURNSTILE_SECRET_KEY');
 const handler=createHandler({client,origins,publicKey,rateSalt:Deno.env.get('LINEUPS_RATE_SALT')||serverKey,
   sharingReady:!!botSecret,
-  verifyBot:createBotVerifier({secret:botSecret,origins})
+  verifyBot:createBotVerifier({secret:botSecret,origins}),
+  // Server-side JWT check; the share owner is never taken from the request body.
+  async authenticate(jwt:string){const {data,error}=await client.auth.getUser(jwt);return error?null:data.user;},
 });
 Deno.serve(handler);

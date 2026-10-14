@@ -12,7 +12,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invali
 const {buildBrowserBackend}=await import('./backend-build.mjs');
 // Only this in-memory bundle is served locally. dist/backend.js remains production.
 const localBundle=await buildBrowserBackend({...config,local:true});
-const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json; charset=utf-8' };
+const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json; charset=utf-8', '.woff2': 'font/woff2' };
 let matchesHandler;
 let catalogueService;
 function catalogue(){

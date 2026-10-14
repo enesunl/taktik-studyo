@@ -74,9 +74,9 @@ test('welcome account switch disposes A progress and starts B at step one withou
  const f=fixture({path:'/hos-geldin'}),page=startPage(f.options);await page.ready;await tick();
  const walk=(n=f.nodes.protectedContent)=>[n,...n.children.flatMap(walk)];
  const click=text=>walk().find(n=>n.tagName==='button'&&n.textContent===text).emit('click');
- await click('Başla →');assert.equal(walk().find(n=>n.tagName==='h1').textContent,'TAKTİĞİNİ\nSAHADA GÖSTER.');
- const staleSkip=walk().find(n=>n.textContent==='Atla');f.switch(B);await tick();await tick();
- assert.equal(walk().find(n=>n.tagName==='h1').textContent,"TAKTİK STÜDYO'YA\nHOŞ GELDİN.");
+ await click('Başla →');assert.equal(walk().find(n=>n.tagName==='h1').textContent,'Futbol fikirlerini sahaya taşı');
+ const staleSkip=walk().find(n=>n.textContent==='Turu geç');f.switch(B);await tick();await tick();
+ assert.equal(walk().find(n=>n.tagName==='h1').textContent,"Taktik Stüdyo'ya hoş geldin");
  await staleSkip.emit('click');assert.equal(f.currentId(),B);assert.equal(f.navigation.length,0);assert(f.calls.every(c=>c.kind==='select'));
  assert.deepEqual(f.calls.filter(c=>c.columns===preferenceColumns).map(c=>c.filters[0][1]),[A,B]);page.dispose();
 });
@@ -87,7 +87,7 @@ test('welcome pending A completion-read result never navigates B or overwrites i
  const page=startPage(f.options);await page.ready;await tick();f.switch(B);await tick();await tick();
  wait.resolve({data:{id:A,favorite_team_slug:null,onboarding_version:1,onboarding_completed_at:'2026-10-05T00:00:00Z'}});await tick();
  assert.equal(f.currentId(),B);assert.equal(f.navigation.length,0);
- assert.equal(f.nodes.protectedContent.children[0].textContent,'1 / 5');assert(f.calls.every(c=>c.kind==='select'));page.dispose();
+ assert.equal(f.nodes.protectedContent.children[0].textContent,'1 / 6');assert(f.calls.every(c=>c.kind==='select'));page.dispose();
 });
 
 test('O2 picker and membership share the configured canonical transport; completion writes only to Auth/Profile client',async()=>{
@@ -105,7 +105,7 @@ test('O2 picker and membership share the configured canonical transport; complet
  const page=startPage(f.options);await page.ready;await tick();
  const walk=(n=f.nodes.protectedContent)=>[n,...n.children.flatMap(walk)];
  const click=async text=>{await walk().find(n=>n.tagName==='button'&&n.textContent===text).emit('click');await tick();};
- await click('Başla →');for(let i=0;i<3;i++)await click('Devam →');
+ await click('Başla →');for(let i=0;i<4;i++)await click('Devam →');
  await walk().find(n=>n.tagName==='input'&&n.value==='galatasaray').emit('change');
  await click("Taktik Stüdyo'ya Başla →");
  assert.deepEqual(f.navigation,['/studyo.html']);assert.equal(teams.calls.length,2);

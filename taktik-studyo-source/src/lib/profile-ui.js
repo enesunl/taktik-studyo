@@ -1,5 +1,6 @@
 import {weeklyRecordLink} from './weekly-lineups-ui.js';
 import {mountProfileFavorite} from './profile-favorite-ui.js';
+import {mountAccountDeletion} from './account-delete-ui.js';
 
 const messages = {
   invalid_profile:'Kullanıcı adı 3–24 harf, rakam veya alt çizgi içermeli. Görünen ad en fazla 60 karakter olmalı; kontrol karakterleri kullanma.',
@@ -16,7 +17,7 @@ export function profileInitials(name){
   return letters.normalize('NFD').replace(/\p{M}/gu,'').toLocaleUpperCase('en-US')||'TS';
 }
 
-export function mountProfile({document,api,validatedUser,current,projects,onSignOut,catalogue,weeklyRecords,weeklyStores=[],eventTarget}) {
+export function mountProfile({document,api,validatedUser,current,projects,onSignOut,catalogue,weeklyRecords,weeklyStores=[],eventTarget,accountDeletion}) {
   const root = document.getElementById('profileContent');
   root.replaceChildren(document.getElementById('profileTemplate').content.cloneNode(true));
   const form = root.querySelector('form'), username = root.querySelector('#profileUsername');
@@ -128,6 +129,7 @@ export function mountProfile({document,api,validatedUser,current,projects,onSign
   function dispose() {
     if (disposed) return;
     favorite?.dispose();
+    deletion?.dispose();
     eventTarget?.removeEventListener('storage',loadWeekly);
     disposed = true; form.hidden = true; form.inert = true; apply(null); email.textContent = ''; status.textContent = '';
     form.removeEventListener('submit',submit); retry.removeEventListener('click',load);
@@ -138,6 +140,9 @@ export function mountProfile({document,api,validatedUser,current,projects,onSign
   edit.addEventListener('click',editProfile);accountEdit.addEventListener('click',editProfile);cancel.addEventListener('click',cancelEdit);logout.addEventListener('click',signOut);projectRetry.addEventListener('click',loadProjects);
   const favoriteRoot=root.querySelector('#profileFavorite');
   const favorite=favoriteRoot&&catalogue?mountProfileFavorite({document,root:favoriteRoot,initials,api,catalogue,current:active}):null;
+  // ACCOUNT1: optional; only mounted when the page provides the trusted deletion API.
+  const dangerRoot=root.querySelector('#profileDanger');
+  const deletion=dangerRoot&&accountDeletion?mountAccountDeletion({document,root:dangerRoot,deleteAccount:accountDeletion.deleteAccount,onDeleted:accountDeletion.onDeleted,current:active}):null;
   const ready = Promise.all([load(),loadProjects(),loadWeekly()]);
   eventTarget?.addEventListener('storage',loadWeekly);
   return {ready,favoriteReady:favorite?.ready,dispose};

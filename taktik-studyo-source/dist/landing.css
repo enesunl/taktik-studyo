@@ -1,0 +1,162 @@
+/* Hand-maintained public landing V2 sections. Loaded only by index.html; hero base styles stay in routes.css.
+   Uses theme.css tokens for light/dark; pitch miniatures intentionally stay dark in either theme like .hero-field. */
+#landing{--lp-max:1240px;--lp-gutter:5%;--lp-pitch-a:#1d3529;--lp-pitch-b:#213c2e;--lp-pitch-line:#96b193;--lp-lime:#d1f48b;--lp-lime-edge:#e6ffc0;--lp-ink-dark:#18231d;--lp-amber:#f5bd28}
+#landing section[id]{scroll-margin-top:24px}
+@media(prefers-reduced-motion:no-preference){html:has(#landing:not([hidden])){scroll-behavior:smooth}}
+#landing :focus-visible{outline:3px solid var(--focus);outline-offset:5px}
+
+/* Hero refinements */
+.hero-actions .secondary-link{display:inline-flex;align-items:center;gap:8px}
+.hero-actions .secondary-link::after{content:'↓';font-size:14px;color:var(--text-secondary)}
+:root[data-theme=dark] .hero-actions .primary-link{box-shadow:inset 0 0 0 1px var(--border)}
+.hero-footnote{letter-spacing:.2px}
+
+/* Shared section rhythm */
+.lp-section{max-width:var(--lp-max);margin:0 auto;padding:96px var(--lp-gutter);box-sizing:border-box}
+.lp-heading{max-width:640px;margin-bottom:48px}
+.lp-eyebrow{margin:0 0 14px;font-size:12px;letter-spacing:2px;font-weight:650;color:var(--text-secondary)}
+.lp-heading h2,.lp-cta h2{font:800 clamp(30px,3.6vw,46px)/1.12 Manrope,Arial,sans-serif;letter-spacing:-1.5px;margin:0;color:var(--text-primary)}
+.lp-heading>p:not(.lp-eyebrow){margin:18px 0 0;font-size:18px;line-height:1.7;color:var(--text-secondary)}
+#landing h3{font:800 22px/1.25 Manrope,Arial,sans-serif;letter-spacing:-.5px;margin:0;color:var(--text-primary)}
+.lp-features{border-top:1px solid var(--border)}
+
+/* Features: alternating editorial rows, each with its own miniature */
+.lp-feature{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);align-items:center;gap:7%;padding:56px 0;border-top:1px solid var(--border)}
+.lp-feature:last-child{padding-bottom:0}
+.lp-feature-flip .lp-feature-copy{order:2}
+.lp-index{display:block;margin-bottom:18px;font:700 13px Manrope,Arial,sans-serif;letter-spacing:1px;color:var(--text-secondary)}
+.lp-feature-copy h3{font-size:30px!important;letter-spacing:-1px!important}
+.lp-feature-lead{margin:10px 0 0;font-size:18px;font-weight:600;color:var(--text-primary)}
+.lp-feature-copy p:not(.lp-feature-lead){margin:14px 0 0;font-size:16px;line-height:1.75;color:var(--text-secondary);max-width:480px}
+.lp-points{list-style:none;margin:22px 0 0;padding:0;display:grid;gap:10px;font-size:14px;font-weight:600;color:var(--text-primary)}
+.lp-points li{display:flex;align-items:center;gap:12px}
+.lp-points li::before{content:'';flex:none;width:14px;height:2px;border-radius:2px;background:var(--focus)}
+
+.lp-visual{position:relative;box-sizing:border-box;min-width:0;padding:22px;border:1px solid var(--border);border-radius:16px;background:var(--bg-elevated);color:var(--text-primary);user-select:none}
+.lpv-label{font-size:11px;font-weight:650;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-secondary)}
+.lpv-pill{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border:1px solid var(--border);border-radius:999px;background:var(--bg-surface);font-size:12px;font-weight:650;white-space:nowrap}
+.lpv-pill.is-strong{background:var(--action-bg);border-color:var(--action-bg);color:var(--action-text)}
+.lpv-seg,.lpv-chips{display:inline-flex;flex-wrap:wrap;gap:4px}
+.lpv-seg{padding:3px;border:1px solid var(--border);border-radius:9px;background:var(--bg-surface)}
+.lpv-seg b,.lpv-chips b{padding:5px 11px;border-radius:6px;font-size:12px;font-weight:650;color:var(--text-secondary)}
+.lpv-chips b{border:1px solid var(--border);background:var(--bg-surface)}
+.lpv-seg b.is-on,.lpv-chips b.is-on{background:var(--action-bg);border-color:var(--action-bg);color:var(--action-text)}
+.lpv-pitch{position:relative;overflow:hidden;border-radius:10px;border:6px solid #182a21;color:var(--lp-pitch-line)}
+.lpv-pitch svg{position:absolute;inset:0;width:100%;height:100%;opacity:.55}
+.lpv-pitch svg.lpv-ink{opacity:1}
+.lpv-dot,.lpv-shirt,.lpv-jersey{position:absolute;left:var(--x);top:var(--y);transform:translate(-50%,-50%)}
+
+/* 01 Studio: wide two-team pitch with drawings */
+.lpv-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.lpv-pitch-wide{aspect-ratio:400/240;background:repeating-linear-gradient(90deg,var(--lp-pitch-a) 0 10%,var(--lp-pitch-b) 10% 20%)}
+.lpv-dot{width:15px;height:15px;border-radius:50%;box-shadow:0 3px 8px #0004}
+.lpv-dot.home{background:var(--lp-lime);border:2px solid var(--lp-lime-edge)}
+.lpv-dot.away{background:#f4f6f2;border:2px solid #a61931}
+
+/* 02 Tactical board: portrait pitch + formation and bench panel */
+.lp-visual-board{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:center}
+.lpv-pitch-tall{aspect-ratio:200/260;background:repeating-linear-gradient(0deg,var(--lp-pitch-a) 0 12.5%,var(--lp-pitch-b) 12.5% 25%)}
+.lpv-shirt{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--lp-lime);border:2px solid var(--lp-lime-edge);font:700 10px/1 'DM Sans',Arial,sans-serif;font-style:normal;color:#21341f;box-shadow:0 3px 8px #0004}
+.lpv-shirt.is-swap{outline:2px dashed var(--lp-amber);outline-offset:3px}
+.lpv-side{display:flex;flex-direction:column;gap:10px;min-width:0}
+.lpv-side .lpv-label:not(:first-child){margin-top:10px}
+.lpv-bench{display:grid;gap:6px}
+.lpv-bench>span{display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-surface)}
+.lpv-bench>span.is-swap{border-color:var(--focus);background:var(--selected-bg)}
+.lpv-bench em{width:20px;font:700 12px 'DM Sans',Arial,sans-serif;font-style:normal;font-variant-numeric:tabular-nums;color:var(--text-secondary)}
+.lpv-bench s,.lpv-fixtures s,.lpv-lineups s{display:block;height:8px;border-radius:4px;background:var(--border);text-decoration:none}
+.lpv-bench s{flex:1}
+.lpv-bench strong{font-size:14px;color:var(--focus)}
+
+/* 03 Matches: weekly fixture list with an open detail row */
+.lpv-week{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border:1px solid var(--border);border-radius:10px;background:var(--bg-surface);font-size:13px;font-weight:650}
+.lpv-week b{color:var(--text-secondary);font-size:16px;line-height:1}
+.lpv-fixtures{list-style:none;margin:10px 0 0;padding:0}
+.lpv-fixtures li{display:grid;grid-template-columns:16px minmax(0,1fr) 54px minmax(0,1fr) 16px;align-items:center;gap:10px;padding:12px;border-bottom:1px solid var(--border)}
+.lpv-fixtures li:last-child{border-bottom:0}
+.lpv-fixtures li.is-open{border:1px solid var(--focus);border-radius:8px;background:var(--bg-surface)}
+.lpv-fixtures i{width:16px;height:16px;border-radius:50%;border:2px solid var(--text-secondary);box-sizing:border-box;opacity:.55}
+.lpv-fixtures s{width:78%}
+.lpv-fixtures s:last-of-type{justify-self:end}
+.lpv-fixtures time{text-align:center;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--text-secondary)}
+.lpv-detail{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px 16px;margin-top:12px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--bg-surface)}
+.lpv-lineups{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.lpv-lineups>span{display:grid;gap:6px}
+.lpv-lineups s{height:6px}
+.lpv-lineups>span:last-child s{justify-self:end}
+.lpv-lineups s:nth-child(2){width:80%}.lpv-lineups s:nth-child(3){width:62%}
+.lpv-detail .lpv-pill{grid-column:2;grid-row:1}
+
+/* 04 Weekly XI: export-style poster with save/PNG actions */
+.lp-visual-weekly{display:flex;flex-direction:column;align-items:center;gap:20px;padding-block:30px}
+.lpv-poster{box-sizing:border-box;width:min(300px,82%);aspect-ratio:4/5;padding:16px;border-radius:14px;background:linear-gradient(160deg,#1f3a2b,#0f1d16);box-shadow:0 22px 50px #18231d33;transform:rotate(-2deg);display:flex;flex-direction:column}
+.lpv-poster-title{text-align:center;font:800 13px Manrope,Arial,sans-serif;letter-spacing:2px;color:var(--lp-lime)}
+.lpv-poster-pitch{position:relative;flex:1;margin-top:12px;border:1px solid #96b19355;border-radius:4px}
+.lpv-poster-pitch::before{content:'';position:absolute;left:0;right:0;top:50%;border-top:1px solid #96b19355}
+.lpv-jersey{width:24px;height:22px;background:var(--lp-lime);clip-path:polygon(30% 0,70% 0,100% 20%,88% 44%,78% 38%,78% 100%,22% 100%,22% 38%,12% 44%,0 20%)}
+.lpv-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+
+/* How it works */
+.lp-steps{border-top:1px solid var(--border)}
+.lp-step-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:40px}
+.lp-step-list li{padding-top:24px;border-top:2px solid var(--text-primary)}
+.lp-step-no{display:block;margin-bottom:18px;font:800 40px/1 Manrope,Arial,sans-serif;letter-spacing:-1px;color:var(--focus)}
+.lp-step-list p,.lp-audience-grid p{margin:12px 0 0;font-size:16px;line-height:1.7;color:var(--text-secondary)}
+
+/* Audience */
+.lp-audience{border-top:1px solid var(--border)}
+.lp-audience-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.lp-audience-grid>div{padding:4px 32px}
+.lp-audience-grid>div:first-child{padding-left:0}
+.lp-audience-grid>div+div{border-left:1px solid var(--border)}
+
+/* Final CTA: dark band in either theme, centre-circle motif */
+.lp-cta{max-width:var(--lp-max);margin:0 auto 96px;padding:0 var(--lp-gutter);box-sizing:border-box}
+.lp-cta-inner{display:flex;align-items:center;justify-content:space-between;gap:32px;flex-wrap:wrap;padding:56px;border-radius:20px;background:radial-gradient(circle at 100% 50%,transparent 0 150px,#96b19333 151px 152px,transparent 153px),var(--action-bg);color:#edf3e9}
+.lp-cta h2{color:#edf3e9}
+.lp-cta p{margin:14px 0 0;font-size:17px;line-height:1.7;color:#b6c5af;max-width:460px}
+.lp-cta-actions{display:flex;align-items:center;gap:24px;flex-wrap:wrap}
+.lp-cta-primary{display:inline-flex;align-items:center;gap:24px;padding:16px 24px;border-radius:8px;background:var(--lp-lime);color:var(--lp-ink-dark);font-weight:700;text-decoration:none}
+.lp-cta-primary:hover{background:#c7f36b}
+.lp-cta-secondary{color:#dcf5b1;font-weight:600;text-decoration:underline;text-decoration-color:#dcf5b166;text-underline-offset:5px}
+.lp-cta-secondary:hover{text-decoration-color:currentColor}
+.lp-cta :focus-visible{outline-color:#c7f36b!important}
+
+/* Footer: product identity; legal/contact links are added only once those pages exist. */
+.lp-footer{display:block;padding:40px var(--lp-gutter) 28px;font-size:13px}
+.lp-footer-inner{max-width:var(--lp-max);margin:0 auto;display:flex;align-items:flex-start;justify-content:space-between;gap:24px 48px;flex-wrap:wrap}
+.lp-footer .brand{font-size:20px}
+.lp-footer-brand p{margin:10px 0 0;font-size:13px;color:var(--text-secondary)}
+.lp-footer-nav{display:flex;gap:24px;flex-wrap:wrap;padding-top:4px}
+.lp-footer-nav a{color:var(--text-primary);font-size:14px;font-weight:600;text-decoration:none}
+.lp-footer-nav a:hover{text-decoration:underline;text-underline-offset:5px}
+.lp-footer-legal{flex-basis:100%;gap:10px 22px;padding-top:18px;border-top:1px solid var(--border)}
+.lp-footer-legal a{font-size:13px;font-weight:500;color:var(--text-secondary)}
+.lp-footer-note{max-width:var(--lp-max);margin:28px auto 0;font-size:12px;color:var(--text-secondary)}
+
+@media(max-width:900px){
+  .lp-section{padding-block:72px}
+  .lp-feature{grid-template-columns:minmax(0,1fr);gap:32px;padding:44px 0}
+  .lp-feature-flip .lp-feature-copy{order:0}
+  .lp-feature-copy p:not(.lp-feature-lead){max-width:none}
+  .lp-step-list{grid-template-columns:minmax(0,1fr);gap:28px}
+  .lp-audience-grid{grid-template-columns:minmax(0,1fr);gap:24px}
+  .lp-audience-grid>div{padding:0}
+  .lp-audience-grid>div+div{border-left:0;border-top:1px solid var(--border);padding-top:24px}
+  .lp-cta-inner{padding:40px 32px}
+}
+@media(max-width:700px){
+  #landing{--lp-gutter:24px}
+  .lp-section{padding-block:60px}
+  .lp-heading{margin-bottom:32px}
+  .lp-heading>p:not(.lp-eyebrow){font-size:16px}
+  .lp-feature-copy h3{font-size:26px!important}
+  .lp-visual{padding:16px}
+  .lp-visual-board{grid-template-columns:minmax(0,1fr)}
+  .lpv-pitch-tall{width:min(240px,100%);justify-self:center}
+  .lpv-fixtures li{gap:8px;padding:10px 8px;grid-template-columns:14px minmax(0,1fr) 46px minmax(0,1fr) 14px}
+  .lp-cta{margin-bottom:64px}
+  .lp-cta-inner{padding:32px 24px;background:var(--action-bg)}
+  .lp-cta-actions{width:100%}
+  .lp-cta-primary{width:100%;justify-content:space-between;box-sizing:border-box}
+}

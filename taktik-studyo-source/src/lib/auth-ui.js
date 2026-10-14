@@ -12,6 +12,7 @@ const messages = {
   state_changed:'Oturum değişti. Devam etmek için sayfayı yeniden aç.',
   session_cleanup_failed:'Oturum güvenli şekilde kapatılamadı. Giriş yapmadan önce çıkış işlemini yeniden dene.',
   sign_up_failed:'Kayıt işlemi tamamlanamadı. Biraz sonra tekrar dene.',
+  terms_required:'Kayıt olmak için Kullanım Koşulları’nı kabul etmelisin.',
   confirmation_invalid:'Doğrulama bağlantısı geçersiz. E-postandaki bağlantıyı yeniden aç.',
   confirmation_failed:'Doğrulama tamamlanamadı. Bağlantı kullanılmış veya süresi dolmuş olabilir.',
   existing_session:'Bu tarayıcıda zaten bir oturum açık. Doğrulama için mevcut oturumdan çıkıp e-posta bağlantısını yeniden aç veya gizli pencere kullan.',
@@ -66,6 +67,8 @@ export function mountAuthPage({document, location, history, eventTarget, api, pa
         if (!usernameValid(field('username').value)) {error('invalid_username'); return;}
         if (field('password').value.length < 12) {error('short_password'); return;}
         if (field('password').value !== field('passwordConfirmation').value) {error('password_mismatch'); return;}
+        // LEGAL1: separate, unchecked Terms control. Not sent to Auth; no personal-data consent is collected.
+        if (field('termsAccepted')?.checked !== true) {error('terms_required'); return;}
       }
     }
     busy = true; button.disabled = true; form?.setAttribute('aria-busy','true');

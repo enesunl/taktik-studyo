@@ -154,7 +154,8 @@ test('static Auth pages provide accessible local-only forms with safe callback r
     assert.ok(html.indexOf('name="referrer" content="no-referrer"') < html.indexOf('<link'));
     for (const input of html.matchAll(/<input id="([^"]+)"[^>]*>/g)) {
       assert.ok(html.includes('<label for="'+input[1]+'">'));
-      assert.match(input[0],/autocomplete="(?:email|username|current-password|new-password)"/);
+      // LEGAL1 Terms checkbox: labelled, but autocomplete does not apply to checkboxes.
+      if (!/type="checkbox"/.test(input[0])) assert.match(input[0],/autocomplete="(?:email|username|current-password|new-password)"/);
       if (input[1].startsWith('password')) assert.doesNotMatch(input[0],/maxlength/);
     }
   }

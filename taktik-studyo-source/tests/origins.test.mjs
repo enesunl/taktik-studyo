@@ -39,12 +39,12 @@ test('production origin regression: default and explicit configuration allow pre
     });
     const response = await handler(new Request('https://db.test/functions/v1/lineups', {
       method:'OPTIONS', headers:{origin:production,'access-control-request-method':'POST',
-        'access-control-request-headers':'apikey, content-type, x-bot-token'}
+        'access-control-request-headers':'apikey, authorization, content-type, x-bot-token'}
     }));
     assert.equal(response.status, 204);
     assert.equal(response.headers.get('Access-Control-Allow-Origin'), production);
     assert.equal(response.headers.get('Access-Control-Allow-Methods'), 'GET, POST, OPTIONS');
-    assert.equal(response.headers.get('Access-Control-Allow-Headers'), 'apikey, content-type, x-bot-token');
+    assert.equal(response.headers.get('Access-Control-Allow-Headers'), 'apikey, authorization, content-type, x-bot-token');
     assert.equal(response.headers.get('Vary'), 'Origin');
     assert.equal(accesses, 0);
   }
@@ -54,9 +54,10 @@ test('configured origins support preflight, verified sharing and reads with exac
   const origins = parseAllowedOrigins(`${production},${preview}`);
   const payload = {team_name:'Test',formation:'4-3-3',lineup_data:{team:{name:'Test',short:'T',color:'#123456',color2:'#abcdef'},customized:false,players:Array.from({length:11},(_,id)=>({id,x:50,y:50,role:'MO',name:'Test',number:id+1,renamed:false}))},drawing_data:[]};
   const id = '01234567-89ab-4cde-8fab-0123456789ab';
+  const owner = '11111111-1111-4111-8111-111111111111', jwt = 'user-jwt-fixture';
   let writes = 0, reads = 0, verifications = 0;
   const client = {
-    async rpc(name, args) { assert.equal(name, 'create_shared_lineup'); assert.deepEqual(args.payload, payload); assert.match(args.client_bucket, /^[a-f0-9]{64}$/); writes++; return {data:id}; },
+    async rpc(name, args) { assert.equal(name, 'create_shared_lineup'); assert.deepEqual(args.payload, payload); assert.match(args.client_bucket, /^[a-f0-9]{64}$/); assert.equal(args.owner, owner); writes++; return {data:id}; },
     from(table) { assert.equal(table, 'shared_lineups'); return {
       select() { return this; }, eq(column, value) { assert.equal(column, 'public_id'); assert.equal(value, id); return this; },
       async maybeSingle() { reads++; return {data:{...payload,expires_at:null}}; }
@@ -66,7 +67,9 @@ test('configured origins support preflight, verified sharing and reads with exac
     verifications++;
     return {ok:true,json:async()=>({success:true,action:'share_lineup',hostname:options.body.get('response')})};
   }});
-  const handler = createHandler({client,origins,publicKey:'public-test',rateSalt:'test-only',sharingReady:true,verifyBot});
+  // ACCOUNT1: the owner comes only from the verified JWT.
+  const authenticate = async token => token === jwt ? {id:owner,email_confirmed_at:'2026-10-14T00:00:00Z'} : null;
+  const handler = createHandler({client,origins,publicKey:'public-test',rateSalt:'test-only',sharingReady:true,verifyBot,authenticate});
   for (const origin of origins) {
     const request = (method, headers = {}) => new Request('https://db.test/functions/v1/lineups' + (method === 'GET' ? '?id=' + id : ''), {
       method, headers:{origin,apikey:'public-test','content-type':'application/json',...headers},
@@ -77,9 +80,13 @@ test('configured origins support preflight, verified sharing and reads with exac
     assert.equal(preflight.headers.get('Access-Control-Allow-Origin'), origin);
     assert.equal(preflight.headers.get('Vary'), 'Origin');
     assert.equal(preflight.headers.get('X-Sharing-Ready'), 'true');
-    const missingToken = await handler(request('POST'));
+    const anonymous = await handler(request('POST', {'x-bot-token':new URL(origin).hostname}));
+    assert.equal(anonymous.status, 401);
+    const forged = await handler(request('POST', {'x-bot-token':new URL(origin).hostname,authorization:'Bearer forged'}));
+    assert.equal(forged.status, 401);
+    const missingToken = await handler(request('POST', {authorization:'Bearer '+jwt}));
     assert.equal(missingToken.status, 403);
-    const saved = await handler(request('POST', {'x-bot-token':new URL(origin).hostname}));
+    const saved = await handler(request('POST', {'x-bot-token':new URL(origin).hostname,authorization:'Bearer '+jwt}));
     assert.equal(saved.status, 201);
     assert.equal(saved.headers.get('Access-Control-Allow-Origin'), origin);
     assert.deepEqual(await saved.json(), {public_id:id});

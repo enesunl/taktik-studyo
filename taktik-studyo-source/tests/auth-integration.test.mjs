@@ -79,13 +79,15 @@ test('real SDK main singleton persists normal Auth; dedicated recovery construct
     const publicQueries = calls.filter(c => c.path.startsWith('/rest/'));
     assert.ok(publicQueries.length >= 2);
     assert.ok(publicQueries.every(c => c.headers.get('authorization') !== 'Bearer '+jwt));
-    const share = async () => {
+    // ACCOUNT1: reading/readiness stay anonymous; creating a share requires the signed-in session.
+    const share = async signedIn => {
       assert.equal(await backend.sharingReady(), true);
       assert.equal((await backend.readLineup(id)).team.name, 'Test');
-      assert.equal(await backend.saveLineup(board, 'test-turnstile-proof'), id);
+      if (signedIn) assert.equal(await backend.saveLineup(board, 'test-turnstile-proof'), id);
+      else await assert.rejects(backend.saveLineup(board, 'test-turnstile-proof'), /giriş yapmalısın/);
       await assert.rejects(backend.saveLineup(board, ''));
     };
-    await share();
+    await share(false);
     assert.equal((await auth.signInWithPassword({email:user.email,password:'fake-password'})).ok, true);
     assert.equal((await auth.validateUser()).user.id, id);
     const start = calls.length;
@@ -93,16 +95,17 @@ test('real SDK main singleton persists normal Auth; dedicated recovery construct
     const authenticatedQueries = calls.slice(start).filter(c => c.path.startsWith('/rest/'));
     assert.equal(authenticatedQueries.length, 2);
     assert.ok(authenticatedQueries.every(c => c.headers.get('authorization') === 'Bearer '+jwt));
-    await share();
+    await share(true);
     const shares = calls.filter(c => c.path.startsWith('/functions/'));
-    assert.equal(shares.length, 6);
+    assert.equal(shares.length, 5);
+    assert.equal(shares.filter(c => c.method === 'POST').length, 1);
     for (const call of shares) {
-      assert.equal(call.headers.get('authorization'), null);
       assert.equal(call.headers.get('apikey'), key);
       if (call.method === 'POST') {
+        assert.equal(call.headers.get('authorization'), 'Bearer '+jwt);
         assert.equal(call.headers.get('x-bot-token'), 'test-turnstile-proof');
         assert.deepEqual(JSON.parse(call.body), toShare(board));
-      }
+      } else assert.equal(call.headers.get('authorization'), null);
     }
     assert.equal(calls.some(c => c.path.includes('shared_lineups')), false);
     assert.equal((await auth.signOut()).ok, true);

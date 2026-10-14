@@ -44,10 +44,11 @@ content_path = "./supabase/templates/recovery.html"
 enabled = false
 
 [edge_runtime]
-enabled = false
+# ACCOUNT1: enabled locally to serve account-delete (local stack only; hosted is unaffected).
+enabled = true
 
 [functions.lineups]
-# No user sessions. The function validates the publishable apikey header itself.
+# Public GET by link id; POST additionally requires a confirmed user JWT (owner) checked in the handler.
 verify_jwt = false
 entrypoint = "./functions/lineups/index.ts"
 
@@ -55,3 +56,8 @@ entrypoint = "./functions/lineups/index.ts"
 # Signed-in user JWT plus handler-side getUser and confirmed-email validation.
 verify_jwt = true
 entrypoint = "./functions/matches/index.ts"
+
+[functions.account-delete]
+# Gateway JWT check plus handler-side getUser, password re-verification and typed confirmation.
+verify_jwt = true
+entrypoint = "./functions/account-delete/index.ts"
