@@ -1,6 +1,6 @@
 import {validXI} from './studio-lineups.js';
 import {requestedMatchId,isMatchId} from './match-id.js';
-import {requestedRound,seasonValid} from './matches.js';
+import {requestedRound,seasonValid,readFreshness} from './matches.js';
 import {requestMatches,detailError} from './matches-transport.js';
 export {requestedMatchId};
 export const POSITION_LABELS = Object.freeze({goalkeeper:'KL',defender:'DEF',midfielder:'ORT',forward:'FOR',unknown:'—'});
@@ -43,9 +43,11 @@ export function createMatchDetailApi({client,current,location,fetchImpl,identity
       const {data,error} = await requestMatches({client,current,location,fetchImpl,id});
       if (!current()) return {ok:false,error:{code:'state_changed'}};
       if (error) throw Error(detailError(error.context?.status));
-      if (!detailValid(data,id)) throw Error('PROVIDER_UNAVAILABLE');
-      if(identity&&!identity.validateMatch(data))throw Error('PROVIDER_UNAVAILABLE');
-      return {ok:true,match:data};
+      // The additive freshness field is separated before validation so the match object is unchanged.
+      const {freshness,...match} = data && typeof data === 'object' ? data : {};
+      if (!detailValid(match,id)) throw Error('PROVIDER_UNAVAILABLE');
+      if(identity&&!identity.validateMatch(match))throw Error('PROVIDER_UNAVAILABLE');
+      return {ok:true,match,freshness:readFreshness(freshness)};
     } catch (error) {return {ok:false,error:{code:!current() ? 'state_changed' : ['INVALID_MATCH_ID','MATCH_NOT_FOUND','UNAUTHORIZED'].includes(error?.message) ? error.message : 'PROVIDER_UNAVAILABLE'}};}
   }};
 }

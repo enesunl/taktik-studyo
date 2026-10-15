@@ -50,7 +50,9 @@ test('real SDK main singleton persists normal Auth; dedicated recovery construct
   const output = await build({stdin:{contents:"import './src/backend-entry.js'; export {auth} from './src/lib/auth.js';",
     resolveDir:fileURLToPath(new URL('..', import.meta.url)), sourcefile:'auth-test-entry.js'},
     bundle:true, write:false, platform:'browser', format:'cjs', target:'es2022',
-    define:{__SUPABASE_URL__:JSON.stringify(url), __SUPABASE_PUBLISHABLE_KEY__:JSON.stringify(key), __TURNSTILE_SITE_KEY__:'"test-site-key"'},
+    define:{__SUPABASE_URL__:JSON.stringify(url), __SUPABASE_PUBLISHABLE_KEY__:JSON.stringify(key), __TURNSTILE_SITE_KEY__:'"test-site-key"',
+      // Explicit legacy rollback build: this suite covers Auth persistence/sharing over the legacy catalogue tables (SEC1.1).
+      __CATALOGUE_SOURCE__:'"legacy"'},
     plugins:[{name:'fake-sdk-boundary',setup(b){b.onResolve({filter:/^@supabase\/supabase-js$/}, () => ({path:'sdk',namespace:'test'}));
       b.onLoad({filter:/.*/,namespace:'test'}, () => ({contents:'export const createClient = globalThis.testCreateClient; export const isAuthApiError=globalThis.testIsAuthApiError; export const isAuthSessionMissingError=globalThis.testIsAuthSessionMissingError;'}));}}]});
   const window = {localStorage:sdkStorage};

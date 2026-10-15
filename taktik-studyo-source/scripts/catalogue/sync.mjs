@@ -10,6 +10,9 @@ const providerId=v=>typeof v==='string'&&/^[1-9][0-9]{0,15}$/.test(v);
 const teamFields=['id','display_name','short_name','color_primary','color_secondary','sort_order'];
 const playerFields=['team_id','display_name','position_group','specific_position','shirt_number'];
 const pick=(r,keys)=>Object.fromEntries(keys.map(k=>[k,r[k]]));
+// PROD1.6: live BSD names can carry stray whitespace (e.g. a trailing space). Only spaces are
+// normalized; control characters, empty or over-long names are still rejected by validateInput.
+export const providerName=v=>typeof v==='string'?v.replace(/ {2,}/g,' ').trim():v;
 export function validateInput(input){
   check(input?.complete===true&&input.provider==='bsd'&&Array.isArray(input.teams)&&input.teams.length>0&&input.teams.length<=100);
   check(Array.isArray(input.players)&&input.players.length<=10000);
@@ -36,7 +39,8 @@ export function planSync(input,state=emptyState(),{newId=randomUUID}={}){
     return {...pick(previous||t,teamFields),catalogue_active:true};
   });
   const players=input.players.map(p=>{
-    const id=existingPlayerMap.get(p.provider_id)||newId();check(uuid(id),'invalid_internal_id');
+    // newId receives the provider row (the import tool derives a deterministic UUID from it).
+    const id=existingPlayerMap.get(p.provider_id)||newId(p);check(uuid(id),'invalid_internal_id');
     check(!existingPlayerMap.has(p.provider_id)||state.players.some(x=>x.id===id),'dangling_mapping');
     check(existingPlayerMap.has(p.provider_id)||!state.players.some(x=>x.id===id),'identity_collision');
     return {id,...pick(p,playerFields),catalogue_active:true};
@@ -76,7 +80,7 @@ export async function fetchBsdCatalogue({token,registrations,leagueId=11,seasonI
       const pid=String(p.id);check(providerId(pid));
       const d=await get(`players/${pid}/`);
       check(d?.id===p.id&&d.current_team_id===t.id&&d.name===p.name&&d.position===p.position&&d.jersey_number===p.jersey_number,'inconsistent_provider_response');
-      players.push({provider_id:pid,team_id:reg.id,display_name:p.name,position_group:p.position,specific_position:d.specific_position,shirt_number:p.jersey_number});
+      players.push({provider_id:pid,team_id:reg.id,display_name:providerName(p.name),position_group:p.position,specific_position:d.specific_position,shirt_number:p.jersey_number});
     }
   }
   const input={provider:'bsd',complete:true,teams,players};validateInput(input);return input;

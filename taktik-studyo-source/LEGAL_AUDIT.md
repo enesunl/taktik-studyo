@@ -20,7 +20,7 @@ kontrol edilemedi · **[REVIEW REQUIRED]** operatör veya hukukçu kararı gerek
 | İşleten | Türkiye'de yerleşik gerçek kişi; şirket yok (operatör beyanı) |
 | Ücret | Ücretsiz; ödeme/abonelik kodu yok [DOĞRULANDI] |
 | Yayın durumu | Canlı alan adı Netlify üzerinde parola korumalı: `https://taktikstudyo.com/` → `401 Unauthorized` [DOĞRULANDI, 14.10.2026] |
-| İletişim e-postası | `iletisim@taktikstudyo.com` (operatör bildirimi, LEGAL1.2). **Alan adında MX kaydı yok**; adres şu an posta alamaz [DOĞRULANDI, 14.10.2026] |
+| İletişim e-postası | `iletisim@taktikstudyo.com` (operatör bildirimi, LEGAL1.2). LEGAL2 (15.10.2026): Google Workspace — MX `smtp.google.com`, Google SPF, DMARC `p=none` [DOĞRULANDI: DNS]; gönderme/alma operatör tarafından test edildi. (14.10.2026'da MX yoktu.) |
 | Veri sorumlusu adı-soyadı, tebligat adresi, (varsa) KEP | Depoda yok → **[REVIEW REQUIRED]** |
 | VERBİS | Gerçek kişi, küçük ölçek; muafiyet hukukçu tarafından teyit edilmeli **[REVIEW REQUIRED]** |
 
@@ -144,3 +144,12 @@ veya m.9/6 kapsamındaki arızi istisnalar. Depoda hiçbir sözleşme/bildirim k
   `[REVIEW REQUIRED]` olarak kaldı). İletişim sayfasına erişim, düzeltme ve silme talep adımları
   eklendi; `DATA_REQUEST_PROCEDURE.md` iç prosedürü oluşturuldu. Hosted FK kuralları ve şema farkı
   salt okuma sorgularıyla doğrulandı. Hesap silme, migration veya veri değişikliği yapılmadı.
+- **LEGAL2:** Taslaklar nihai inceleme için güncellendi; ayrıntılar ve açık sorular `LEGAL2_REVIEW.md`, operatörden beklenen bilgiler `LEGAL2_OPERATOR_CHECKLIST.md`.
+  - Google Workspace alıcı olarak eklendi.
+  - Supabase bölgesi doğrulandı (işaret kaldırıldı).
+  - BSD Sports Data spor verisi kaynağı olarak adlandırıldı.
+  - Paylaşım bağlantısı saklaması "canlı / planlanan" ayrımıyla düzeltildi.
+  - Yazışma saklaması ve sağlayıcı DPA'ları işaretlendi.
+  - Koşullara sağlayıcı verisinin toplu kopyalanması yasağı eklendi.
+  - Dört sayfaya yayında henüz olmayan özellikleri listeleyen kapsam işareti eklendi.
+  - Bölüm 7'deki 1. engel (MX yok) çözüldü.

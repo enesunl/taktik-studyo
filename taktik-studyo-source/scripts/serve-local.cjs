@@ -4,14 +4,18 @@ const http = require('node:http');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const root = path.resolve(__dirname, '../dist');
-async function createLocalServer({config,port=4173,catalogueSource='canonical',token}={}) {
+async function createLocalServer({config,port=4173,catalogueSource='canonical',catalogueTransport='local',token,serverKey}={}) {
 const {assertLocalUrl,assertLocalPublicKey}=await import('./local-supabase.mjs');
 assertLocalUrl(config?.url);assertLocalPublicKey(config?.key);
 if(!['legacy','canonical'].includes(catalogueSource))throw Error('Invalid catalogue source');
+// PROD1.5: 'supabase' reads the canonical catalogue from Supabase Local tables (as hosted does);
+// the local server key is used only inside this process for the matches canonical model.
+if(!['local','supabase'].includes(catalogueTransport)||catalogueTransport==='supabase'&&(catalogueSource!=='canonical'||!serverKey))throw Error('Invalid catalogue transport');
+const viaSupabase=catalogueTransport==='supabase';
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid port');
 const {buildBrowserBackend}=await import('./backend-build.mjs');
 // Only this in-memory bundle is served locally. dist/backend.js remains production.
-const localBundle=await buildBrowserBackend({...config,local:true});
+const localBundle=await buildBrowserBackend({...config,local:true,catalogueSource});
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json; charset=utf-8', '.woff2': 'font/woff2' };
 let matchesHandler;
 let catalogueService;
@@ -32,15 +36,19 @@ async function localMatches(req,res) {
     if (!['localhost:'+port,'127.0.0.1:'+port].includes(req.headers.host)) throw Error();
     if (!matchesHandler) {
       const {createLocalMatches} = await import('./local-matches.mjs');
-      const provider=catalogueSource==='canonical'?await catalogue():null;
-      matchesHandler = createLocalMatches({load:provider?.loadSeason,loadDetail:provider?.loadDetail,url:config.url,key:config.key,token,port});
+      let canonical,load,loadDetail;
+      if(viaSupabase){
+        const {createClient}=await import('@supabase/supabase-js');
+        const {createCanonicalMatches,readCatalogueState}=await import('../supabase/functions/matches/canonical.js');
+        const server=createClient(config.url,serverKey,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+        canonical=loaders=>createCanonicalMatches({loadState:()=>readCatalogueState(server),...loaders});
+      }else if(catalogueSource==='canonical'){
+        const provider=await catalogue();({loadSeason:load,loadDetail}=provider);
+        canonical=()=>({events:async data=>({...data,matches:data.matches.map(m=>provider.canonicalEvent(m))}),match:data=>provider.canonicalMatch(data)});
+      }
+      matchesHandler = createLocalMatches({load,loadDetail,canonical,url:config.url,key:config.key,token,port});
     }
-    let response = await matchesHandler(new Request('http://'+req.headers.host+req.url,{method:req.method,headers:req.headers}));
-    if(catalogueSource==='canonical'&&response.ok&&req.method==='GET'){
-      const data=await response.json();
-      const service=await catalogue();
-      response=new Response(JSON.stringify(data.id?await service.canonicalMatch(data):{...data,matches:data.matches.map(m=>service.canonicalEvent(m))}),{status:response.status,headers:response.headers});
-    }
+    const response = await matchesHandler(new Request('http://'+req.headers.host+req.url,{method:req.method,headers:req.headers}));
     res.writeHead(response.status,{...Object.fromEntries(response.headers),'Cache-Control':'no-store'});
     res.end(Buffer.from(await response.arrayBuffer()));
   } catch {
@@ -53,7 +61,7 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   if(!['localhost:'+port,'127.0.0.1:'+port].includes(req.headers.host)){res.writeHead(403);res.end();return;}
   if((req.url||'').split('?')[0]==='/__local/catalogue'){
-   if(catalogueSource!=='canonical'||!['localhost:'+port,'127.0.0.1:'+port].includes(req.headers.host)){res.writeHead(403);res.end();return;}
+   if(catalogueSource!=='canonical'||viaSupabase||!['localhost:'+port,'127.0.0.1:'+port].includes(req.headers.host)){res.writeHead(403);res.end();return;}
    try{
     const chunks=[];let bytes=0;for await(const chunk of req){bytes+=chunk.length;if(bytes>4*1024*1024)throw Error();chunks.push(chunk);}
     const response=await (await catalogue()).handle(new Request('http://'+req.headers.host+req.url,{method:req.method,headers:req.headers,...(['GET','HEAD'].includes(req.method)?{}:{body:Buffer.concat(chunks)})}));
@@ -62,7 +70,7 @@ const server = http.createServer(async (req, res) => {
   }
   if(req.url==='/__local/catalogue-config.js'){
    if(catalogueSource!=='canonical'||!['localhost:'+port,'127.0.0.1:'+port].includes(req.headers.host)){res.writeHead(404);res.end();return;}
-   res.writeHead(200,{'Content-Type':'text/javascript'});res.end('window.TAKTIK_CATALOGUE_CONFIG=Object.freeze({source:"canonical"});');return;
+   res.writeHead(200,{'Content-Type':'text/javascript'});res.end('window.TAKTIK_CATALOGUE_CONFIG=Object.freeze({source:"canonical"'+(viaSupabase?',transport:"supabase"':'')+'});');return;
   }
   if ((req.url || '').split('?')[0] === '/__local/matches') return localMatches(req,res);
   const end = (status, message) => {
@@ -114,7 +122,15 @@ if(require.main===module){
   const {loadLocalSupabase}=await import('./local-supabase.mjs');
   const config=await loadLocalSupabase();
   const port=Number(process.argv[2]||4173);
-  const server=await createLocalServer({config,port,catalogueSource:process.env.CATALOGUE_SOURCE||'canonical',token:process.env.BSD_API_TOKEN});
+  // CATALOGUE_TRANSPORT=supabase: read the imported catalogue from Supabase Local tables. The local
+  // server key comes from `supabase status`, is checked against the same loopback URL and stays here.
+  const catalogueTransport=process.env.CATALOGUE_TRANSPORT||'local';let serverKey;
+  if(catalogueTransport==='supabase'){
+   const {readLocalStatus}=await import('./local-supabase.mjs');const status=await readLocalStatus();
+   if(status.API_URL!==config.url)throw Error('Local Supabase status changed; restart the server.');
+   serverKey=status.SECRET_KEY||status.SERVICE_ROLE_KEY;
+  }
+  const server=await createLocalServer({config,port,catalogueSource:process.env.CATALOGUE_SOURCE||'canonical',catalogueTransport,serverKey,token:process.env.BSD_API_TOKEN});
   server.on('error',error=>{console.error('Local server could not start: '+error.code);process.exitCode=1;});
   server.listen(port,'127.0.0.1',()=>console.log(`Taktik Studyo: http://localhost:${port} — Supabase Local: ${config.url} (Ctrl+C to stop)`));
  })().catch(error=>{console.error(error.message);process.exitCode=1;});

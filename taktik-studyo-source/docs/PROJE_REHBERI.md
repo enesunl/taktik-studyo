@@ -67,7 +67,7 @@ kimlikleri çıkarılarak türetiliyor. Çizimler normalize koordinatlarla tutul
 | `dist/comparison.css` | Karşılaştırma stilleri |
 | `dist/app.js` | Saha motoru ve kullanıcı etkileşimleri |
 | `dist/comparison.js` | Sol/sağ saha başlatma |
-| `dist/rosters.js` | Statik fallback katalog |
+| ~~`dist/rosters.js`~~ | SEC1.1 ile kaldırıldı; katalog yalnızca BSD (`catalogue_*`), statik yedek yok |
 | `dist/faces/*.png` | 473 yerel oyuncu fotoğrafı |
 | `src/backend-entry.js` | Modülleri saha motoruna bağlayan başlangıç ve Edge çağrıları |
 | `src/lib/supabase.js` | Tek merkezi Supabase client |

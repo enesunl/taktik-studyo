@@ -5,7 +5,7 @@ class Element{
 }
 const document={body:{dataset:{page:'comparison'},style:{overflow:''},append(){}},createElement:()=>new Element(),createComment:()=>new Element(),documentElement:new Element(),querySelectorAll:()=>[],addEventListener(){}};
 const context=vm.createContext({window:{addEventListener(){},scrollBy(){},innerHeight:900},document,setTimeout(){},clearTimeout(){},requestAnimationFrame:()=>1,cancelAnimationFrame(){},URLSearchParams});
-const dir=require('path').join(__dirname,'../dist/');vm.runInContext(fs.readFileSync(dir+'rosters.js','utf8'),context);
+const dir=require('path').join(__dirname,'../dist/');vm.runInContext(require('./helpers/legacy-shape-roster.cjs').legacyRosterScript(),context);
 if(process.env.LIVE_CATALOGUE_FILE){const live=JSON.parse(fs.readFileSync(process.env.LIVE_CATALOGUE_FILE,'utf8'));context.window.TAKTIK_TEAMS=live.teams;context.window.TAKTIK_ROSTERS.teams=live.rosters;}
 vm.runInContext(fs.readFileSync(dir+'app.js','utf8'),context);
 const leftRoot=new Element(),rightRoot=new Element();const left=context.window.createTacticsBoard(leftRoot,{team:'Galatasaray',benchOnly:true}),right=context.window.createTacticsBoard(rightRoot,{team:'Fenerbahçe',benchOnly:true});

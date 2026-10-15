@@ -2,7 +2,7 @@
 // Credentials are only read from the process; never serialized or written.
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
-import {readFileSync} from 'node:fs';
+import {createRequire} from 'node:module';
 import {createMatchesHandler} from '../supabase/functions/matches/handler.js';
 import {fetchDetail,fetchSeason} from '../supabase/functions/matches/provider.js';
 import {createMatchLayout,createLocalCatalogue,resolveStudioLineups} from '../src/lib/match-layout.js';
@@ -40,7 +40,8 @@ else try {
   choose('action','clear');assert.equal(board.getDrawings().objects.length,0);assert.deepEqual(board.getState(),initial);
   assert.deepEqual(allNodes(root).filter(n=>n.className==='match-player-goals').map(n=>n.children.length),goalsBefore);
   assert.equal(upstreamRequests,4);board.dispose();
-  vm.runInNewContext(readFileSync(new URL('../dist/rosters.js',import.meta.url),'utf8'),{window:f.window});
+  // SEC1.1: legacy-shape rosters derived from the BSD fixture; the FotMob snapshot is gone.
+  vm.runInNewContext(createRequire(import.meta.url)('../tests/helpers/legacy-shape-roster.cjs').legacyRosterScript({withTeams:true}),{window:f.window});
   const local=createLocalCatalogue(f.window),future=await load('216231'),futureModel=createMatchLayout(future,local),lineups=resolveStudioLineups(future,local);assert.ok(futureModel);
   const coldRequests=upstreamRequests;await load('216231');assert.equal(upstreamRequests,coldRequests);assert.ok(coldRequests<=28);
   console.log(JSON.stringify({runtime:'Node handler + DOM fixture; mocked Auth; live BSD GET only',completed:{id:'215997',players:22,pitches:1,homeFormation:model.home.formation,awayFormation:model.away.formation,dragReset:true,drawingTools:6,eraseUndoRedoClear:true,resetPreservesDrawings:true,goalsPreserved:true},future:{id:'216231',studioAvailable:true,homeSource:lineups.home.lineupKind,awaySource:lineups.away.lineupKind,sourceMatchIds:[lineups.home.sourceMatchId,lineups.away.sourceMatchId].filter(Boolean)},upstreamRequests,cacheHits:2,interactionProviderRequests:0}));

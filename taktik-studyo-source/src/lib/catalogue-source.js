@@ -4,10 +4,16 @@ import {createLocalCatalogueClient} from './catalogue-local-client.js';
 import {squadFallback} from './catalogue-default-xi.js';
 import {internalPlayerId} from './catalogue-identity.js';
 import {serializeStudioProject} from './studio-project-snapshot.js';
+const loopback=origin=>{try{const u=new URL(origin);return u.protocol==='http:'&&['localhost','127.0.0.1'].includes(u.hostname);}catch{return false;}};
 export const canonicalRows=players=>players.map(p=>({id:p.id,team_id:p.teamId,display_name:p.name,shirt_number:p.number,position_group:p.positionGroup,specific_position:p.specificPosition,catalogue_active:p.catalogueActive}));
 export function createCatalogueSource({config,client,window,fetchImpl}){
  const source=config?.source??'legacy';if(!['legacy','canonical'].includes(source))throw catalogueError('catalogue_malformed');
- const canonical=source==='canonical',dataClient=canonical?createLocalCatalogueClient({auth:client?.auth,origin:window.location.origin,fetchImpl}):client;
+ // Canonical (BSD) data: loopback development keeps the local PGlite transport; any other
+ // origin reads the authenticated catalogue_* tables through the existing Supabase client.
+ // There is no static roster fallback in either mode.
+ // transport:'supabase' (local integration only) makes loopback use the Supabase tables too.
+ const canonical=source==='canonical',local=canonical&&loopback(window?.location?.origin)&&config?.transport!=='supabase';
+ const dataClient=canonical?(local?createLocalCatalogueClient({auth:client?.auth,origin:window.location.origin,fetchImpl}):client):client;
  const reader=canonical?createCanonicalCatalogue(dataClient):createCatalogue(client);
  let data,defaults={},pending,defaultsReady=null;
  function install(model,legacy){
@@ -18,7 +24,7 @@ export function createCatalogueSource({config,client,window,fetchImpl}){
   window.TAKTIK_ROSTERS=canonical?{teams:Object.fromEntries(model.teams.map(t=>[t.name,{identity:'internal',teamId:t.id,players:model.players.filter(p=>p.teamId===t.id).map(p=>({...p,position:p.positionGroup}))}]))}:{...window.TAKTIK_ROSTERS,teams:legacy.rosters};
   if(canonical)window.TAKTIK_CATALOGUE_RUNTIME=api;
  }
- const api={source,canonical,dataClient:canonical?dataClient:undefined,get model(){return data;},get defaultsReady(){return defaultsReady;},
+ const api={source,canonical,local,dataClient:canonical?dataClient:undefined,get model(){return data;},get defaultsReady(){return defaultsReady;},
   validateMatch(match){
    const people=['home','away'].flatMap(side=>['lineups','studioLineups'].flatMap(kind=>['starters','substitutes'].flatMap(group=>match[kind]?.[side]?.[group]||[])));
    for(const e of [...(match.incidents||[]),...(match.substitutions||[])])people.push(...[e.player,e.incoming,e.outgoing].filter(Boolean));
@@ -30,10 +36,11 @@ export function createCatalogueSource({config,client,window,fetchImpl}){
   async load(){
    if(pending)return pending;
    pending=(async()=>{
-    if(!canonical&&!client)return;
+    if(!dataClient)throw catalogueError('network_failure');
     // Recent confirmed XIs can require multiple provider detail calls. The
     // catalogue is sufficient for a usable board; enrichment never remounts it.
-    if(canonical&&!defaultsReady)defaultsReady=dataClient.request('defaults').then(context=>{if(!context.error&&context.data)defaults=context.data;}).catch(()=>{});
+    // Only the local transport serves defaults; elsewhere the deterministic squad arrangement applies.
+    if(canonical&&!defaultsReady)defaultsReady=typeof dataClient.request==='function'?dataClient.request('defaults').then(context=>{if(!context.error&&context.data)defaults=context.data;}).catch(()=>{}):Promise.resolve();
     const result=await reader.load();
     if(canonical){install(result);}
     else install({teams:result.teams.map((t,i)=>({id:t.id,name:t.name,shortName:t.short,color:t.color,color2:t.color2,sortOrder:i,catalogueActive:true})),players:result.teams.flatMap(t=>result.rosters[t.name].players.map(p=>({id:p.id,teamId:t.id,name:p.name,number:p.number,positionGroup:p.position,specificPosition:null,catalogueActive:true})))},result);

@@ -7,16 +7,20 @@ Kamuya açık açıklama: `dist/iletisim.html`. Bulgular: `LEGAL_AUDIT.md`.
 > Bu prosedür uygulama içine otomatik silme veya migration eklemez. Aşağıdaki işlemler, yetkili
 > operatör tarafından Supabase Dashboard üzerinden ve her talep için ayrı ayrı elle yapılır.
 
-## 0. Ön koşul — talep kanalı çalışmıyor
+## 0. Talep kanalı (LEGAL2 güncellemesi, 15.10.2026)
 
-`iletisim@taktikstudyo.com` sitede yayımlandı, ancak 14.10.2026 itibarıyla `taktikstudyo.com` alan
-adının **MX kaydı yok** (yetkili sunucu `ns1.metunic.com.tr` yalnızca SOA döndürüyor). Bu adrese
-gönderilen e-postalar teslim edilemez. Yayından önce:
+`iletisim@taktikstudyo.com` artık posta alıyor:
 
-1. Bir posta kutusu sağlayıcısı seçilip MX, SPF ve DMARC kayıtları eklenmeli **[REVIEW REQUIRED]**.
-2. Mevcut `send.taktikstudyo.com` / `resend._domainkey` kayıtları yalnızca gönderime yöneliktir; gelen
-   postayı karşılamaz.
-3. Dışarıdan test e-postası gönderilip teslim doğrulanmalı.
+- **Altyapı:** Google Workspace. Kayıtlar: MX `smtp.google.com`, SPF `include:_spf.google.com ~all`, DMARC `p=none` [DOĞRULANDI: DNS, 15.10.2026].
+- **Test:** Gönderme ve alma testi operatör tarafından yapıldı.
+- **Gönderim kayıtları:** `send.taktikstudyo.com` ve `resend._domainkey` yalnızca Supabase Auth e-postalarının gönderimiyle ilgilidir; Auth SMTP ayarı hâlâ **[DOĞRULANMADI]**.
+
+Açık noktalar:
+
+1. Google Workspace, posta kutusundaki yazışmalar ve başvurular için **veri işleyen** olur. Sözleşme tarafı Google kuruluşu, veri işleme koşullarının kabulü ve KVKK m.9 aktarım dayanağı doğrulanmalı **[REVIEW REQUIRED]**.
+2. Posta kutusuna erişim yalnızca operatörde olmalı; iki adımlı doğrulama açık olmalı. Bu, operatör tarafından teyit edilmeli **[REVIEW REQUIRED]**.
+3. Başvuru e-postaları ve ekleri için bir saklama süresi belirlenmeli **[REVIEW REQUIRED]**.
+4. DMARC `p=none` yalnızca izleme yapar. Yayından sonra `quarantine`/`reject` değerlendirilmeli (sahte gönderen riskine karşı).
 
 ## 1. Talep alma ve kimlik doğrulama
 
@@ -120,7 +124,8 @@ Bir Auth kullanıcısının profili yok: profil, istemci tarafından açıkça o
 | Supabase / Netlify günlükleri | IP, tarayıcı ve istek kayıtları sağlayıcı süresince tutulur; operatörün tek tek silme imkânı yoktur **[DOĞRULANMADI: süreler]**. |
 | E-posta sağlayıcısı | DNS, Resend'e işaret ediyor; Supabase Auth SMTP ayarı **[DOĞRULANMADI]**. Gönderim günlükleri alıcı adresini içerebilir. |
 | Cloudflare (Turnstile, Supabase ağı) | Kullanıcıya bağlanabilir kayıt tutulmuyor (uygulama tarafı); sağlayıcı tarafı **[DOĞRULANMADI]**. |
-| Yurt dışı aktarım | Netlify, Supabase, Cloudflare ve e-posta sağlayıcısı için KVKK m.9 mekanizması belirlenmeli **[REVIEW REQUIRED]**. |
+| Google Workspace (iletişim posta kutusu) | Talep e-postaları ve ekleri posta kutusunda kalır. Operatör, başvuru tamamlanınca gereksiz ekleri (ör. kimlik belgesi kopyası) siler; süre **[REVIEW REQUIRED]**. |
+| Yurt dışı aktarım | Netlify, Supabase, Cloudflare, Google Workspace ve e-posta gönderim sağlayıcısı için KVKK m.9 mekanizması belirlenmeli **[REVIEW REQUIRED]**. |
 
 ## 7. Talep kaydı ve süreler
 
@@ -147,7 +152,7 @@ Kayıt depoda tutulmaz; operatöre özel, erişimi kısıtlı bir tabloda tutulu
 
 ## 8. Açık sorular
 
-1. Gelen posta altyapısı (MX) ve `iletisim@taktikstudyo.com` posta kutusunun kurulması.
+1. ~~Gelen posta altyapısı (MX)~~ Çözüldü: Google Workspace (bölüm 0). Google'ın veri işleme koşulları ve aktarım dayanağı açık.
 2. E-posta gönderim sağlayıcısı ve Supabase Auth SMTP ayarı.
 3. KVKK m.9 yurt dışı aktarım mekanizması (standart sözleşme ve bildirim ya da istisna).
 4. Supabase yedek/günlük süreleri, Netlify ve e-posta sağlayıcısı günlük süreleri.

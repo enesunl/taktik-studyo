@@ -159,14 +159,15 @@ test('O3 shared picker keeps all 18 canonical teams and explicit no-team option 
   assert.deepEqual(f.writes,[{favoriteTeamSlug:'galatasaray'}]);assert.deepEqual(f.navigation,['/studyo.html']);f.page.dispose();
 });
 
-test('OB3.1 showcase teams mirror canonical names/colors and every player exists in the bundled roster snapshot',async()=>{
+test('OB3.1 showcase teams mirror canonical names/colors and every player exists in the BSD catalogue fixture',async()=>{
   const registry=JSON.parse(await readFile(new URL('../scripts/catalogue/team-registrations.json',import.meta.url),'utf8'));
-  const window={};new Function('window',await readFile(new URL('../dist/rosters.js',import.meta.url),'utf8'))(window);
+  const bsd=JSON.parse(await readFile(new URL('./fixtures/bsd-catalogue-clean.json',import.meta.url),'utf8'));
   for(const [id,team] of Object.entries(showcaseTeams)){
     const canonical=registry.find(t=>t.id===id);assert(canonical,id);
     assert.deepEqual([team.name,team.short,team.primary,team.secondary],[canonical.display_name,canonical.short_name,canonical.color_primary,canonical.color_secondary]);
   }
-  const roster=key=>window.TAKTIK_ROSTERS.teams[showcaseTeams[key].name].players;
+  // Same shape as the old snapshot check: name/number per canonical team slug.
+  const roster=key=>bsd.players.filter(p=>p.team_id===key).map(p=>({name:p.display_name,number:p.shirt_number}));
   const has=(key,full,number)=>{const p=roster(key).find(p=>p.name===full);assert(p,`${full} not in ${key}`);if(number!==undefined)assert.equal(p.number,number,full);};
   for(const p of boardShowcase.players)has(boardShowcase.team,p.full,p.number);
   for(const p of [boardShowcase.substitution.out,boardShowcase.substitution.in,...boardShowcase.bench])assert(roster(boardShowcase.team).some(r=>r.number===p.number&&r.name.includes(p.name)),p.name);
@@ -181,7 +182,7 @@ test('OB3.1 illustrations show team names, colored kits and player names without
   const expectations={
     studio:['Galatasaray','Fenerbahçe','Osimhen','Škriniar'],
     board:['Trabzonspor','Onana','Salah','Franculino','Paul Onuachu','Ozan Tufan'],
-    matches:['Beşiktaş','Trabzonspor','Samsunspor','Başakşehir','Kökcü','Malinovsky','Stüdyoda Aç →'],
+    matches:['Beşiktaş','Trabzonspor','Samsunspor','Başakşehir','Kökçü','Malinovskyi','Stüdyoda Aç →'],
     weekly:['Ederson','Osimhen','Kanté','Victor Osimhen','Galatasaray','PNG İndir ↓'],
   };
   await f.click('Başla →');

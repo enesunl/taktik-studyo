@@ -11,11 +11,13 @@ import {normalizeLineups} from '../supabase/functions/matches/detail.js';
 import {teamMapping} from '../supabase/functions/matches/teams.js';
 import {validXI} from '../src/lib/studio-lineups.js';
 import {parseFormation} from '../src/lib/match-layout.js';
+import {legacyRosterText,LEGACY_ROSTER_PATH} from './catalogue/legacy-snapshot.mjs';
 
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..'),BASE='https://sports.bzzoiro.com/api/v2/';
 const token=process.env.BSD_API_TOKEN?.trim(),ledger=[],cache=new Map();
 const read=path=>readFileSync(resolve(ROOT,path),'utf8');
-const hash=path=>createHash('sha256').update(readFileSync(resolve(ROOT,path))).digest('hex');
+// SEC1.1: the legacy snapshot is frozen evidence read from Git history, not a working-tree file.
+const hash=path=>createHash('sha256').update(path===LEGACY_ROSTER_PATH?legacyRosterText():readFileSync(resolve(ROOT,path))).digest('hex');
 const protectedFiles=['dist/rosters.js','supabase/seed.sql','BSD_CATALOGUE_COMPATIBILITY_AUDIT.md','scripts/audit-bsd-catalogue.mjs'];
 const baselineHashes=Object.fromEntries(protectedFiles.map(p=>[p,hash(p)]));
 const norm=v=>String(v??'').normalize('NFKD').replace(/[ıİ]/g,'i').toLowerCase().replace(/\p{M}/gu,'').replace(/[’‘`´ʼ']/g,'').replace(/[‐‑–—-]/g,' ').replace(/\s+/g,' ').trim();
@@ -54,7 +56,7 @@ async function get(path){
 }
 async function pool(rows,fn){let next=0;const out=new Array(rows.length);await Promise.all(Array.from({length:Math.min(4,rows.length)},async()=>{for(;;){const i=next++;if(i>=rows.length)return;out[i]=await fn(rows[i],i);}}));return out;}
 function localData(){
-  const roster=JSON.parse(read('dist/rosters.js').replace(/^\s*window\.TAKTIK_ROSTERS\s*=\s*/,'').replace(/;\s*$/,''));
+  const roster=JSON.parse(legacyRosterText().replace(/^\s*window\.TAKTIK_ROSTERS\s*=\s*/,'').replace(/;\s*$/,''));
   const teams=Object.entries(roster.teams).map(([name,t])=>({name,legacyTeamId:'fotmob-'+t.source.match(/\/teams\/(\d+)\//)[1],players:t.players}));
   return {teams,players:teams.flatMap(t=>t.players.map(p=>({...p,legacyPlayerId:p.id,team:t.name,legacyTeamId:t.legacyTeamId})))};
 }

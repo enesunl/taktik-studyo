@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createMatchesHandler,matchesOrigins} from '../supabase/functions/matches/handler.js';
+import {createMatchesHandler,matchesOrigins,seasonTTL} from '../supabase/functions/matches/handler.js';
 import {match,deferred} from './helpers/matches-fixture.mjs';
 
 const user = {id:'test-user',email_confirmed_at:'2026-09-01'};
@@ -25,14 +25,16 @@ test('strict origin handling and GET-only fixed scope; CORS never wildcard',asyn
   assert.deepEqual(matchesOrigins(),['https://taktikstudyo.com']);
   for(const origin of ['*','','https://taktikstudyo.com/path','https://user:pass@example.com','http://localhost:9999','https://*.example.com']) assert.throws(() => matchesOrigins(origin));
 });
-test('cache is private, expires in five minutes, deduplicates concurrent loads and authenticates cache hits',async() => {
+test('cache is private, expires per seasonTTL, deduplicates concurrent loads and authenticates cache hits',async() => {
   let loads=0,checks=0,time=0;const wait=deferred();
   const handler=createMatchesHandler({...options,now:()=>time,authenticate:async()=>{checks++;return user;},load:async()=>{loads++;return wait.promise;}});
   const a=handler(request()),b=handler(request());await Promise.resolve();wait.resolve(result);
   const responses=await Promise.all([a,b]);assert.equal(loads,1);assert.equal(checks,2);
-  assert.equal(responses[0].headers.get('cache-control'),'private, max-age=300');
+  // Browser max-age stays at most 5 minutes; the server TTL depends on how close a match is (PROD1.2).
+  const ttl=seasonTTL(result,0);assert.equal(responses[0].headers.get('cache-control'),'private, max-age='+Math.min(300,ttl));
   await handler(request());assert.equal(loads,1);assert.equal(checks,3);
-  time=300001;await handler(request());assert.equal(loads,2);
+  time=ttl*1000-1;await handler(request());assert.equal(loads,1);
+  time=ttl*1000+1;await handler(request());assert.equal(loads,2);
 });
 test('rate limit, timeout and connection failures never expose upstream body, token or error',async() => {
   for(const error of ['provider_limited','secret token, URL and stack']) {

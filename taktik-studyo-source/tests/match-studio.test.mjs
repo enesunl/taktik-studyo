@@ -99,13 +99,13 @@ test('invalid IDs, future XI absence, failure/retry and stale async response nev
   const g=matchBoardDocument(),wait=deferred();let active=true,calls=0;const late=mountMatchStudio({document:g.document,window:g.window,current:()=>active,api:{load(){calls++;return wait.promise;}}});fire(g.nodes.matchStudioContent.children[2],'click');assert.equal(calls,1);active=false;late.dispose();wait.resolve({ok:true,match:detail()});await late.ready;assert.equal(g.nodes.matchStudioContent.children.length,0);
   const h=matchBoardDocument();let tries=0;const retry=mountMatchStudio({document:h.document,window:h.window,current:()=>true,api:{load:async()=>++tries===1?{ok:false,error:{message:'secret'}}:{ok:true,match:detail()}}});await retry.ready;assert.doesNotMatch(textOf(h.nodes.matchStudioContent),/secret/);fire(h.nodes.matchStudioContent.children[2],'click');await tick();assert.equal(tries,2);retry.dispose();
 });
-for(const path of ['/mac-studyosu','/mac-studyosu.html'])test(path+' shares protected guard, no draft/catalogue and blocks recovery',async()=>{
+for(const path of ['/mac-studyosu','/mac-studyosu.html'])test(path+' shares protected guard, loads the active catalogue only after validation (SEC1.1) and blocks recovery',async()=>{
   assert.deepEqual(resolvePage(new URL(path,'https://taktikstudyo.com')),{kind:'protected',page:'match-studio',path:'/mac-studyosu.html'});
   for(const status of ['signed_in','signed_out','password_recovery']){
-    const f=matchBoardDocument(path+'?id=215997&hafta=6'),state={status,user:{id:'u'}};let loads=0;
+    const f=matchBoardDocument(path+'?id=215997&hafta=6'),state={status,user:{id:'u'}};let loads=0,catalogues=0;
     f.window.location=new URL('https://taktikstudyo.com'+path+'?id=215997&hafta=6');f.window.location.replace=url=>f.navigations.push(url);
     const auth={initialize:async()=>({ok:true}),getState:()=>state,subscribe:()=>()=>{},validateUser:async()=>({ok:true,user:{id:'u'}})};
-    const page=startPage({auth,document:f.document,window:f.window,client:{functions:{invoke:async()=>{loads++;return{data:detail()};}}},backend:{loadCatalogue(){throw Error('No catalogue');}}});await page.ready;await tick();assert.equal(loads,status==='signed_in'?1:0);assert.equal(f.nodes.protectedContent.hidden,status!=='signed_in');page.dispose();
+    const page=startPage({auth,document:f.document,window:f.window,client:{functions:{invoke:async()=>{loads++;return{data:detail()};}}},backend:{loadCatalogue(){catalogues++;return Promise.resolve();}}});await page.ready;await tick();assert.equal(loads,status==='signed_in'?1:0);assert.equal(catalogues,status==='signed_in'?1:0);assert.equal(f.nodes.protectedContent.hidden,status!=='signed_in');page.dispose();
   }
 });
 test('static Match Studio uses common app utilities and dedicated horizontal viewport',()=>{

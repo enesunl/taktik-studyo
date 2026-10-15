@@ -4,13 +4,15 @@ import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
 import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
+import {legacyRosterText,LEGACY_ROSTER_PATH} from './legacy-snapshot.mjs';
 const root=fileURLToPath(new URL('../../',import.meta.url));
 const read=p=>readFileSync(resolve(root,p),'utf8');
 const norm=v=>v.normalize('NFKD').replace(/[ıİ]/g,'i').toLowerCase().replace(/\p{M}/gu,'').replace(/[’‘`´ʼ']/g,'').replace(/[‐‑–—-]/g,' ').replace(/\s+/g,' ').trim();
 const rows=s=>s.split('\n').filter(l=>/^\| \d/.test(l)).map(l=>l.trim().slice(1,-1).split('|').map(x=>x.trim()));
 export function auditInput(){
   const d1=read('BSD_CATALOGUE_COMPATIBILITY_AUDIT.md'),d11=read('BSD_MIGRATION_BLOCKER_AUDIT.md');
-  const roster=JSON.parse(read('dist/rosters.js').replace(/^\s*window\.TAKTIK_ROSTERS\s*=\s*/,'').replace(/;\s*$/,''));
+  // Frozen D2 evidence: the removed legacy snapshot is read from Git history (SEC1.1).
+  const legacyText=legacyRosterText(),roster=JSON.parse(legacyText.replace(/^\s*window\.TAKTIK_ROSTERS\s*=\s*/,'').replace(/;\s*$/,''));
   const seed=read('supabase/seed.sql');
   const slugs=['alanyaspor','amedspor','basaksehir','besiktas','caykur-rizespor','corum-fk','erzurumspor','eyupspor','fenerbahce','galatasaray','gaziantep-fk','genclerbirligi','goztepe','kasimpasa','kocaelispor','konyaspor','samsunspor','trabzonspor'];
   const teamRows=d1.split('## 3.')[1].split('## 4.')[0].split('\n').filter(l=>/^\| .*\| fotmob-/.test(l)).map(l=>l.trim().slice(1,-1).split('|').map(x=>x.trim()));
@@ -44,7 +46,7 @@ export function auditInput(){
   assert.equal(players.length,543);assert.equal(new Set(players.map(p=>p.provider_id)).size,543);
   const unresolved=matches.filter(m=>!aliases.some(a=>a.legacy_id===m.p.id)).map(m=>({legacy_id:m.p.id,team_id:m.p.team_id,
     reason:m.c.length===0?'NO_SAFE_MATCH':m.c.length>1||claims.get(m.match?.provider_id)>1?'AMBIGUOUS':'MEDIUM'}));
-  return {version:1,evidence:Object.fromEntries(['BSD_CATALOGUE_COMPATIBILITY_AUDIT.md','BSD_MIGRATION_BLOCKER_AUDIT.md','dist/rosters.js'].map(p=>[p,createHash('sha256').update(readFileSync(resolve(root,p))).digest('hex')])),
+  return {version:1,evidence:Object.fromEntries(['BSD_CATALOGUE_COMPATIBILITY_AUDIT.md','BSD_MIGRATION_BLOCKER_AUDIT.md',LEGACY_ROSTER_PATH].map(p=>[p,createHash('sha256').update(p===LEGACY_ROSTER_PATH?legacyText:readFileSync(resolve(root,p))).digest('hex')])),
     summary:{teams:teams.length,players:players.length,high:high.length,safeVariants:variants.length,safeAliases:aliases.length,unresolved:unresolved.length},teams,players,aliases,unresolved};
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){

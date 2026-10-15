@@ -31,30 +31,32 @@ window.TAKTIK_DRAFTS={
   read(key){try{return readDraft(window.localStorage,key);}catch{return null;}},
   write(key,state){let ok=false;try{ok=writeDraft(window.localStorage,key,state);}catch{}if(!ok)status('Taslak bu tarayıcıya kaydedilemedi. Açık kadro üzerinde çalışmaya devam edebilirsin.');return ok;}
 };
-const catalogue=createCatalogueSource({config:window.TAKTIK_CATALOGUE_CONFIG,client:supabase,window});
+// SEC1.1: the build selects the catalogue (default BSD canonical); legacy is an explicit rollback
+// build only. The local server may inject its own explicit configuration.
+const buildCatalogueSource=typeof __CATALOGUE_SOURCE__==='string'?__CATALOGUE_SOURCE__:'canonical';
+const catalogue=createCatalogueSource({config:window.TAKTIK_CATALOGUE_CONFIG??{source:buildCatalogueSource},client:supabase,window});
 let catalogueReady = null;
 window.TAKTIK_BACKEND={
   enabled:!!supabase,
-  source:supabase?'loading':'fallback',
+  source:supabase?'loading':'unavailable',
   validateShare:prepareShare,
   ready:Promise.resolve(),
   catalogue,
   loadCatalogue(){
-    if (!supabase&&!catalogue.canonical) return Promise.resolve();
     if (!catalogueReady) catalogueReady=catalogue.load().then(()=>{
       window.TAKTIK_BACKEND.source='supabase';
-    }).catch(error=>{catalogueReady=null;if(catalogue.canonical){window.TAKTIK_BACKEND.source='error';status('Takım kataloğu şu anda yüklenemedi. Tekrar dene.');throw error;}window.TAKTIK_BACKEND.source='fallback';status('Güncel kadrolar alınamadı. Kayıtlı takım listesiyle çalışıyorsun.');});
+    }).catch(error=>{catalogueReady=null;window.TAKTIK_BACKEND.source='error';status('Takım kataloğu şu anda yüklenemedi. Tekrar dene.');throw error;});
     window.TAKTIK_BACKEND.ready=catalogueReady;
     return catalogueReady;
   },
   async sharingReady(){
-    if(catalogue.canonical)return false;
+    if(catalogue.local)return false;
     if(!supabase)return false;
     const response=await fetch(publicConfig.url+'/functions/v1/lineups',{method:'OPTIONS',headers:{apikey:publicConfig.key},signal:AbortSignal.timeout(8000)});
     return response.ok && response.headers.get('X-Sharing-Ready')==='true';
   },
   async saveLineup(state,token){
-    if(catalogue.canonical)throw new Error('Yerel katalog modunda paylaşım yayımlanmaz.');
+    if(catalogue.local)throw new Error('Yerel katalog modunda paylaşım yayımlanmaz.');
     if(!supabase)throw new Error('Paylaşım henüz etkin değil.');
     if(typeof token!=='string'||!token||token.length>2048)throw new Error('Önce güvenlik doğrulamasını tamamla.');
     const body=prepareShare(state);

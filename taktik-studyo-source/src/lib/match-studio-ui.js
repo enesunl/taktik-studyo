@@ -1,4 +1,4 @@
-import {requestedRound} from './matches.js';
+import {requestedRound,staleNotice} from './matches.js';
 import {studioRoute,serializeStudioProject,projectBoardState} from './studio-project-snapshot.js';
 import {createProjectRecovery} from './studio-autosave.js';
 import {mountStudioSave} from './studio-save-ui.js';
@@ -46,6 +46,7 @@ export function mountMatchStudio({document,window,api,current,projects,userId,pl
     const match=result.match,model=createMatchLayout(match,local);
     if(!model){status.textContent='Bu maç için başlangıç kadroları mevcut değil. Eksiksiz iki kadro gerekli.';return;}
     setup(model,{source:{mode:'match',matchId:route.id,week:requestedRound(window.location.search)||null}});
+    status.textContent=staleNotice(result.freshness);
   }
   function setup(model,{source,project=null,initial={},restored=null}){
     clearEditor();const free=source.mode==='free';

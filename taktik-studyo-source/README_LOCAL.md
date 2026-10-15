@@ -38,7 +38,7 @@ bağımlılık kurmadan `node scripts/serve-local.cjs` çalıştırabilirsin.
 | Renk, yerleşim, saha ve genel görünüm | `dist/styles.css` |
 | Kadro, drag & drop, yedek değişimi, çizim, fullscreen | `dist/app.js` |
 | İki kadronun oluşturulması ve karşılaştırma görünümü | `dist/comparison.js`, `dist/comparison.css` |
-| Yedek statik oyuncu kataloğu | `dist/rosters.js` |
+| Oyuncu kataloğu (BSD; statik yedek yok, SEC1.1) | `src/lib/catalogue-source.js`, `src/lib/catalogue-canonical.js` |
 | Supabase okuma ve model dönüştürme | `src/lib/catalogue.js` |
 | Supabase istemcisi | `src/lib/supabase.js` |
 | localStorage kaydı | `src/lib/drafts.js` ve `dist/app.js` |

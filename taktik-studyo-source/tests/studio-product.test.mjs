@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
+import {legacyRosterScript} from './helpers/legacy-shape-roster.cjs';
 import {matchBoardDocument,fire,BoardNode} from './helpers/match-board-fixture.mjs';
 import {allNodes,textOf} from './helpers/matches-fixture.mjs';
 import {detail} from './helpers/match-detail-fixture.mjs';
@@ -14,7 +15,7 @@ import {resolveProbableXI,HISTORY_LIMIT} from '../supabase/functions/matches/pro
 import {createMatchesHandler} from '../supabase/functions/matches/handler.js';
 
 const read=path=>readFileSync(new URL('../'+path,import.meta.url),'utf8');
-function localFixture(){const f=matchBoardDocument('/mac-studyosu');vm.runInNewContext(read('dist/rosters.js'),{window:f.window});return {...f,local:createLocalCatalogue(f.window)};}
+function localFixture(){const f=matchBoardDocument('/mac-studyosu');vm.runInNewContext(legacyRosterScript({withTeams:true}),{window:f.window});return {...f,local:createLocalCatalogue(f.window)};}
 function boardFixture(){const f=localFixture(),model=createMatchLayout(detail()),board=createMatchBoard({root:f.nodes.matchStudioContent,document:f.document,model,utils:f.utils});return {...f,model,board,root:f.nodes.matchStudioContent};}
 const node=(root,cls)=>allNodes(root).find(n=>(n.className||'').split(' ').includes(cls));
 const markers=root=>allNodes(root).filter(n=>n.dataset.slotKey);

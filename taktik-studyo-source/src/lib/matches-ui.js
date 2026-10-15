@@ -1,5 +1,5 @@
 import {promoteFavoriteMatch} from './favorite-team.js';
-import {ROUNDS,requestedRound,adjacentRound,defaultRound,matchDate,MATCH_STATUS_LABELS} from './matches.js';
+import {ROUNDS,requestedRound,adjacentRound,defaultRound,matchDate,MATCH_STATUS_LABELS,staleNotice} from './matches.js';
 
 export function mountMatches({document,window,api,current,loadFavorite,now = Date.now}) {
   const root = document.getElementById('matchesContent');
@@ -14,7 +14,9 @@ export function mountMatches({document,window,api,current,loadFavorite,now = Dat
   const buttons = ROUNDS.map(round => {const button = node('button',String(round)); button.type = 'button'; button.setAttribute('aria-label',round+'. hafta'); weeks.append(button); return button;});
   controls.append(heading,weeks);
   const list = node('div',undefined,'matches-list');
-  root.replaceChildren(status,retry,controls,list);
+  // Shown only when the server says the displayed data is a retained copy (provider temporarily unavailable).
+  const notice = node('p',undefined,'matches-stale'); notice.setAttribute('role','status'); notice.hidden = true;
+  root.replaceChildren(status,retry,notice,controls,list);
   let stopped = false, busy = false, generation = 0, matches = [], selected = 1, favorite = null, loaded = false;
   const active = () => !stopped && current();
   const listeners = [];
@@ -63,12 +65,13 @@ export function mountMatches({document,window,api,current,loadFavorite,now = Dat
   async function load() {
     if (!active() || busy) return;
     loaded=false;busy = true; const turn = ++generation;
-    status.textContent = 'Maçlar yükleniyor…'; retry.hidden = true; controls.hidden = true; list.replaceChildren();
+    status.textContent = 'Maçlar yükleniyor…'; retry.hidden = true; controls.hidden = true; list.replaceChildren(); notice.hidden = true;
     let result;
     try {result = await api.load();} catch {result = {ok:false};}
     if (!active() || turn !== generation) return;
     busy = false;
     if (!result.ok) {status.textContent = 'Maç verileri şu anda alınamıyor. Lütfen biraz sonra tekrar deneyin.'; retry.hidden = false; return;}
+    notice.textContent = staleNotice(result.freshness); notice.hidden = !notice.textContent;
     loaded=true;matches = result.matches; selected = requestedRound(window.location.search) || defaultRound(matches,now());
     urlRound(selected,true); controls.hidden = false; render();
   }

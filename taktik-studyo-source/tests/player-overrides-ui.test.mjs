@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import {legacyRosterScript} from './helpers/legacy-shape-roster.cjs';
 import {createPlayerOverrides} from '../src/lib/player-overrides.js';
 import {createFreeTeam,createLocalCatalogue,createMatchLayout} from '../src/lib/match-layout.js';
 import {createMatchBoard} from '../src/lib/match-board.js';
@@ -34,7 +35,7 @@ test('failed player save preserves all form fields and canonical view; pending s
  client.error=null;const d=deferred();client.pause=d.promise;editor(f,'Pending edit');await tick();f.board.selectTeam('Fenerbahçe');d.resolve();await tick();assert.equal(f.board.getState().team.name,'Fenerbahçe');assert.equal(control(f.root,'playerEditStatus').textContent,'');assert.equal(control(f.root,'playerForm').inert,false);
 });
 test('Free Studio overlay propagates without dirtying saved snapshot; reopen keeps tactical identity, bench, drawings and pitch',async()=>{
- const f=matchBoardDocument(),client=overrideClient(),overrides=store(client);await overrides.load();vm.runInNewContext(read('dist/rosters.js'),{window:f.window});
+ const f=matchBoardDocument(),client=overrideClient(),overrides=store(client);await overrides.load();vm.runInNewContext(legacyRosterScript({withTeams:true}),{window:f.window});
  const local=createLocalCatalogue(f.window),model={matchId:null,home:createFreeTeam(local.teams[0],'home',local),away:createFreeTeam(local.teams[1],'away',local)};
  let changes=0;const options={root:f.nodes.matchStudioContent,document:f.document,model,utils:f.utils,playerOverrides:overrides,onChange:()=>changes++};const board=createMatchBoard(options),snapshot=structuredClone(board.exportState()),p=model.home.players[0];
  assert.equal((await overrides.save('local:'+p.playerId,{name:'Free custom',number:88,role:'MO'})).ok,true);

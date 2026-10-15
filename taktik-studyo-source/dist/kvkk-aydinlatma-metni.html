@@ -7,8 +7,9 @@
 <main class="legal-main"><article class="legal-article" aria-labelledby="legalTitle">
 <p class="legal-eyebrow">Yasal bilgilendirme</p>
 <h1 id="legalTitle">KVKK Aydınlatma Metni</h1>
-<p class="legal-meta">Taslak tarihi: 14 Ekim 2026 · Yürürlük tarihi: <mark class="legal-review">[REVIEW REQUIRED: yayın onayından sonra]</mark></p>
+<p class="legal-meta">Taslak tarihi: 15 Ekim 2026 · Yürürlük tarihi: <mark class="legal-review">[REVIEW REQUIRED: yayın onayından sonra]</mark></p>
 <div class="legal-draft" role="note"><strong>Taslak metin.</strong> Bu metin hukuki inceleme ve onay tamamlanmadan yürürlüğe girmez. Köşeli parantez içindeki işaretli alanlar yayından önce doldurulmalıdır.</div>
+<p class="legal-scope"><mark class="legal-review">[REVIEW REQUIRED: Bu taslak, yayın için planlanan hizmeti anlatır. 15 Ekim 2026 itibarıyla canlı sitede henüz bulunmayan ve yayından önce canlıya alınacak olanlar: favori takım ve tanıtım akışı, Haftanın İlk 11’i kayıtları, Maçlar (BSD maç verisi), BSD oyuncu kataloğu (canlıda hâlâ eski FotMob kaynaklı kadro verisi kullanılıyor), uygulama içi hesap silme ve paylaşım bağlantılarının hesaba bağlanması. Canlıdaki paylaşım akışı şu an giriş gerektirmiyor. Metin, yayın günü canlı durumla eşitlenmeden yayımlanmamalı.]</mark></p>
 <p class="legal-lead">Bu metin, 6698 sayılı Kişisel Verilerin Korunması Kanunu (“KVKK”) m.10 ve Aydınlatma Yükümlülüğünün Yerine Getirilmesinde Uyulacak Usul ve Esaslar Hakkında Tebliğ uyarınca, Taktik Stüdyo’yu kullanırken kişisel verilerinin nasıl işlendiği hakkında seni bilgilendirmek için hazırlanmıştır. Bu metin bir bilgilendirmedir; açık rıza alınması anlamına gelmez ve kabul edilmesi gerekmez.</p>
 <h2 id="sorumlu">1. Veri sorumlusu</h2>
 <dl class="legal-facts">
@@ -26,6 +27,7 @@
 <tr><td>İletişim</td><td>E-posta adresi</td><td>Kayıt, giriş, e-posta doğrulama, şifre sıfırlama</td></tr>
 <tr><td>Kullanıcı içeriği ve tercihleri</td><td>Kaydettiğin Stüdyo çalışmaları, Haftanın İlk 11’i kayıtları, oyuncu adı/numara/mevki düzeltmelerin, favori takımın, tanıtımı tamamlama bilgisi</td><td>Bu özellikleri kullandığında</td></tr>
 <tr><td>İşlem güvenliği</td><td>Şifren (hizmet sağlayıcı tarafından geri döndürülemez biçimde özetlenmiş/hash’lenmiş olarak), oturum belirteçleri, hesap oluşturma/doğrulama/giriş zamanları; hizmet sağlayıcıların sistem günlüklerinde IP adresi, tarayıcı bilgisi ve istek zamanı</td><td>Hizmeti kullandığın sürece</td></tr>
+<tr><td>Yazışmalar ve başvurular</td><td>Bize e-posta ile yazdığında e-posta adresin, mesajın ve eklerin; KVKK başvurularında başvuruda verdiğin bilgiler</td><td>Bize yazdığında veya başvuru yaptığında</td></tr>
 <tr><td>Paylaşım güvenliği</td><td>Kadro paylaşımında, IP adresinin günlük değişen ve tuzlanmış tek yönlü özeti (ham IP adresi saklanmaz)</td><td>Yalnızca “Kadroyu paylaş” kullanıldığında</td></tr>
 </tbody></table></div>
 <p>Özel nitelikli kişisel veri (sağlık, biyometrik vb.), konum, ödeme bilgisi veya fotoğraf işlenmez. Paylaştığın kadrolar herkese açık bir bağlantıyla görüntülenebilir; bu kadrolara kişisel bilgi yazmamanı öneririz.</p>
@@ -52,18 +54,20 @@
 <div class="legal-table"><table>
 <thead><tr><th scope="col">Alıcı</th><th scope="col">Kapsam</th><th scope="col">Konum</th></tr></thead>
 <tbody>
-<tr><td>Supabase Inc. (veritabanı, kimlik doğrulama, sunucu fonksiyonları)</td><td>Hesap ve kullanıcı içeriği verileri, sistem günlükleri</td><td>Sunucu bölgesi Frankfurt, Almanya <mark class="legal-review">[REVIEW REQUIRED: canlı ayar doğrulanmalı]</mark>; sağlayıcı ABD merkezlidir</td></tr>
+<tr><td>Supabase Inc. (veritabanı, kimlik doğrulama, sunucu fonksiyonları)</td><td>Hesap ve kullanıcı içeriği verileri, sistem günlükleri</td><td>Sunucu bölgesi Frankfurt, Almanya (15 Ekim 2026 itibarıyla doğrulandı); sağlayıcı ABD merkezlidir ve kendi alt işleyicilerini (barındırma ve ağ hizmetleri) kullanır <mark class="legal-review">[REVIEW REQUIRED: veri işleme sözleşmesi (DPA) ve alt işleyici listesi doğrulanmalı]</mark></td></tr>
 <tr><td>Netlify, Inc. (web sitesinin barındırılması)</td><td>Web sitesinin sunulması, erişim günlükleri (IP adresi, tarayıcı bilgisi)</td><td>ABD merkezli; küresel içerik dağıtım ağı <mark class="legal-review">[REVIEW REQUIRED: sözleşme ve veri işleme koşulları doğrulanmalı]</mark></td></tr>
-<tr><td>E-posta gönderim altyapısı <mark class="legal-review">[REVIEW REQUIRED: alan adı DNS kayıtları Resend kullanımına işaret ediyor; Supabase Auth SMTP ayarı doğrulanmalı]</mark></td><td>Doğrulama ve şifre sıfırlama e-postaları için e-posta adresi</td><td><mark class="legal-review">[REVIEW REQUIRED: konum]</mark></td></tr>
+<tr><td>E-posta gönderim altyapısı <mark class="legal-review">[REVIEW REQUIRED: alan adı DNS kayıtları Resend kullanımına işaret ediyor; Supabase Auth SMTP ayarı doğrulanmalı; sağlayıcı adı ve konumu buna göre yazılmalı]</mark></td><td>Doğrulama ve şifre sıfırlama e-postaları için e-posta adresi</td><td>Doğrulanan sağlayıcıya göre</td></tr>
+<tr><td>Google (Google Workspace e-posta hizmeti)</td><td><a href="mailto:iletisim@taktikstudyo.com">iletisim@taktikstudyo.com</a> adresine yazdığın e-postalar ve KVKK başvuruları</td><td>Google’ın küresel altyapısı; sağlayıcı ABD merkezlidir <mark class="legal-review">[REVIEW REQUIRED: sözleşme tarafı Google kuruluşu, veri işleme koşulları ve veri konumu doğrulanmalı]</mark></td></tr>
 <tr><td>Cloudflare, Inc. (Turnstile bot koruması)</td><td>Yalnızca kadro paylaşırken; IP adresi ve tarayıcı/cihaz sinyalleri</td><td>ABD ve küresel ağ</td></tr>
 </tbody></table></div>
-<p>Yukarıdaki sağlayıcıların bir kısmı yurt dışında bulunduğundan veya yurt dışından erişim sağlayabildiğinden, kişisel verilerin KVKK m.9 kapsamında yurt dışına aktarılmış sayılabilir. Bu aktarımlar <mark class="legal-review">[REVIEW REQUIRED: KVKK m.9’daki uygun güvence (ör. Kurul’un ilan ettiği standart sözleşme ve Kurul’a bildirim) veya istisna dayanağı belirlenip burada açıkça yazılmalı]</mark> kapsamında yapılır. Ayrıca kanunen yetkili kamu kurum ve kuruluşlarına, talep edilmesi hâlinde ve mevzuatın izin verdiği ölçüde aktarım yapılabilir.</p>
-<p>Maç ve fikstür bilgileri bir spor verisi sağlayıcısından sunucu üzerinden alınır; bu isteklerde kişisel verin gönderilmez.</p>
+<p>Yukarıdaki sağlayıcıların bir kısmı yurt dışında bulunduğundan veya yurt dışından erişim sağlayabildiğinden, kişisel verilerin KVKK m.9 kapsamında yurt dışına aktarılmış sayılabilir. Bu aktarımlar <mark class="legal-review">[REVIEW REQUIRED: KVKK m.9 (2024’te değişen hâliyle) uyarınca her sağlayıcı için aktarım dayanağı (yeterlilik kararı, Kurul’un standart sözleşmesi ve imzadan sonra Kurul’a bildirim, bağlayıcı şirket kuralları veya arızi aktarım istisnası) belirlenip uygulanmalı ve burada açıkça yazılmalı. Bu metindeki bilgilendirme tek başına aktarımı hukuka uygun hâle getirmez.]</mark> kapsamında yapılır. Ayrıca kanunen yetkili kamu kurum ve kuruluşlarına, talep edilmesi hâlinde ve mevzuatın izin verdiği ölçüde aktarım yapılabilir.</p>
+<p>Maç, fikstür, kulüp ve futbolcu bilgileri spor verisi sağlayıcısı BSD Sports Data’dan sunucularımız üzerinden alınır; bu isteklerde senin kişisel verin gönderilmez.</p>
 <h2 id="saklama">7. Saklama süresi</h2>
 <ul>
 <li>Hesap, profil, kayıtlı çalışmalar ve tercihler: hesabın açık olduğu sürece. Hesabın silindiğinde bu kayıtlar veritabanından silinir.</li>
-<li>Paylaşılan kadrolar: oluşturan hesaba bağlıdır; hesabın açık olduğu sürece saklanır ve hesabın silindiğinde birlikte silinir <mark class="legal-review">[REVIEW REQUIRED: ayrı bir saklama süresi belirlenip belirlenmeyeceği değerlendirilmeli]</mark>. Belirli bir bağlantının kaldırılmasını istersen bize yazabilirsin.</li>
+<li>Paylaşılan kadrolar: oluşturan hesaba bağlıdır; hesabın açık olduğu sürece saklanır ve hesabın silindiğinde birlikte silinir <mark class="legal-review">[REVIEW REQUIRED: hesaba bağlama yayın güncellemesiyle canlıya alınacak (canlıdaki 8 eski test bağlantısı bu güncellemede kaldırılır); ayrı bir saklama süresi operatör kararı]</mark>. Belirli bir bağlantının kaldırılmasını istersen bize yazabilirsin.</li>
 <li>Paylaşım hız sınırı özetleri: en geç 2 gün içinde silinir.</li>
+<li>E-posta yazışmaları ve KVKK başvuru kayıtları: <mark class="legal-review">[REVIEW REQUIRED: saklama süresi belirlenmeli (ör. başvurunun sonuçlanmasından sonra zamanaşımı süresince)]</mark>.</li>
 <li>Hizmet sağlayıcı sistem günlükleri ve yedekler: ilgili sağlayıcının saklama süresince <mark class="legal-review">[REVIEW REQUIRED: süreler doğrulanmalı]</mark>.</li>
 </ul>
 <h2 id="haklar">8. KVKK m.11 kapsamındaki hakların</h2>

@@ -67,7 +67,8 @@ for(const failure of ['preference','catalogue','pending'])test(failure+' does no
  page.dispose();pending.resolve(result('galatasaray'));await page.favoriteReady;
 });
 
-const fixtures=['A','B','Favorite','C'].map((id,i)=>({...match(),id,kickoff:`2026-09-${20+i}T17:00:00Z`,home:{...match().home,teamId:i===2?'galatasaray':'other'},away:{...match().away,teamId:'away'}}));
+// Identity overrides set teamId and canonicalId together so the real BSD mapping cannot leak through.
+const fixtures=['A','B','Favorite','C'].map((id,i)=>({...match(),id,kickoff:`2026-09-${20+i}T17:00:00Z`,home:{...match().home,teamId:i===2?'galatasaray':'other',canonicalId:i===2?'galatasaray':'other'},away:{...match().away,teamId:'away',canonicalId:'away'}}));
 test('stable promotion moves exactly one match without mutation, names/provider IDs cannot impersonate canonical identity',()=>{
  assert.deepEqual(promoteFavoriteMatch(fixtures,teams[0]).matches.map(m=>m.id),['Favorite','A','B','C']);assert.deepEqual(fixtures.map(m=>m.id),['A','B','Favorite','C']);
  for(const team of [null,teams[1]])assert.equal(promoteFavoriteMatch(fixtures,team).matches,fixtures);

@@ -14,9 +14,11 @@ export async function loadFavoriteTeam({api,catalogue}) {
 }
 
 // Input is already the displayed round, in its original chronological order.
-// teamId comes from the existing provider-to-canonical mapping, never a name.
+// teamId (local canonical server) or canonicalId (hosted matches function, whose teamId stays legacy)
+// come from the server-side provider mapping, never from a name or provider id.
 export function promoteFavoriteMatch(matches,team) {
-  const index=team?matches.findIndex(m=>m.home.teamId===team.id||m.away.teamId===team.id):-1;
+  const owns=side=>side?.teamId===team.id||side?.canonicalId===team.id;
+  const index=team?matches.findIndex(m=>owns(m.home)||owns(m.away)):-1;
   return {matches:index>0?[matches[index],...matches.slice(0,index),...matches.slice(index+1)]:matches,
     favoriteMatchId:index<0?null:matches[index].id};
 }

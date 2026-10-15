@@ -11,7 +11,9 @@ const browserOnlyKeys={name:'publishable-only-browser-client',setup(builder){bui
   return {contents:source.replace(generic,'key.startsWith("sb_publishable_")'),loader:'js'};
 });}};
 
-export async function buildBrowserBackend({url='',key='',siteKey='',authSiteKey='',local=false,outfile}={}){
+export async function buildBrowserBackend({url='',key='',siteKey='',authSiteKey='',local=false,catalogueSource='canonical',outfile}={}){
+ // SEC1.1: BSD canonical by default; 'legacy' only for an explicit rollback build. No static roster fallback.
+ if(!['canonical','legacy'].includes(catalogueSource))throw Error('Invalid catalogue source.');
  if(local){assertLocalUrl(url);assertLocalPublicKey(key);}
  else{
   if(!!url!==!!key)throw Error('Both public Supabase configuration values are required.');
@@ -20,6 +22,6 @@ export async function buildBrowserBackend({url='',key='',siteKey='',authSiteKey=
  }
  for(const value of [siteKey,authSiteKey])if(value&&!/^[A-Za-z0-9_-]{10,100}$/.test(value))throw Error('Invalid public Turnstile site key.');
  const result=await build({absWorkingDir:fileURLToPath(new URL('../',import.meta.url)),entryPoints:['src/backend-entry.js'],bundle:true,minify:true,format:'iife',target:'es2022',supported:{'template-literal':false},
-  ...(outfile?{outfile}:{write:false}),plugins:[browserOnlyKeys],define:{__SUPABASE_URL__:JSON.stringify(url),__SUPABASE_PUBLISHABLE_KEY__:JSON.stringify(key),__TURNSTILE_SITE_KEY__:JSON.stringify(siteKey),__AUTH_TURNSTILE_SITE_KEY__:JSON.stringify(authSiteKey)},legalComments:'eof'});
+  ...(outfile?{outfile}:{write:false}),plugins:[browserOnlyKeys],define:{__SUPABASE_URL__:JSON.stringify(url),__SUPABASE_PUBLISHABLE_KEY__:JSON.stringify(key),__TURNSTILE_SITE_KEY__:JSON.stringify(siteKey),__AUTH_TURNSTILE_SITE_KEY__:JSON.stringify(authSiteKey),__CATALOGUE_SOURCE__:JSON.stringify(catalogueSource)},legalComments:'eof'});
  return outfile?undefined:result.outputFiles[0].contents;
 }

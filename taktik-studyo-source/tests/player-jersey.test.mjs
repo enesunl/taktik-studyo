@@ -30,11 +30,11 @@ test('all board modes share local decorative jerseys and no image renderer',()=>
  assert.doesNotMatch(app,/<img\b|createElement\(['"]img['"]\)|player-face|face-fallback|\.src\s*=|photoSource|faces\//);
 });
 
-test('production tree contains no old portrait assets and roster has no remote portrait URLs',()=>{
+test('production tree contains no old portrait assets and no legacy roster file',()=>{
  const dist=new URL('../dist/',import.meta.url),files=readdirSync(dist,{recursive:true}).map(String);
  assert.equal(files.filter(f=>/^faces[\\/].+/.test(f)).length,0);
- const roster=readFileSync(new URL('rosters.js',dist),'utf8');
- assert.doesNotMatch(roster,/photoSource|images\.fotmob\.com|playerimages/);
+ // SEC1.1: the legacy roster snapshot is no longer published (see legacy-roster-removed.test.mjs).
+ assert.equal(files.includes('rosters.js'),false);
  const css=readFileSync(new URL('styles.css',dist),'utf8');
  assert.doesNotMatch(css,/player-face|face-fallback|squad-avatar|player-disc/);
  assert.match(css,/\.jersey-body\{fill:var\(--team\)/);

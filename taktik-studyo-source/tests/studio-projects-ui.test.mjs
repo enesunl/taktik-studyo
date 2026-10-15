@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
+import {legacyRosterScript} from './helpers/legacy-shape-roster.cjs';
 import {matchBoardDocument,fire,BoardNode} from './helpers/match-board-fixture.mjs';
 import {allNodes,textOf,tick,deferred} from './helpers/matches-fixture.mjs';
 import {snapshot,row,id,copyId,owner,memory} from './helpers/studio-project-fixture.mjs';
@@ -19,7 +20,7 @@ const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 const node=(root,cls)=>allNodes(root).find(n=>(n.className||'').split(' ').includes(cls));
 const button=(root,label)=>allNodes(root).find(n=>n.tagName==='button'&&(n.attrs['aria-label']===label||n.textContent===label));
 const markers=root=>allNodes(root).filter(n=>n.dataset.slotKey);
-function fixture(path){const f=matchBoardDocument(path);vm.runInNewContext(read('dist/rosters.js'),{window:f.window});return f;}
+function fixture(path){const f=matchBoardDocument(path);vm.runInNewContext(legacyRosterScript({withTeams:true}),{window:f.window});return f;}
 function draw(root,type){fire(allNodes(root).find(n=>n.dataset.tool===type),'click');const input=node(root,'match-drawing-input');fire(input,'pointerdown',{clientX:230,clientY:200});fire(input,'pointerup',{clientX:600,clientY:450});}
 function appearance(root){return node(root,'match-pitch').attrs;}
 function people(root){return markers(root).map(n=>({key:n.dataset.slotKey,style:[n.style.left,n.style.top].map(v=>Number(parseFloat(v).toFixed(8))),text:textOf(n)}));}

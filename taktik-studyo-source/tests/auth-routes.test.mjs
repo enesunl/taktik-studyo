@@ -270,7 +270,7 @@ test('static shells hide protected contents and deterministic defer order leaves
   const redirects=readFileSync(new URL('../dist/_redirects',import.meta.url),'utf8');assert.deepEqual(redirects.trim().split(/\r?\n/),['/lineup/* /index.html 200','/haftanin-ilk-11i /haftanin-ilk-11i.html 200','/hos-geldin /hos-geldin.html 200']);
 });
 
-test('actual backend bundle defers routes to DOMContentLoaded; landing/profile avoid catalogue; bfcache revalidates',async()=>{
+test('actual backend bundle defers routes to DOMContentLoaded; landing/profile avoid catalogue; no-catalogue board is unavailable; bfcache revalidates',async()=>{
   const built=await build({entryPoints:[fileURLToPath(new URL('../src/backend-entry.js',import.meta.url))],bundle:true,write:false,format:'iife',target:'es2022',
     define:{__SUPABASE_URL__:'""',__SUPABASE_PUBLISHABLE_KEY__:'""',__TURNSTILE_SITE_KEY__:'""',__AUTH_TURNSTILE_SITE_KEY__:'""'},
     plugins:[{name:'test-auth',setup(b){b.onLoad({filter:/[\\/]lib[\\/]auth\.js$/},()=>({contents:'export const auth=globalThis.testAuth;'}));}}]});
@@ -289,12 +289,22 @@ test('actual backend bundle defers routes to DOMContentLoaded; landing/profile a
     await events.emit('DOMContentLoaded');await tick();
     if(path.includes('lineup')){assert.equal(initializes,0);assert.equal(f.calls[0][0],'shared');assert.equal(catalogues,0);}
     else if(path==='/'){assert.equal(f.nodes.landing.hidden,false);assert.equal(initializes,1);assert.equal(catalogues,0);}
-    else {
+    else if(path==='/profil.html'){
       assert.equal(f.validations.length,1);assert.equal(f.nodes.protectedContent.hidden,false);
-      assert.equal(catalogues,path==='/profil.html'?0:1);
+      assert.equal(catalogues,0);
       await f.options.window.emit('pagehide');assert.equal(f.nodes.protectedContent.hidden,true);
       await f.options.window.emit('pageshow',{persisted:true});await tick();
       assert.equal(f.validations.length,2);assert.equal(f.nodes.protectedContent.hidden,false);
+    }
+    else {
+      // SEC1.1: this bundle has no Supabase target, so no catalogue exists. The board shows the
+      // controlled unavailable state instead of a bundled roster, and revalidation retries.
+      assert.equal(f.validations.length,1);assert.equal(catalogues,1);
+      assert.equal(f.nodes.protectedContent.hidden,true);assert.equal(f.nodes.guardMessage.textContent,'Sayfa verileri şu anda yüklenemedi. Tekrar dene.');
+      assert.equal(f.options.window.TAKTIK_BACKEND.source,'error');
+      await f.options.window.emit('pagehide');
+      await f.options.window.emit('pageshow',{persisted:true});await tick();
+      assert.equal(f.validations.length,2);assert.equal(catalogues,2);assert.equal(f.nodes.protectedContent.hidden,true);
     }
     await f.options.window.emit('pagehide');
   }

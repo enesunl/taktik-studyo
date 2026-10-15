@@ -28,8 +28,11 @@ export async function openCatalogueDatabase(dataDir,{populate=true}={}){
   revoke all on function tactics_private.touch_updated_at() from public,anon,authenticated;
   create function auth.uid() returns uuid language sql stable set search_path='' as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
   grant usage on schema auth to anon,authenticated;grant execute on function auth.uid() to anon,authenticated;`);
- for(const name of ['20260923135716_studio_projects','20260924094207_player_overrides','20260925035438_catalogue_identity_foundation'])await apply(name,read('supabase/migrations/'+name+'.sql'));
+ // 20260925040000 (SEC1.1) removes anonymous catalogue reads; existing local databases receive it once.
+ for(const name of ['20260923135716_studio_projects','20260924094207_player_overrides','20260925035438_catalogue_identity_foundation','20260925040000_catalogue_no_anon_read'])await apply(name,read('supabase/migrations/'+name+'.sql'));
  await apply('internal_override_keys',read('supabase/local/catalogue_override_keys.sql'));
+ // PROD1.5: same override-key rule and transactional sync function as the hosted schema.
+ for(const name of ['20261015120000_player_override_internal_keys','20261015120100_catalogue_sync'])await apply(name,read('supabase/migrations/'+name+'.sql'));
  const input=cleanCatalogueInput();
  if(populate&&!versions.has('clean_population')){
   await syncLocal(db,input,{dryRun:false});

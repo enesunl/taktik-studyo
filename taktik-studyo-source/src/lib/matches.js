@@ -20,6 +20,17 @@ export function defaultRound(matches,now = Date.now()) {
   if (played.length) return played.at(-1).round;
   return sorted.reduce((best,m) => Math.abs(Date.parse(m.kickoff)-now) < Math.abs(Date.parse(best.kickoff)-now) ? m : best).round;
 }
+// Additive server field {stale, fetchedAt}. Malformed values are ignored; data is never derived from it.
+export function readFreshness(value) {
+  return value && typeof value === 'object' && typeof value.stale === 'boolean' && typeof value.fetchedAt === 'string'
+    && Number.isFinite(Date.parse(value.fetchedAt)) ? {stale:value.stale,fetchedAt:value.fetchedAt} : null;
+}
+export function staleNotice(freshness,timeZone) {
+  if (!freshness?.stale) return '';
+  const when = new Intl.DateTimeFormat('tr-TR',{...(timeZone ? {timeZone} : {}),day:'numeric',month:'long',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(freshness.fetchedAt));
+  return 'Maç verileri şu anda güncellenemiyor. Gösterilen bilgiler '+when+' itibarıyla alındı.';
+}
+
 export function matchDate(kickoff,timeZone) {
   const options = timeZone ? {timeZone} : {};
   const date = new Date(kickoff);
@@ -50,7 +61,7 @@ export function createMatchesApi({client,current,location,fetchImpl}) {
       const {data,error} = await requestMatches({client,current,location,fetchImpl});
       if (!current()) return {ok:false,error:{code:'state_changed'}};
       if (error || !seasonValid(data)) throw Error();
-      return {ok:true,matches:data.matches};
+      return {ok:true,matches:data.matches,freshness:readFreshness(data.freshness)};
     } catch {return {ok:false,error:{code:current() ? 'matches_unavailable' : 'state_changed'}};}
   }};
 }

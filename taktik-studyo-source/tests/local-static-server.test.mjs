@@ -1,21 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
-import {createServer} from 'node:net';
 import {once} from 'node:events';
 import {fileURLToPath} from 'node:url';
 import {resolvePage} from '../src/lib/page-routes.js';
 
-test('local HTTP server serves every protected alias, including Çalışmalarım, without Auth or provider requests', {timeout:15000}, async()=>{
-  const portProbe=createServer();portProbe.listen(0,'127.0.0.1');await once(portProbe,'listening');
-  const port=portProbe.address().port;await new Promise(resolve=>portProbe.close(resolve));
-  const server=spawn(process.execPath,[fileURLToPath(new URL('./helpers/local-server-process.cjs',import.meta.url)),String(port)],{stdio:['ignore','pipe','pipe']});
-  const exited=once(server,'exit');let startupTimer;
+// PROD1.5 flake fix: the child picks and holds its own port (no parent probe/release race) and the
+// readiness wait shares the test budget. Under a fully parallel suite, child Node startup plus the
+// esbuild bundle measured up to ~5 s, which exceeded the former fixed 5 s readiness cap.
+test('local HTTP server serves every protected alias, including Çalışmalarım, without Auth or provider requests', {timeout:60000}, async()=>{
+  const server=spawn(process.execPath,[fileURLToPath(new URL('./helpers/local-server-process.cjs',import.meta.url))],{stdio:['ignore','pipe','pipe']});
+  const exited=once(server,'exit');let startupTimer,port,stderr='';
   try{
+    server.stderr.on('data',chunk=>{stderr+=chunk;});
     await new Promise((resolve,reject)=>{
-      startupTimer=setTimeout(()=>reject(Error('Local server startup timed out')),5000);
-      server.once('error',reject);server.once('exit',()=>reject(Error('Local server exited before ready')));
-      server.stdout.on('data',chunk=>{if(chunk.toString().includes('Taktik Studyo:'))resolve();});
+      startupTimer=setTimeout(()=>reject(Error('Local server startup timed out')),45000);
+      server.once('error',reject);server.once('exit',()=>reject(Error('Local server exited before ready: '+stderr.trim())));
+      let out='';server.stdout.on('data',chunk=>{out+=chunk;const m=out.match(/fixture ready on ([0-9]+)/);if(m){port=Number(m[1]);resolve();}});
     });
     const origin='http://127.0.0.1:'+port;
     for(const asset of ['/backend.js','/%62ackend.js','/BACKEND.JS','/backend.js?cache=test']){

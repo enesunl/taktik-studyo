@@ -7,6 +7,7 @@ import {fetchSeason} from '../supabase/functions/matches/provider.js';
 import {normalizeLineups} from '../supabase/functions/matches/detail.js';
 import {teamMapping} from '../supabase/functions/matches/teams.js';
 import {validXI} from '../src/lib/studio-lineups.js';
+import {legacyRosterText} from './catalogue/legacy-snapshot.mjs';
 
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const BASE='https://sports.bzzoiro.com/api/v2/';
@@ -48,7 +49,7 @@ const aliases=new Map([['196',['Beşiktaş','Beşiktaş JK']],['194',['Başakşe
 async function pool(items,fn){let next=0;const out=new Array(items.length);await Promise.all(Array.from({length:Math.min(4,items.length)},async()=>{for(;;){const i=next++;if(i>=items.length)return;out[i]=await fn(items[i],i);}}));return out;}
 function legacyCatalogue(){
   // This is JSON data assigned to a global, not arbitrary application execution.
-  const text=readFileSync(resolve(ROOT,'dist/rosters.js'),'utf8');
+  const text=legacyRosterText(); // removed from dist/ in SEC1.1; frozen evidence from Git history
   const match=text.match(/^\s*window\.TAKTIK_ROSTERS\s*=\s*([\s\S]*?);?\s*$/);
   assert(match,'Roster assignment missing');
   const roster=JSON.parse(match[1]);

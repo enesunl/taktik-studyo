@@ -72,8 +72,8 @@ export function startPage({auth,document,window,backend,client,accountDeletion})
         playerOverrides=createPlayerOverrides({client:dataClient,validatedUser,current,internalOnly:!!canonical});
         // Both depend on the validated identity, not on each other's results.
         // Join before mount so the first XI already includes personal overrides.
-        const needsCatalogue=canonical||['studio','weekly-xi'].includes(route.page);
-        try {await Promise.all([needsCatalogue?backend.loadCatalogue():Promise.resolve(),playerOverrides.load()]);}
+        // Every roster page loads the active catalogue; there is no static roster fallback (SEC1.1).
+        try {await Promise.all([backend.loadCatalogue(),playerOverrides.load()]);}
         catch(error){playerOverrides.dispose();throw error;}
         if(!current()){playerOverrides.dispose();return;}
       }

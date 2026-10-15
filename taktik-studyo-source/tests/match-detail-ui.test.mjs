@@ -59,11 +59,12 @@ test('M1 completed and upcoming cards use keyboard-native anchors and retain wee
 for(const path of ['/mac','/mac.html'])test(path+' shares protected Auth bootstrap for signed in, signed out and recovery',async()=>{
   assert.deepEqual(resolvePage(new URL(path,'https://taktikstudyo.com')),{kind:'protected',page:'match',path:'/mac.html'});
   for(const status of ['signed_in','signed_out','password_recovery']){
-    const f=ui(),state={status,user:status==='signed_out'?null:{id:'u'}};let initialized=0,validated=0,requests=0;
+    const f=ui(),state={status,user:status==='signed_out'?null:{id:'u'}};let initialized=0,validated=0,requests=0,catalogues=0;
     f.window.location=new URL('https://taktikstudyo.com'+path+'?id=215997&hafta=6');f.window.location.replace=url=>f.navigations.push(url);
     const auth={initialize:async()=>{initialized++;return{ok:true};},getState:()=>state,subscribe:()=>()=>{},validateUser:async()=>{validated++;return{ok:true,user:{id:'u'}};}};
-    const page=startPage({auth,document:f.document,window:f.window,client:{functions:{invoke:async()=>{requests++;return{data:detail()};}}},backend:{loadCatalogue(){throw Error('No catalogue');}}});await page.ready;await tick();
-    assert.equal(initialized,1);assert.equal(validated,status==='signed_in'?1:0);assert.equal(requests,status==='signed_in'?1:0);assert.equal(f.nodes.protectedContent.hidden,status!=='signed_in');page.dispose();
+    const page=startPage({auth,document:f.document,window:f.window,client:{functions:{invoke:async()=>{requests++;return{data:detail()};}}},backend:{loadCatalogue(){catalogues++;return Promise.resolve();}}});await page.ready;await tick();
+    // SEC1.1: the active catalogue (no static roster) loads only after validation.
+    assert.equal(initialized,1);assert.equal(validated,status==='signed_in'?1:0);assert.equal(requests,status==='signed_in'?1:0);assert.equal(catalogues,status==='signed_in'?1:0);assert.equal(f.nodes.protectedContent.hidden,status!=='signed_in');page.dispose();
   }
 });
 test('installed SDK builds only production matches?id; local transport only same-origin matches?id',async()=>{

@@ -35,6 +35,28 @@ function nextOffset(value,offset) {
   return offset + 200;
 }
 
+// Provider errors keep the existing outward messages but carry metadata for the handler:
+// - 429 (any kind: per-IP burst or account quota) -> limited + Retry-After in ms (seconds or HTTP date).
+// - 401/402/403 (invalid/revoked token, missing entitlement) -> accessDenied: no stale fallback.
+// Non-enumerable marker on a partial detail whose optional resource was rate limited. JSON
+// serialisation ignores it, so the API body is unchanged; the handler uses it to back off.
+export const PROVIDER_LIMITED = Symbol.for('taktik.matches.providerLimited');
+export function retryAfterMs(value, now = Date.now()) {
+  if (typeof value !== 'string' || !value.trim()) return 0;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return seconds > 0 ? seconds * 1000 : 0;
+  const date = Date.parse(value);
+  return Number.isFinite(date) && date > now ? date - now : 0;
+}
+function limitedError(message,response) {
+  const error = Error(message);
+  error.limited = true;
+  error.retryAfterMs = retryAfterMs(response.headers?.get?.('retry-after') ?? null);
+  return error;
+}
+const accessError = message => Object.assign(Error(message),{accessDenied:true});
+const ACCESS_STATUSES = new Set([401,402,403]);
+
 // Only constants construct upstream URLs. Even a provider-supplied next URL is
 // validated, then reconstructed; neither browser input nor redirects are followed.
 export async function fetchSeason({token,fetchImpl = fetch,timeoutMs = 12000,teamResolver=mapTeam}) {
@@ -45,7 +67,9 @@ export async function fetchSeason({token,fetchImpl = fetch,timeoutMs = 12000,tea
   try {
     for (let page = 0; page < 4; page++) {
       const response = await fetchImpl(pageUrl(offset),{headers:{Authorization:'Token '+token},signal:controller.signal,redirect:'error'});
-      if (!response.ok) throw Error(response.status === 429 ? 'provider_limited' : 'matches_unavailable');
+      if (response.status === 429) throw limitedError('provider_limited',response);
+      if (ACCESS_STATUSES.has(response.status)) throw accessError('matches_unavailable');
+      if (!response.ok) throw Error('matches_unavailable');
       const text = await response.text();
       if (text.length > 2_000_000) throw Error('matches_unavailable');
       const data = JSON.parse(text);
@@ -68,6 +92,7 @@ export async function fetchSeason({token,fetchImpl = fetch,timeoutMs = 12000,tea
     }
     throw Error('matches_unavailable');
   } catch (error) {
+    if (error?.limited || error?.accessDenied) throw error;
     throw Error(error?.message === 'provider_limited' ? 'provider_limited' : 'matches_unavailable');
   } finally {clearTimeout(timer);}
 }
@@ -81,6 +106,8 @@ export async function fetchDetail({id,token,fetchImpl = fetch,timeoutMs = 18000,
     const response = await fetchImpl(endpoint+id+'/'+suffix,{headers:{Authorization:'Token '+token},redirect:'error',signal});
     if (response.status === 404) {if (optional) return null; throw Error('MATCH_NOT_FOUND');}
     if (response.status === 204 && optional) return null;
+    if (response.status === 429) throw limitedError('PROVIDER_UNAVAILABLE',response);
+    if (ACCESS_STATUSES.has(response.status)) throw accessError('PROVIDER_UNAVAILABLE');
     if (!response.ok) throw Error('PROVIDER_UNAVAILABLE');
     const body = await response.text();
     if (body.length > 2_000_000) throw Error('PROVIDER_UNAVAILABLE');
@@ -94,8 +121,17 @@ export async function fetchDetail({id,token,fetchImpl = fetch,timeoutMs = 18000,
     // Never request optional endpoints for an out-of-scope match.
     const names = ['lineups','incidents','stats'];
     const results = await Promise.allSettled(names.map(name => read(name+'/',true)));
+    // Lost access on any resource means no partial data either.
+    const denied = results.find(result => result.status === 'rejected' && result.reason?.accessDenied);
+    if (denied) throw denied.reason;
+    const limited = results.find(result => result.status === 'rejected' && result.reason?.limited);
     const resources = Object.fromEntries(names.map((name,i) => [name,{value:results[i].status === 'fulfilled' ? results[i].value : null,failed:results[i].status === 'rejected'}]));
-    return normalizeDetail(match,raw,resources);
-  } catch (error) {throw Error(error?.message === 'MATCH_NOT_FOUND' ? 'MATCH_NOT_FOUND' : 'PROVIDER_UNAVAILABLE');}
-  finally {clearTimeout(timer);}
+    const detail = normalizeDetail(match,raw,resources);
+    // Optional 429 stays a partial detail (existing contract) but signals provider back-off.
+    if (limited) Object.defineProperty(detail,PROVIDER_LIMITED,{value:{retryAfterMs:limited.reason.retryAfterMs}});
+    return detail;
+  } catch (error) {
+    if (error?.limited || error?.accessDenied) throw error;
+    throw Error(error?.message === 'MATCH_NOT_FOUND' ? 'MATCH_NOT_FOUND' : 'PROVIDER_UNAVAILABLE');
+  } finally {clearTimeout(timer);}
 }

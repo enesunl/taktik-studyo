@@ -100,9 +100,35 @@ test('LEGAL1.1 fonts are self-hosted WOFF2 with OFL licenses; no served file req
 
 test('LEGAL1.1 drafts reflect verified providers and keep unresolved items marked for review',()=>{
   const kvkk=read('kvkk-aydinlatma-metni.html'),cookies=read('cerez-politikasi.html');
-  assert.match(kvkk,/Netlify, Inc\./);assert.doesNotMatch(kvkk,/Google/);
+  // LEGAL2: Google appears only as the verified Google Workspace contact mailbox, never Google Fonts.
+  assert.match(kvkk,/Netlify, Inc\./);assert.doesNotMatch(kvkk,/Google Fonts|fonts\.googleapis/);
   assert.match(kvkk,/Resend kullanımına işaret ediyor; Supabase Auth SMTP ayarı doğrulanmalı/);
   assert.doesNotMatch(read('gizlilik-politikasi.html'),/yazı tipleri\)/);
   assert.match(cookies,/Google Fonts veya başka bir yazı tipi servisine istek yapılmaz/);
   assert.match(cookies,/__cf_bm/);assert.match(cookies,/Turnstile’ın çerez veya tarayıcı depolaması kullanıp kullanmadığı <mark class="legal-review">\[REVIEW REQUIRED/);
+});
+
+test('LEGAL2 drafts reflect verified providers, separate live from planned features and keep review gates',()=>{
+  const kvkk=read('kvkk-aydinlatma-metni.html'),privacy=read('gizlilik-politikasi.html'),terms=read('kullanim-kosullari.html'),contact=read('iletisim.html');
+  // Not yet live features are named in one explicit review marker on every content page.
+  for(const [slug,html] of [['kvkk',kvkk],['gizlilik',privacy],['kosullar',terms],['iletisim',contact]]){
+    assert.match(html,/<p class="legal-scope"><mark class="legal-review">\[REVIEW REQUIRED: Bu taslak, yayın için planlanan hizmeti anlatır\.[^<]*uygulama içi hesap silme[^<]*yayımlanmamalı\.\]<\/mark><\/p>/,slug);
+  }
+  for(const slug of legal)assert.match(read(slug+'.html'),/Taslak tarihi: 15 Ekim 2026/,slug);
+  // Verified facts: Google Workspace mailbox, Supabase Frankfurt region, BSD as the sports-data source.
+  assert.match(kvkk,/Google \(Google Workspace e-posta hizmeti\)/);assert.match(privacy,/Google Workspace/);
+  assert.doesNotMatch(kvkk,/Frankfurt, Almanya <mark class="legal-review">\[REVIEW REQUIRED: canlı ayar doğrulanmalı\]/);
+  for(const html of [kvkk,privacy,terms])assert.match(html,/BSD Sports Data/);
+  assert.match(terms,/resmî lig, kulüp veya federasyon verisi değildir/);
+  assert.match(terms,/toplu olarak kopyalamak, ham veri olarak yeniden dağıtmak/);
+  // Unverified items stay gated: identity, transfers, provider agreements, retention, licence.
+  assert.match(kvkk,/Bu metindeki bilgilendirme tek başına aktarımı hukuka uygun hâle getirmez/);
+  assert.match(kvkk,/E-posta yazışmaları ve KVKK başvuru kayıtları: <mark class="legal-review">\[REVIEW REQUIRED: saklama süresi/);
+  // LEGAL2.1: the 8 old links are decided test data; account linkage and retention stay gated.
+  for(const html of [kvkk,privacy])assert.match(html,/\[REVIEW REQUIRED: hesaba bağlama yayın güncellemesiyle canlıya alınacak \(canlıdaki 8 eski test bağlantısı bu güncellemede kaldırılır\); ayrı bir saklama süresi operatör kararı\]/);
+  assert.match(contact,/hesaba bağlama yayın güncellemesiyle canlıya alınacak/);
+  assert.match(kvkk,/Supabase Auth SMTP ayarı doğrulanmalı; sağlayıcı adı ve konumu buna göre yazılmalı/);
+  assert.match(terms,/BSD lisansının \(sürüm 4\.0\)[^<]*hukukçu tarafından onaylanmalı/);
+  // No invented identity, legal entity or private data.
+  for(const slug of legal)assert.doesNotMatch(read(slug+'.html'),/T\.C\. kimlik no:|\bKEP adresi:\s*\S+@|Mah\.|Sok\.|Cad\./,slug);
 });

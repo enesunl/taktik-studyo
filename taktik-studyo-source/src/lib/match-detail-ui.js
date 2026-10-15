@@ -1,7 +1,7 @@
 import {LINEUP_LABELS} from './studio-lineups.js';
 import {playerKey} from './player-overrides.js';
 import {requestedMatchId,backToMatches,POSITION_LABELS,STAT_LABELS,INCIDENT_LABELS,incidentMinute} from './match-detail.js';
-import {matchDate,MATCH_STATUS_LABELS} from './matches.js';
+import {matchDate,MATCH_STATUS_LABELS,staleNotice} from './matches.js';
 import {matchStudioAvailable,matchPageUrl,createLocalCatalogue,resolveStudioLineups} from './match-layout.js';
 import {matchGoals,appendScorers} from './match-goals.js';
 
@@ -114,7 +114,7 @@ export function mountMatchDetail({document,window,api,current,playerOverrides}) 
     let result;try{result=await api.load(id);}catch{result={ok:false};}
     if(!active())return;busy=false;
     if(!result.ok){const code=result.error?.code;status.textContent=['INVALID_MATCH_ID','MATCH_NOT_FOUND'].includes(code)?'Maç bulunamadı.':code==='UNAUTHORIZED'?'Oturum doğrulanamadı. Giriş yapıp tekrar dene.':'Maç bilgileri şu anda alınamıyor.';retry.hidden=['INVALID_MATCH_ID','MATCH_NOT_FOUND'].includes(code);return;}
-    status.textContent='';render(result.match);
+    status.textContent='';render(result.match);status.textContent=staleNotice(result.freshness);
   }
   retry.addEventListener('click',load);
   const off=playerOverrides?.subscribe(()=>{if(active()&&!busy&&lastMatch)render(lastMatch);})||(()=>{});

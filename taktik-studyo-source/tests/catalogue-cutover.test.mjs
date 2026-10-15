@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {createLocalCatalogueService} from '../scripts/catalogue/local-service.mjs';
 import {createCatalogueSource} from '../src/lib/catalogue-source.js';
+import {createLocalCatalogueClient} from '../src/lib/catalogue-local-client.js';
 import {createCanonicalCatalogue,normalizeCanonical} from '../src/lib/catalogue-canonical.js';
 import {createPlayerOverrides,playerKey} from '../src/lib/player-overrides.js';
 import {createStudioProjects} from '../src/lib/studio-projects.js';
@@ -148,7 +149,11 @@ test('D4 clean room: no old catalogue, aliases or roster script; actual SQL and 
    const row=await runtime.dataClient.from('player_overrides').insert({user_id:other,player_key:'local:22',name:'No',number:2,role:'MO'}).select('*');assert.equal(row.error.code,'42501');
    const response=await service.handle(new Request(origin+'/__local/catalogue',{method:'POST',headers:{Origin:'https://attacker.test','content-type':'application/json',authorization:'Bearer owner'},body:'{"action":"defaults"}'}));assert.equal(response.status,403);
    const data=await runtime.dataClient.request('fallback');assert.equal(data.players.length,543);assert.doesNotMatch(JSON.stringify(data),/fotmob|source_url|photo_url|faces\/|selection_rank|"roles"|"starts"|provider_id/);
-   assert.throws(()=>createCatalogueSource({config:{source:'canonical'},window:{location:{origin:'https://taktikstudyo.com'}},client}),/local_catalogue_required/);
+   // SEC1.1: the local PGlite transport still refuses non-loopback origins. A hosted origin reads the
+   // authenticated catalogue_* tables through the app's own Supabase client instead (never the local transport).
+   assert.throws(()=>createLocalCatalogueClient({auth:client.auth,origin:'https://taktikstudyo.com'}),/local_catalogue_required/);
+   const hosted=createCatalogueSource({config:{source:'canonical'},window:{location:{origin:'https://taktikstudyo.com'}},client});
+   assert.equal(hosted.canonical,true);assert.equal(hosted.local,false);assert.equal(hosted.dataClient,client);
   });
  }finally{await service.db.close();}
 });
@@ -158,5 +163,8 @@ test('D3 canonical errors stay distinct and never call legacy tables',async()=>{
   await assert.rejects(createCanonicalCatalogue(client).load(),e=>e.code===code);
  }
  assert.throws(()=>normalizeCanonical([],[]),e=>e.code==='catalogue_empty');assert.throws(()=>normalizeCanonical([{}],[{}]),e=>e.code==='catalogue_malformed');
- const legacy=createCatalogueSource({client:null,window:{}});assert.equal(legacy.source,'legacy');assert.equal(legacy.dataClient,undefined);await legacy.load();
+ // No client means no catalogue: an explicit error, never a static roster fallback (SEC1.1).
+ const legacy=createCatalogueSource({client:null,window:{}});assert.equal(legacy.source,'legacy');assert.equal(legacy.dataClient,undefined);
+ await assert.rejects(legacy.load(),e=>e.code==='network_failure');
+ await assert.rejects(createCatalogueSource({config:{source:'canonical'},client:null,window:{location:{origin:'https://taktikstudyo.com'}}}).load(),e=>e.code==='network_failure');
 });

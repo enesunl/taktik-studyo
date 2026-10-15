@@ -84,15 +84,24 @@ test('detail handler has narrow ID contract and authenticated per-ID cache with 
   for(const query of ['?url=https://evil.test','?id=215997&season_id=99','?id=215997&endpoint=stats'])assert.equal((await handler(request(query))).status,400);
   assert.equal((await handler(request('?id=215997',false))).status,401);assert.equal(calls,0);
   const responses=await Promise.all([handler(request('?id=215997')),handler(request('?id=215997'))]);assert.equal(calls,1);assert.equal(auth,2);
-  assert.equal(responses[0].headers.get('cache-control'),'private, max-age=3600');
-  time=30000;assert.equal((await handler(request('?id=215997'))).headers.get('cache-control'),'private, max-age=3570');assert.equal(calls,1);
-  await handler(request('?id=215998'));assert.equal(calls,2);time=3600001;await handler(request('?id=215997'));assert.equal(calls,3);
-  assert.equal(detailTTL({...full,status:'live'}),45);assert.equal(detailTTL({...full,status:'upcoming',availability:{stats:'unavailable'}}),300);assert.equal(detailTTL({...full,availability:{stats:'error'}}),60);
+  // PROD1.2: a complete finished match is stable for 6 h (was 1 h); browser max-age follows the remaining TTL.
+  assert.equal(responses[0].headers.get('cache-control'),'private, max-age=21600');
+  time=30000;assert.equal((await handler(request('?id=215997'))).headers.get('cache-control'),'private, max-age=21570');assert.equal(calls,1);
+  await handler(request('?id=215998'));assert.equal(calls,2);time=21600001;await handler(request('?id=215997'));assert.equal(calls,3);
+  const kickoff=Date.parse(full.kickoff);
+  assert.equal(detailTTL({...full,status:'live'}),45);assert.equal(detailTTL({...full,availability:{stats:'error'}}),60);
+  for(const [hoursAhead,ttl] of [[1,300],[2,300],[3,1800],[24,1800],[25,3600]])assert.equal(detailTTL({...full,status:'upcoming',lineups:null,availability:{stats:'unavailable'}},kickoff-hoursAhead*3600e3),ttl,'upcoming '+hoursAhead+'h');
+  assert.equal(detailTTL({...full,status:'upcoming',availability:{stats:'unavailable'}},kickoff-48*3600e3),300,'upcoming with predicted/confirmed lineups keeps 5 min');
+  assert.equal(detailTTL({...full,availability:{stats:'unavailable'}},kickoff+3*3600e3),60,'recently finished, still filling');
+  assert.equal(detailTTL({...full,availability:{stats:'unavailable'}},kickoff+5*3600e3),3600,'older finished gap');
+  assert.equal(detailTTL({...full,status:'postponed',availability:{}}),600);
 });
-test('detail handler never exposes provider errors and does not cache failures',async()=>{
-  for(const code of ['MATCH_NOT_FOUND','secret credential']){
-    let calls=0;const handler=createMatchesHandler({authenticate:async()=>({id:'u',email_confirmed_at:'yes'}),loadDetail:async()=>{calls++;throw Error(code);}});
-    for(let i=0;i<2;i++){const res=await handler(request('?id=215997'));assert.equal(res.status,code==='MATCH_NOT_FOUND'?404:503);assert.deepEqual(await res.json(),{error:{code:code==='MATCH_NOT_FOUND'?code:'PROVIDER_UNAVAILABLE'}});}
-    assert.equal(calls,2);
+test('detail handler never exposes provider errors; failures are retried only after a short cool-down',async()=>{
+  // PROD1.2: unknown ids are remembered for 10 min, other provider errors for 15 s (no retry storm).
+  for(const [code,retryAfterMs] of [['MATCH_NOT_FOUND',600000],['secret credential',15000]]){
+    let calls=0,time=0;const handler=createMatchesHandler({now:()=>time,authenticate:async()=>({id:'u',email_confirmed_at:'yes'}),loadDetail:async()=>{calls++;throw Error(code);}});
+    for(let i=0;i<2;i++){const res=await handler(request('?id=215997'));assert.equal(res.status,code==='MATCH_NOT_FOUND'?404:503);assert.deepEqual(await res.json(),{error:{code:code==='MATCH_NOT_FOUND'?code:'PROVIDER_UNAVAILABLE'}});assert.equal(res.headers.get('cache-control'),'no-store');}
+    assert.equal(calls,1);
+    time=retryAfterMs+1;await handler(request('?id=215997'));assert.equal(calls,2);
   }
 });
