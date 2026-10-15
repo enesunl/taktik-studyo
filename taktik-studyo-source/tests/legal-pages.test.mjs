@@ -67,13 +67,13 @@ test('registration has an information-only privacy notice and one separate, unch
   assert.doesNotMatch(notice,/onay|kabul|rıza veriyorum/i);
 });
 
-test('Terms acceptance gates registration client-side and is never sent to Auth',async()=>{
+test('Terms acceptance gates registration; only the explicit acceptance (no personal-data consent) reaches the API',async()=>{
   const f=pageFixture('register'),page=mountAuthPage(f.options);await page.ready;
   f.fields.termsAccepted.checked=false;await f.fields.authForm.emit('submit');
   assert.match(f.fields.authMessage.textContent,/Kullanım Koşulları/);assert.equal(f.calls.length,0);
   f.fields.termsAccepted.checked=true;await f.fields.authForm.emit('submit');
-  assert.deepEqual(f.calls[0],{kind:'signup',args:{email:'test@example.test',password:f.calls[0].args.password,username:f.calls[0].args.username}});
-  assert.equal('termsAccepted' in f.calls[0].args,false);page.dispose();
+  // SEC2.3: the API records the accepted Terms version; nothing else about consent is sent.
+  assert.deepEqual(f.calls[0],{kind:'signup',args:{email:'test@example.test',password:f.calls[0].args.password,username:f.calls[0].args.username,termsAccepted:true}});page.dispose();
   const login=pageFixture('login'),loginPage=mountAuthPage(login.options);await loginPage.ready;
   await login.fields.authForm.emit('submit');assert.equal(login.calls[0].kind,'login');loginPage.dispose();
 });

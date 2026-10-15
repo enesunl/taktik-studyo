@@ -88,9 +88,9 @@
 .profile-danger:empty{display:none}
 .profile-danger-title{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--error);margin:0 0 8px}
 .profile-danger .profile-help{margin:0 0 14px}
-.profile-card .profile-danger-button{font:inherit;font-weight:700;padding:10px 16px;border:1px solid var(--error);border-radius:7px;background:transparent;color:var(--error);cursor:pointer}
-.profile-card .profile-danger-button:hover:not(:disabled){background:var(--error);color:var(--bg-surface)}
-.profile-card .profile-danger-button:disabled{opacity:.5;cursor:not-allowed}
+.profile-card .profile-danger-button,.weekly-collection-item .profile-danger-button{font:inherit;font-weight:700;padding:10px 16px;border:1px solid var(--error);border-radius:7px;background:transparent;color:var(--error);cursor:pointer}
+.profile-card .profile-danger-button:hover:not(:disabled),.weekly-collection-item .profile-danger-button:hover:not(:disabled){background:var(--error);color:var(--bg-surface)}
+.profile-card .profile-danger-button:disabled,.weekly-collection-item .profile-danger-button:disabled{opacity:.5;cursor:not-allowed}
 .profile-danger-button:focus-visible,.account-delete-dialog :focus-visible{outline:3px solid var(--focus);outline-offset:3px}
 .account-delete-dialog{max-width:520px;width:calc(100% - 32px);box-sizing:border-box;max-height:calc(100vh - 32px);overflow:auto;padding:24px;border:1px solid var(--border);border-top:4px solid var(--error);border-radius:12px;color:var(--text-primary);background:var(--bg-surface);box-shadow:var(--shadow)}
 .account-delete-dialog::backdrop{background:#0b1410b3}
@@ -105,3 +105,5 @@
 .account-delete-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;margin-top:18px}
 .profile-card .account-delete-actions button:not(.profile-danger-button){font:inherit;padding:10px 16px;border:1px solid var(--border);border-radius:7px;background:var(--control-bg);color:var(--text-primary);cursor:pointer}
 @media(max-width:560px){.account-delete-actions{flex-direction:column-reverse}.account-delete-actions button{width:100%}}
+/* SEC2.2 İlk 11’lerim: record link with a separate delete button; usage line. */
+.weekly-collection-item{display:flex;align-items:center;gap:12px;border-top:1px solid var(--border)}.weekly-collection-item>.profile-weekly-entry{flex:1;min-width:0;border-top:0}.weekly-delete{flex:none;min-height:44px}.weekly-usage{margin:0 0 12px;font-size:13px;color:var(--text-secondary)}

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {normalizeStatistics,normalizeLineups,normalizeIncidents,normalizeDetail} from '../supabase/functions/matches/detail.js';
 import {fetchDetail} from '../supabase/functions/matches/provider.js';
 import {createMatchesHandler,detailTTL} from '../supabase/functions/matches/handler.js';
-import {event,match,deferred} from './helpers/matches-fixture.mjs';
+import {event,match,deferred,seasonOf} from './helpers/matches-fixture.mjs';
 import {resources,detail} from './helpers/match-detail-fixture.mjs';
 
 test('M2 stats normalize all nine metrics; expected_goals 2.13 wins over xg.actual 2.15',()=>{
@@ -79,7 +79,7 @@ test('optional rate limit is partial; critical failures are controlled; timeout 
 const request=(query,authorized=true)=>new Request('https://example.test/matches'+query,{headers:authorized?{Authorization:'Bearer test-only'}:{}});
 test('detail handler has narrow ID contract and authenticated per-ID cache with status TTLs',async()=>{
   let calls=0,auth=0,time=0;const full=detail();
-  const handler=createMatchesHandler({token:'test-only',now:()=>time,authenticate:async()=>{auth++;return{id:'u',email_confirmed_at:'yes'};},loadDetail:async({id})=>{calls++;return{...full,id};}});
+  const handler=createMatchesHandler({token:'test-only',now:()=>time,load:seasonOf('215997','215998'),authenticate:async()=>{auth++;return{id:'u',email_confirmed_at:'yes'};},loadDetail:async({id})=>{calls++;return{...full,id};}});
   for(const query of ['?id=','?id=0','?id=-1','?id=abc','?id=1&id=2','?id=9007199254740992','?id=01']) {const res=await handler(request(query));assert.equal(res.status,400);assert.equal((await res.json()).error.code,'INVALID_MATCH_ID');}
   for(const query of ['?url=https://evil.test','?id=215997&season_id=99','?id=215997&endpoint=stats'])assert.equal((await handler(request(query))).status,400);
   assert.equal((await handler(request('?id=215997',false))).status,401);assert.equal(calls,0);
@@ -99,7 +99,7 @@ test('detail handler has narrow ID contract and authenticated per-ID cache with 
 test('detail handler never exposes provider errors; failures are retried only after a short cool-down',async()=>{
   // PROD1.2: unknown ids are remembered for 10 min, other provider errors for 15 s (no retry storm).
   for(const [code,retryAfterMs] of [['MATCH_NOT_FOUND',600000],['secret credential',15000]]){
-    let calls=0,time=0;const handler=createMatchesHandler({now:()=>time,authenticate:async()=>({id:'u',email_confirmed_at:'yes'}),loadDetail:async()=>{calls++;throw Error(code);}});
+    let calls=0,time=0;const handler=createMatchesHandler({now:()=>time,load:seasonOf('215997'),authenticate:async()=>({id:'u',email_confirmed_at:'yes'}),loadDetail:async()=>{calls++;throw Error(code);}});
     for(let i=0;i<2;i++){const res=await handler(request('?id=215997'));assert.equal(res.status,code==='MATCH_NOT_FOUND'?404:503);assert.deepEqual(await res.json(),{error:{code:code==='MATCH_NOT_FOUND'?code:'PROVIDER_UNAVAILABLE'}});assert.equal(res.headers.get('cache-control'),'no-store');}
     assert.equal(calls,1);
     time=retryAfterMs+1;await handler(request('?id=215997'));assert.equal(calls,2);

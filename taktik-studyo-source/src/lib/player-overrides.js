@@ -1,4 +1,5 @@
 import {internalPlayerId} from './catalogue-identity.js';
+import {limitError} from './studio-project-snapshot.js';
 export const PLAYER_ROLES=Object.freeze(['KL','STP','SLB','SĞB','ÖL','MO','OO','SLK','SĞK','SF']);
 const columns='user_id,player_key,name,number,role';
 export const overrideKeyValid=key=>typeof key==='string'&&(/^(?:local:[a-zA-Z0-9_-]{1,80}|bsd:[1-9][0-9]{0,15})$/.test(key)||key.startsWith('internal:')&&internalPlayerId(key.slice(9)));
@@ -67,7 +68,7 @@ export function createPlayerOverrides({client,validatedUser,current,internalOnly
     if(r.error?.code==='23505')r=await client.from('player_overrides').update(normalized).eq('user_id',owner).eq('player_key',key).select(columns).maybeSingle();
    }
    if(!active())return fail('state_changed');
-   if(r.error||!remove&&(!r.data||r.data.user_id!==owner||r.data.player_key!==key||!normalizePlayerOverride(r.data)))return fail('override_save_failed');
+   if(r.error||!remove&&(!r.data||r.data.user_id!==owner||r.data.player_key!==key||!normalizePlayerOverride(r.data)))return fail(limitError(r.error)||'override_save_failed');
    if(remove)cache.delete(key);else cache.set(key,normalizePlayerOverride(r.data));notify(key);return {ok:true};
   }catch{return fail(active()?'override_save_failed':'state_changed');}finally{writing.delete(key);}
  }

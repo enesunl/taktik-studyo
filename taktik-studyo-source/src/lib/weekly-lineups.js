@@ -1,6 +1,6 @@
 import {weeklySnapshot} from './weekly-xi.js';
 import {internalPlayerId} from './catalogue-identity.js';
-import {projectIdValid,projectTitle} from './studio-project-snapshot.js';
+import {projectIdValid,projectTitle,limitError} from './studio-project-snapshot.js';
 export const WEEKLY_COLUMNS='id,user_id,title,season,week,formation,revision,created_at,updated_at';
 const fail=code=>({ok:false,error:{code}});
 export const canonicalWeeklySnapshot=value=>{const s=weeklySnapshot(value);return s&&s.slots.every(row=>!row.player||internalPlayerId(row.player.id))?s:null;};
@@ -19,7 +19,7 @@ export function createWeeklyLineups({client,validatedUser,current}){
   if(full){result.snapshot=canonicalWeeklySnapshot(row.snapshot);if(!result.snapshot||result.snapshot.formation!==row.formation)return null;}
   return result;
  }
- function result(r,full=false){if(!active())return fail('state_changed');const record=!r?.error&&normalize(r?.data,full);return record?{ok:true,record}:fail('weekly_request_failed');}
+ function result(r,full=false){if(!active())return fail('state_changed');const record=!r?.error&&normalize(r?.data,full);return record?{ok:true,record}:fail(limitError(r?.error)||'weekly_request_failed');}
  async function get(id){const b=blocked();if(b)return b;if(!projectIdValid(id))return fail('invalid_form');try{return result(await table().select(WEEKLY_COLUMNS+',snapshot').eq('user_id',owner).eq('id',id).maybeSingle(),true);}catch{return fail(active()?'weekly_request_failed':'state_changed');}}
  async function list(offset=0,size=20){
   const b=blocked();if(b)return b;if(!Number.isSafeInteger(offset)||offset<0||!Number.isInteger(size)||size<1||size>50)return fail('invalid_form');
@@ -41,5 +41,11 @@ export function createWeeklyLineups({client,validatedUser,current}){
    if(!r.error&&!r.data)return fail('conflict');return result(r);
   }catch{return fail(active()?'weekly_request_failed':'state_changed');}
  }
- return Object.freeze({get,list,save});
+ async function remove({id,revision}){
+  const b=blocked();if(b)return b;if(!projectIdValid(id)||!Number.isSafeInteger(revision)||revision<1)return fail('invalid_form');
+  try{const r=await table().delete().eq('user_id',owner).eq('id',id).eq('revision',revision).select('id').maybeSingle();
+   if(!active())return fail('state_changed');return r.error?fail('weekly_request_failed'):r.data?.id===id?{ok:true}:fail('conflict');
+  }catch{return fail(active()?'weekly_request_failed':'state_changed');}
+ }
+ return Object.freeze({get,list,save,remove});
 }

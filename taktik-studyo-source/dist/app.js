@@ -377,7 +377,7 @@ async function editGlobal(remove=false){
   if(!editActive()||editGeneration!==teamGeneration)return;
   editing=false;$('playerForm').inert=false;$('playerForm').setAttribute('aria-busy','false');
   if(state.team.name!==editedTeam||selected!==editedSlot||state.players.find(p=>p.id===selected)?.athleteId!==p.athleteId){editorMessage('');return;}
-  if(!result.ok){editorMessage('Oyuncu düzenlemesi kaydedilemedi. Bilgilerin formda duruyor; tekrar dene.');return;}
+  if(!result.ok){const code=result.error?.code;editorMessage(code==='quota_exceeded'?'Oyuncu düzenleme sınırına ulaştın (500). Bir düzenlemeyi sıfırlayıp tekrar dene; bilgilerin formda duruyor.':code==='rate_limited'?'Çok sık kaydediliyor. Birkaç dakika sonra tekrar dene; bilgilerin formda duruyor.':'Oyuncu düzenlemesi kaydedilemedi. Bilgilerin formda duruyor; tekrar dene.');return;}
   renderPlayers();renderSquad();renderEditor();editorMessage(remove?'Oyuncu düzenlemesi sıfırlandı.':'Kişisel oyuncu düzenlemen kaydedildi.');return;
  }
  if(remove)return;

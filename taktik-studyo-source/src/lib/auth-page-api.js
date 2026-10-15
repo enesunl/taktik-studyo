@@ -1,9 +1,10 @@
-import {confirmationUrl, emailValid, usernameValid, recoveryUrl, emailTokenValid} from './auth-validation.js';
+import {confirmationUrl, emailValid, usernameValid, recoveryUrl, emailTokenValid, TERMS_VERSION} from './auth-validation.js';
 import {createProfileBootstrap} from './profile-bootstrap.js';
 const fail = code => ({ok:false,error:{code}});
 
 // Passed directly to the bundled UI, never attached to window.
-export function createAuthPageApi({auth, client, origin, captchaConfigured = false}) {
+// providerSettings: public Auth settings (GET /auth/v1/settings). Google appears only when the project enables it.
+export function createAuthPageApi({auth, client, origin, captchaConfigured = false, providerSettings = async () => null}) {
   const resultGuards = new WeakMap();
   function completed(result, current) {
     resultGuards.set(result,current);
@@ -36,10 +37,11 @@ export function createAuthPageApi({auth, client, origin, captchaConfigured = fal
       const result = await auth.signInWithPassword({email,password,captchaToken});
       return finishSignIn(result);
     },
-    async signUp({email,password,username,captchaToken} = {}) {
+    async signUp({email,password,username,captchaToken,termsAccepted} = {}) {
       email = typeof email === 'string' ? email.trim() : '';
       if (!emailValid(email) || !usernameValid(username) || typeof password !== 'string'
         || password.length < 12) return fail('invalid_form');
+      if (termsAccepted !== true) return fail('terms_required');
       const emailRedirectTo = confirmationUrl(origin);
       if (!emailRedirectTo) return fail('callback_origin_not_allowed');
       if (!captchaCheck(captchaToken)) return fail('captcha_required');
@@ -48,10 +50,25 @@ export function createAuthPageApi({auth, client, origin, captchaConfigured = fal
       if (auth.getCurrentUser()) return fail('existing_session');
       if (entered.status !== 'idle' && entered !== auth.getState()) return fail('state_changed');
       // The confirmation field stays in the form; this API never receives it.
-      const result = await auth.signUpWithPassword({email,password,username,emailRedirectTo,captchaToken});
+      const result = await auth.signUpWithPassword({email,password,username,emailRedirectTo,captchaToken,termsVersion:TERMS_VERSION});
       if (!result.ok) return result;
       const current = () => auth.isCurrentResult(result);
       return current() ? completed(result,current) : fail('state_changed');
+    },
+    async googleAvailable() {
+      try {return (await providerSettings())?.external?.google === true;} catch {return false;}
+    },
+    async startGoogle() {
+      const redirectTo = confirmationUrl(origin);
+      if (!redirectTo) return fail('callback_origin_not_allowed');
+      const ready = await auth.initialize(); if (!ready.ok) return ready;
+      if (auth.getCurrentUser()) return fail('existing_session');
+      return auth.startOAuth({redirectTo});
+    },
+    // Signs in (or reauthenticates the same account); a new Google account gets its profile in onboarding.
+    async completeOAuth(code) {
+      const ready = await auth.initialize(); if (!ready.ok) return ready;
+      return finishSignIn(await auth.exchangeOAuthCode(code));
     },
     async verifyEmail(tokenHash) {
       const entered = auth.getState();

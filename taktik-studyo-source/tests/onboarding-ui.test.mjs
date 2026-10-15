@@ -9,13 +9,13 @@ import {showcaseTeams,studioShowcase,boardShowcase,matchesShowcase,weeklyShowcas
 const incomplete={onboarding_completed_at:null,onboarding_version:0};
 const complete={onboarding_completed_at:'2026-10-05T00:00:00Z',onboarding_version:1};
 const clubs=[{id:'home-club',name:'Ev sahibi',color:'#123456',color2:'#abcdef'},{id:'away-club',name:'Deplasman',color:'#abcdef',color2:'#123456'}];
-function fixture({search='',load=async()=>({ok:true,profile:incomplete}),save=async()=>({ok:true,profile:complete}),teams=async()=>clubs}={}){
+function fixture({search='',load=async()=>({ok:true,profile:incomplete}),save=async()=>({ok:true,profile:complete}),teams=async()=>clubs,profileSave=null}={}){
   let active=true;
   const root=new ProfileNode('main'),navigation=[],writes=[],reads=[];
   const document={getElementById:id=>id==='protectedContent'?root:null,createElement(tag){const node=new ProfileNode(tag);node.style={setProperty(key,value){node.attrs[key]=value;}};node.focus=()=>{document.activeElement=node;};return node;}};
   const window={location:{pathname:'/hos-geldin',search,replace:url=>navigation.push(url)},history:{pushState(){throw Error('No per-step history');},replaceState(){throw Error('No per-step history');}}};
   for(const key of ['localStorage','sessionStorage'])Object.defineProperty(window,key,{get(){throw Error('No partial storage');}});
-  const api={loadPreferences:load,completeOnboarding:async arg=>{writes.push(arg);return save(arg);}};
+  const api={loadPreferences:load,completeOnboarding:async arg=>{writes.push(arg);return save(arg);},...(profileSave?{save:profileSave}:{})};
   const options={document,window,api,current:()=>active,catalogue:{loadTeams:async()=>{reads.push('teams');return teams();}}};
   const page=mountOnboarding(options);
   const walk=(node=root)=>[node,...node.children.flatMap(walk)];
@@ -202,4 +202,26 @@ test('OB3.1 illustrations show team names, colored kits and player names without
   const none=f.walk().find(n=>n.tagName==='label'&&n.children.some(c=>c.tagName==='input'&&c.value===''));
   assert.equal(none.attrs['--club-primary'],undefined);
   assert.equal(f.writes.length,0);f.page.dispose();
+});
+
+test('SEC2.2 an account without a profile (first Google sign-in) must choose a username and accept the Terms before completing',async()=>{
+  const saves=[];let conflict=true;
+  const f=fixture({load:async()=>({ok:true,profile:null}),profileSave:async input=>{saves.push(input);if(conflict){conflict=false;return {ok:false,error:{code:'username_conflict'}};}return {ok:true,profile:{id:'u'}};}});
+  await f.final();await f.choose('home-club');
+  const username=f.walk().find(n=>n.id==='onboardingUsername'),terms=f.walk().find(n=>n.id==='onboardingTerms');
+  assert(username&&terms,'username and Terms controls are shown');
+  assert(f.walk().some(n=>n.tagName==='a'&&n.href==='/kullanim-kosullari.html'),'Terms link');
+  const start="Taktik Stüdyo'ya Başla →",message=()=>f.walk().find(n=>n.className==='onboarding-message').textContent;
+  username.value='a';await f.click(start);assert.match(message(),/Kullanıcı adı/);
+  username.value='yeni_oyuncu';await f.click(start);assert.match(message(),/Kullanım Koşulları/);
+  assert.equal(saves.length,0);assert.equal(f.writes.length,0);
+  terms.checked=true;await f.click(start);assert.match(message(),/kullanılıyor/);assert.equal(f.writes.length,0);
+  await f.click(start);
+  assert.deepEqual(saves,[{username:'yeni_oyuncu',display_name:'',termsAccepted:true},{username:'yeni_oyuncu',display_name:'',termsAccepted:true}]);
+  assert.deepEqual(f.writes,[{favoriteTeamSlug:'home-club'}]);assert.deepEqual(f.navigation,['/studyo.html']);f.page.dispose();
+});
+
+test('SEC2.2 existing profiles (e-mail registration) see no extra username or Terms step',async()=>{
+  const f=fixture();await f.final();
+  assert.equal(f.walk().some(n=>n.id==='onboardingUsername'||n.id==='onboardingTerms'),false);f.page.dispose();
 });

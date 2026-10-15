@@ -8,7 +8,7 @@ export const tick = () => new Promise(r => setTimeout(r,0));
 export function profileClient(handler = () => ({data:row(),error:null})) {
   const calls = [];
   const client = {
-    auth:{async getUser(){calls.push({kind:'getUser'});return {data:{user:{id:A,email_confirmed_at:'yes',user_metadata:{username:'SeedName'}}}};},
+    auth:{async getUser(){calls.push({kind:'getUser'});return {data:{user:{id:A,email_confirmed_at:'yes',user_metadata:{username:'SeedName',terms_version:'2026-10-15'}}}};},
       updateUser(){throw Error('Auth metadata must never be updated');}},
     from(table) {
       const call = {table,kind:'select',filters:[]};

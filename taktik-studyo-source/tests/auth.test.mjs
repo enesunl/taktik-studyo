@@ -25,7 +25,8 @@ test('restore is single-flight, identity only, immutable and not server validati
   const first = auth.initialize(); assert.equal(auth.initialize(), first);
   assert.equal((await first).ok, true);
   assert.equal(f.calls.register, 1); assert.equal(f.calls.restore, 1); assert.equal(f.calls.validate, 0);
-  assert.deepEqual(auth.getCurrentUser(), {id:user.id, email:user.email, emailConfirmedAt:user.email_confirmed_at});
+  // SEC2.2: providers (server-set app_metadata, empty here) is part of the UI identity snapshot.
+  assert.deepEqual(auth.getCurrentUser(), {id:user.id, email:user.email, emailConfirmedAt:user.email_confirmed_at, providers:[]});
   assert.ok(Object.isFrozen(auth.getState())); assert.ok(Object.isFrozen(auth.getCurrentUser()));
   assert.doesNotMatch(JSON.stringify(auth.getState()), /private-test|untrusted|access_token|refresh_token/);
   assert.equal((await auth.validateUser()).ok, true); assert.equal(f.calls.validate, 1);

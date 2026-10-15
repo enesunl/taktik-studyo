@@ -1,4 +1,5 @@
 import {weeklyRecordLink} from './weekly-lineups-ui.js';
+import {ACCOUNT_LIMITS} from './studio-project-snapshot.js';
 import {mountProfileFavorite} from './profile-favorite-ui.js';
 import {mountAccountDeletion} from './account-delete-ui.js';
 
@@ -75,6 +76,8 @@ export function mountProfile({document,api,validatedUser,current,projects,onSign
     if(!active())return;projectsBusy=false;recent.setAttribute('aria-busy','false');
     if(!result.ok){projectStatus.textContent='Çalışmalar şu anda yüklenemedi. Tekrar deneyebilirsin.';projectRetry.hidden=false;return;}
     for(const [key,id]of [['total','Total'],['free','Free'],['match','Match']])root.querySelector('#profileCount'+id).textContent=String(result.counts[key]);
+    // SEC2.2: total against the free account limit.
+    root.querySelector('#profileCountTotal').textContent+=' / '+ACCOUNT_LIMITS.projects;
     stats.hidden=false;projectStatus.textContent='';empty.hidden=result.projects.length!==0;
     const ordered=[...result.projects].sort((a,b)=>Date.parse(b.updated_at)-Date.parse(a.updated_at)||b.id.localeCompare(a.id)).slice(0,4);
     for(const p of ordered){
@@ -142,7 +145,8 @@ export function mountProfile({document,api,validatedUser,current,projects,onSign
   const favorite=favoriteRoot&&catalogue?mountProfileFavorite({document,root:favoriteRoot,initials,api,catalogue,current:active}):null;
   // ACCOUNT1: optional; only mounted when the page provides the trusted deletion API.
   const dangerRoot=root.querySelector('#profileDanger');
-  const deletion=dangerRoot&&accountDeletion?mountAccountDeletion({document,root:dangerRoot,deleteAccount:accountDeletion.deleteAccount,onDeleted:accountDeletion.onDeleted,current:active}):null;
+  const deletion=dangerRoot&&accountDeletion?mountAccountDeletion({document,root:dangerRoot,deleteAccount:accountDeletion.deleteAccount,onDeleted:accountDeletion.onDeleted,current:active,
+    method:accountDeletion.method,reauthenticate:accountDeletion.reauthenticate,captchaSiteKey:accountDeletion.captchaSiteKey}):null;
   const ready = Promise.all([load(),loadProjects(),loadWeekly()]);
   eventTarget?.addEventListener('storage',loadWeekly);
   return {ready,favoriteReady:favorite?.ready,dispose};

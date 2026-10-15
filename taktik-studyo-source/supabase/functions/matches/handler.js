@@ -63,13 +63,15 @@ export function matchesOrigins(value = 'https://taktikstudyo.com') {
 // {events, match} presenters that attach BSD canonical catalogue identities (canonical.js).
 export function createMatchesHandler({authenticate,token,origins = matchesOrigins(),load = fetchSeason,loadDetail = fetchDetail,now = Date.now,canonical}) {
   let seasonEntry = null, seasonPending = null, blockedUntil = 0, limitedStreak = 0, accessDeniedUntil = 0;
+  // SEC2: ids of the last successfully loaded season; details are fetched only for these.
+  let scheduledIds = new Set();
   const details = new Map(), pendingDetails = new Map(), resolved = new Map(), pendingResolved = new Map();
   const cooldown = new Map(), notFound = new Map();
   const remember = (map, key, value, max) => {map.delete(key); if (map.size >= max) map.delete(map.keys().next().value); map.set(key, value);};
   const stamp = entry => ({...entry, fetchedAt:new Date(now()).toISOString()});
 
   // Licence §5: once access is invalid or revoked, retained raw data must not keep being displayed.
-  function purge() {seasonEntry = null; details.clear(); resolved.clear(); notFound.clear(); cooldown.clear();}
+  function purge() {seasonEntry = null; scheduledIds = new Set(); details.clear(); resolved.clear(); notFound.clear(); cooldown.clear();}
   function noteSuccess() {limitedStreak = 0; accessDeniedUntil = 0;}
   function noteFailure(key, error) {
     const t = now();
@@ -102,7 +104,7 @@ export function createMatchesHandler({authenticate,token,origins = matchesOrigin
     if (gate) return staleOrThrow(seasonEntry, gate.error, gate.staleAllowed);
     if (!seasonPending) seasonPending = Promise.resolve().then(() => load({token})).then(data => {
       const ttl = seasonTTL(data, now()), expires = now() + ttl * 1000;
-      noteSuccess(); cooldown.delete('season');
+      noteSuccess(); cooldown.delete('season'); scheduledIds = new Set(data.matches.map(match => match.id));
       return (seasonEntry = stamp({data, expires, staleUntil:expires + CACHE_LIMITS.staleSeasonMs}));
     }, error => {noteFailure('season', error); throw error;}).finally(() => {seasonPending = null;});
     try {return await seasonPending;}
@@ -188,6 +190,13 @@ export function createMatchesHandler({authenticate,token,origins = matchesOrigin
       if (!user?.id || user.is_anonymous || !user.email_confirmed_at) return reply(401,wantsDetail ? 'UNAUTHORIZED' : 'unauthenticated');
     } catch {return reply(401,wantsDetail ? 'UNAUTHORIZED' : 'unauthenticated');}
     if (wantsDetail) {
+      // SEC2: only fixtures of the configured season reach the provider. Any other well-formed id
+      // would cost a provider request per id (quota exhaustion by enumeration), so it is answered
+      // from the cached season list without a provider call.
+      // The last successfully loaded season counts, so retained details stay available during an
+      // outage; it is cleared only when provider access is lost (licence purge).
+      try {await season();} catch {}
+      if (!scheduledIds.has(id)) return scheduledIds.size ? reply(404,'MATCH_NOT_FOUND') : reply(503,'PROVIDER_UNAVAILABLE');
       try {
         const entry = await studioDetail(id), data = await presentMatch(entry.data);
         return new Response(body({...entry, data}),{headers:{...headers,'Cache-Control':cacheControl(entry),'X-Matches-Cache':entry.stale ? 'stale' : 'fresh'}});

@@ -12,7 +12,8 @@ const all=readdirSync(dir).filter(f=>f.endsWith('.sql')).sort();
 const APPLIED=['20260913063249_football_backend.sql','20260920094922_catalogue_authenticated_read.sql','20260920102243_profiles_ownership.sql','20260923135716_studio_projects.sql','20260924094207_player_overrides.sql'];
 const PENDING=['20260924200000_legacy_catalogue_no_anon_read.sql','20260925035438_catalogue_identity_foundation.sql','20260925040000_catalogue_no_anon_read.sql',
   '20261004234326_profile_onboarding_foundation.sql','20261013165455_weekly_lineups.sql','20261014074114_weekly_snapshot_validation.sql',
-  '20261014140000_seed_catalogue_teams.sql','20261014150000_shared_lineup_owner.sql','20261015120000_player_override_internal_keys.sql','20261015120100_catalogue_sync.sql'];
+  '20261014140000_seed_catalogue_teams.sql','20261014150000_shared_lineup_owner.sql','20261015120000_player_override_internal_keys.sql','20261015120100_catalogue_sync.sql',
+  '20261015190000_account_limits.sql','20261015200000_terms_acceptance.sql'];
 const user='11111111-1111-4111-8111-111111111111';
 async function production(){
   const db=new PGlite();

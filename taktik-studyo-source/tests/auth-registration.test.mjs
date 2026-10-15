@@ -70,7 +70,10 @@ test('signup sends trimmed email, untouched password, username seed and exact ca
   try {
     assert.deepEqual(await f.api.signUp(credentials), {ok:true,status:'confirmation_pending'});
     assert.deepEqual(f.calls.signup, [{email:credentials.email.trim(),password:credentials.password,
-      options:{data:{username:credentials.username},emailRedirectTo:'https://taktikstudyo.com/auth-callback.html'}}]);
+      options:{data:{username:credentials.username,terms_version:'2026-10-15'},emailRedirectTo:'https://taktikstudyo.com/auth-callback.html'}}]);
+    // SEC2.3: no recorded acceptance, no signup request.
+    assert.equal((await f.api.signUp({...credentials,termsAccepted:undefined})).error.code,'terms_required');assert.equal(f.calls.signup.length,1);
+    assert.equal((await f.auth.signUpWithPassword({...credentials,emailRedirectTo:'https://taktikstudyo.com/auth-callback.html',termsVersion:'v1'})).error.code,'invalid_form');
     assert.equal(f.calls.getUser,0); assert.equal(f.calls.insert.length,0);
   } finally {f.auth.dispose();}
 });
@@ -197,7 +200,7 @@ test('login raw errors and absent Auth configuration are controlled', async () =
     assert.deepEqual(await f.api.signIn(credentials),{ok:false,error:{code:'sign_in_failed'}});
     assert.equal(f.calls.getUser,0);
     const offline = createAuthSession(null);
-    assert.equal((await offline.signUpWithPassword({...credentials,emailRedirectTo:confirmationUrl('https://taktikstudyo.com')})).error.code,'auth_unavailable');
+    assert.equal((await offline.signUpWithPassword({...credentials,emailRedirectTo:confirmationUrl('https://taktikstudyo.com'),termsVersion:'2026-10-15'})).error.code,'auth_unavailable');
     assert.equal((await offline.verifyEmailToken('token')).error.code,'auth_unavailable');
   } finally {f.auth.dispose();}
 });

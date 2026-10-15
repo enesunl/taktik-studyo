@@ -3,6 +3,9 @@ import {parseFormation} from './match-layout.js';
 import {normalizeDrawingObjects} from './tactical-drawings.js';
 import {validPitchColor} from './pitch-preference.js';
 import {SIZE_BOUNDS} from './studio-preferences.js';
+// SEC2.2 free account limits. The database enforces them (migration account_limits); the UI only shows them.
+export const ACCOUNT_LIMITS=Object.freeze({projects:10,weekly:40,overrides:500,sharesPerDay:10});
+export const limitError=error=>error?.code==='P0001'&&['quota_exceeded','rate_limited'].includes(error.message)?error.message:null;
 export const SNAPSHOT_VERSION=1,PROJECT_BYTES=3*1024*1024;
 export const projectIdValid=v=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(v);
 const text=(v,max)=>typeof v==='string'&&v.length>0&&v.length<=max&&!/[\u0000-\u001f\u007f-\u009f]/.test(v);

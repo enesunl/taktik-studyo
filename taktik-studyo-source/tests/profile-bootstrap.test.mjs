@@ -15,8 +15,17 @@ test('existing own profile selects exact allowed columns, never avatar/wildcard 
 test('missing own profile inserts only verified user id and validated username, no metadata authority/upsert', async () => {
   const f = fixture(); f.rows = [{data:null,error:null}];
   assert.deepEqual(await createProfileBootstrap(f.client,value => value === id)(),{ok:true,status:'ready'});
-  assert.deepEqual(f.calls.insert,[{id,username:'Test_12'}]);
+  assert.deepEqual(f.calls.insert,[{id,username:'Test_12',terms_version:'2026-10-15'}]);
   assert.equal(f.calls.select.length,1);
+});
+
+test('SEC2.3 a registration without a recorded Terms version gets no automatic profile (onboarding asks for acceptance)', async () => {
+  for (const terms_version of [undefined,null,'','v1','2026-10-15 ',{},'2025-01-01','2099-12-31']) {
+    const f = fixture(); f.rows = [{data:null,error:null}];
+    f.userResult = {data:{user:{...user,user_metadata:{username:'Test_12',terms_version}}}};
+    assert.deepEqual(await createProfileBootstrap(f.client,() => true)(),{ok:false,status:'profile_incomplete'});
+    assert.equal(f.calls.insert.length,0);
+  }
 });
 
 test('missing or invalid metadata username gives incomplete profile, not insert', async () => {

@@ -47,7 +47,7 @@ test('profile workspace shows service counts, newest rows, safe titles and meani
  const older={id:A,title:'Eski',studio_mode:'free',updated_at:'2026-09-20T10:00:00Z'},newer={id:B,title:'<img src=x>',studio_mode:'match',updated_at:'2026-10-01T11:00:00Z'};
  wait.resolve({ok:true,counts:{total:37,free:25,match:12},projects:[older,newer]});await page.ready;
  assert.equal(calls,1);assert.equal(fields['#profileName'].textContent,'real@example.test');assert.equal(fields['#profileInitials'].textContent,'TS');
- assert.equal(fields['#profileCountTotal'].textContent,'37');assert.equal(fields['#profileCountFree'].textContent,'25');assert.equal(fields['#profileCountMatch'].textContent,'12');
+ assert.equal(fields['#profileCountTotal'].textContent,'37 / 10');assert.equal(fields['#profileCountFree'].textContent,'25');assert.equal(fields['#profileCountMatch'].textContent,'12');
  assert.equal(fields['#profileStats'].hidden,false);assert.equal(fields['#profileEmpty'].hidden,true);
  const item=fields['#profileRecent'].children[0];assert.equal(item.children[0].children[0].textContent,'<img src=x>');assert.equal(item.children[0].children[1].textContent,'Maç çalışması');assert.equal(item.children[2].href,'/mac-studyosu?project='+B);assert.equal(item.children[2].attrs['aria-label'],'<img src=x> çalışmasını aç');assert.equal(item.children[1].attrs.datetime,'2026-10-01T11:00:00.000Z');page.dispose();
 });
@@ -57,7 +57,7 @@ test('projects error is independent of editing, retry distinguishes empty from f
  const page=mountProfile({document:f.document,current:()=>true,validatedUser:{id:A},api:{load:async()=>({ok:true,profile:row()})},projects:{getWorkspaceSummary:()=>++calls===1?Promise.resolve({ok:false,error:{message:'private SQL'}}):wait.promise}});await page.ready;
  const fields=f.mounts[0].fields;assert.equal(fields.form.hidden,true);await fields['#profileEdit'].emit('click');assert.equal(fields.form.hidden,false);assert(fields['#profileStats'].hidden);assert(fields['#profileEmpty'].hidden);assert.equal(fields['#profileProjectsRetry'].hidden,false);assert.doesNotMatch(fields['#profileProjectsStatus'].textContent,/private/);
  const pending=fields['#profileProjectsRetry'].emit('click');await fields['#profileProjectsRetry'].emit('click');assert.equal(calls,2);
- wait.resolve({ok:true,projects:[],counts:{total:0,free:0,match:0}});await pending;assert.equal(fields['#profileEmpty'].hidden,false);assert.equal(fields['#profileCountTotal'].textContent,'0');page.dispose();
+ wait.resolve({ok:true,projects:[],counts:{total:0,free:0,match:0}});await pending;assert.equal(fields['#profileEmpty'].hidden,false);assert.equal(fields['#profileCountTotal'].textContent,'0 / 10');page.dispose();
 });
 
 test('late workspace results cannot repopulate disposed or changed-account profile; logout delegates once',async()=>{
@@ -127,7 +127,7 @@ test('profile guard validates before own load; no catalogue, import or storage; 
 test('profile guard supplies immutable validated context and omits draft scope',async()=>{
   const f=routeFixture();let context;
   const guard=createProtectedPage({auth:f.options.auth,path:'/profil.html',drafts:false,show(){},navigate(){},mount(scope,current,user){assert.equal(scope,null);assert.equal(current(),true);context=user;}});
-  await guard.start();assert.equal(Object.isFrozen(context),true);assert.deepEqual(context,{id:A,email:'server-validated@example.test'});guard.dispose();
+  await guard.start();assert.equal(Object.isFrozen(context),true);assert.deepEqual(context,{id:A,email:'server-validated@example.test',providers:[]});guard.dispose();
 });
 
 test('unauthenticated, recovery and failed server validation never mount profile or fetch data',async()=>{
@@ -211,7 +211,7 @@ test('canonical mode reads empty account projects and edits profile through Auth
  const page=startPage(f.options);await page.ready;await tick();
  const fields=f.mounts[0].fields;assert.equal(fields['#profileName'].textContent,'Görünen ad');assert.equal(fields['#profileStatus'].textContent,'');assert.equal(fields['#profileEdit'].disabled,false);
  assert.equal(teamRequests,0);assert.deepEqual(localTables,[]);
- assert.equal(fields['#profileEmpty'].hidden,false);assert.equal(fields['#profileCountTotal'].textContent,'0');
+ assert.equal(fields['#profileEmpty'].hidden,false);assert.equal(fields['#profileCountTotal'].textContent,'0 / 10');
  const projectReads=f.requests.filter(c=>c.table==='studio_projects');assert.equal(projectReads.length,3);
  assert.equal(projectReads.filter(c=>c.options?.head&&c.options.count==='exact').length,2);
  assert(projectReads.every(c=>!c.columns.split(',').includes('snapshot')&&!c.columns.split(',').includes('mode')));

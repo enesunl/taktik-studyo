@@ -1,14 +1,4 @@
-let widgetScript;
-function loadTurnstile() {
-  if(window.turnstile)return Promise.resolve(window.turnstile);
-  if(!widgetScript)widgetScript=new Promise((resolve,reject)=>{
-    const script=document.createElement('script');script.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';script.async=true;
-    const timer=setTimeout(()=>{script.remove();reject(new Error('Doğrulama yüklenemedi.'));},15000);
-    script.onload=()=>{clearTimeout(timer);window.turnstile?resolve(window.turnstile):reject(new Error('Doğrulama yüklenemedi.'));};
-    script.onerror=()=>{clearTimeout(timer);script.remove();reject(new Error('Doğrulama yüklenemedi.'));};document.head.append(script);
-  }).catch(error=>{widgetScript=null;throw error;});
-  return widgetScript;
-}
+import {loadTurnstile} from './turnstile.js';
 const el=(tag,cls,text)=>{const element=document.createElement(tag);if(cls)element.className=cls;if(text)element.textContent=text;return element;};
 export function createSharingUI(backend,siteKey) {
   return {attach(board,trigger){

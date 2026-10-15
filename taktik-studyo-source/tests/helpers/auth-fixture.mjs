@@ -3,9 +3,10 @@ import {createAuthPageApi} from '../../src/lib/auth-page-api.js';
 
 export const id = '11111111-1111-4111-8111-111111111111';
 export const user = {id,email:'test@example.test',email_confirmed_at:'2026-09-18T10:00:00Z',
-  user_metadata:{username:'Test_12',id:'attacker-id',role:'admin'}};
+  // Registered through the UI: the accepted Terms version (SEC2.3) travels with the signup metadata.
+  user_metadata:{username:'Test_12',terms_version:'2026-10-15',id:'attacker-id',role:'admin'}};
 export const session = {user,access_token:'fake-access-private',refresh_token:'fake-refresh-private'};
-export const credentials = {email:' test@example.test ',password:' twelve chars ',username:'Test_12'};
+export const credentials = {email:' test@example.test ',password:' twelve chars ',username:'Test_12',termsAccepted:true};
 export function fixture({initial = null, captchaConfigured = false, origin = 'https://taktikstudyo.com'} = {}) {
   const calls = {signup:[],login:[],verify:[],select:[],insert:[],getUser:0};
   let callback, current = initial;

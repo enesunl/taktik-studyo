@@ -31,7 +31,7 @@ test('workspace summary never delivers A statistics after account invalidation o
 test('private project list uses owner-only metadata query, stable updated DESC and pagination',async()=>{
  const f=setup([{data:Array.from({length:21},()=>row())}]);const r=await f.api.listProjects(20);
  assert.equal(r.projects.length,20);assert.equal(r.more,true);assert.equal(r.nextOffset,40);assert.equal(r.projects[0].snapshot,undefined);
- assert.deepEqual(f.calls[0],[['from','studio_projects'],['select',PROJECT_COLUMNS],['eq','user_id',owner],['order','updated_at',{ascending:false}],['order','id',{ascending:false}],['range',20,40]]);
+ assert.deepEqual(f.calls[0],[['from','studio_projects'],['select',PROJECT_COLUMNS,{count:'exact'}],['eq','user_id',owner],['order','updated_at',{ascending:false}],['order','id',{ascending:false}],['range',20,40]]);
 });
 test('create pins owner, trims title, never supplies metadata; update and rename use revision CAS',async()=>{
  const f=setup([{data:row()},{data:row({revision:2})},{data:row({revision:3})}]);

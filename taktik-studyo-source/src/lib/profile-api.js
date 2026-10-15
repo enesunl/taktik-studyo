@@ -1,5 +1,5 @@
 import {createProfilePreferences} from './profile-preferences.js';
-import {usernameValid} from './auth-validation.js';
+import {usernameValid, TERMS_VERSION} from './auth-validation.js';
 import {createProfileBootstrap, profileColumns} from './profile-bootstrap.js';
 
 const failure = code => ({ok:false,error:{code}});
@@ -58,7 +58,8 @@ export function createProfileApi({client,validatedUser,current,teamCatalogue}) {
       if (!own.ok) return own;
       if (own.profile) return await updateOwn();
       if (!active()) return failure('state_changed');
-      const inserted = await client.from('profiles').insert({id,...values}).select(profileColumns).maybeSingle();
+      // SEC2.3: creating a profile records the Terms acceptance only when the caller collected it (onboarding).
+      const inserted = await client.from('profiles').insert({id,...values,...(input.termsAccepted === true ? {terms_version:TERMS_VERSION} : {})}).select(profileColumns).maybeSingle();
       if (!active()) return failure('state_changed');
       if (inserted.error?.code !== '23505') return result(inserted,'profile_save_failed');
       // A concurrent bootstrap may have inserted our own row. Never look up the

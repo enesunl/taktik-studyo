@@ -4,6 +4,8 @@ export const event = (overrides = {}) => ({id:215997,league_id:11,season_id:1539
   event_date:'2026-09-20T17:00:00+00:00',status:'finished',home_team_id:3380,home_team:'Amed Sportif Faaliyetler',
   away_team_id:196,away_team:'Beşiktaş JK',home_score:3,away_score:2,venue_id:3071,...overrides});
 export const match = (overrides = {}) => normalizeEvent(event(overrides));
+// SEC2: match details are served only for fixtures of the loaded season; tests list their ids.
+export const seasonOf = (...ids) => async () => ({season:'2026-2027',matches:ids.map(id => match({id:Number(id)}))});
 export const deferred = () => {let resolve; const promise = new Promise(r => {resolve = r;}); return {promise,resolve};};
 export const tick = () => new Promise(r => setTimeout(r,0));
 

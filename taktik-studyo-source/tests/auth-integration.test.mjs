@@ -163,7 +163,7 @@ test('real SDK with two independent mocked devices: TokenHash confirmation needs
   const apis = clients.map((client,i) => createAuthPageApi({client,auth:controllers[i],origin:'https://taktikstudyo.com'}));
   try {
     await Promise.all(apis.map(api => api.initialize()));
-    assert.deepEqual(await apis[0].signUp({email:user.email,password:'twelve chars pass',username:'Cross_device'}),{ok:true,status:'confirmation_pending'});
+    assert.deepEqual(await apis[0].signUp({email:user.email,password:'twelve chars pass',username:'Cross_device',termsAccepted:true}),{ok:true,status:'confirmation_pending'});
     assert.equal(controllers[0].getCurrentUser(),null); assert.equal(stores[1].size,0);
     assert.equal(calls.some(call => call.path.endsWith('/verify')),false);
     assert.deepEqual(await apis[1].verifyEmail('fake-cross-device-token'),{ok:true,userId:id,profile:{ok:true,status:'ready'}});

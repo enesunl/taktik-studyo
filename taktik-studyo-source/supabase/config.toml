@@ -40,6 +40,15 @@ content_path = "./supabase/templates/confirmation.html"
 subject = "Taktik Stüdyo — Yerel parola sıfırlama"
 content_path = "./supabase/templates/recovery.html"
 
+# SEC2.2: Google OAuth stays disabled locally (and in production until approved). To try it locally,
+# create a separate Google test client with redirect URI http://127.0.0.1:54321/auth/v1/callback, export the
+# two values below in your shell (never commit them) and restart the local stack:
+# [auth.external.google]
+# enabled = true
+# client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+# secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
+# skip_nonce_check = false
+
 [analytics]
 enabled = false
 

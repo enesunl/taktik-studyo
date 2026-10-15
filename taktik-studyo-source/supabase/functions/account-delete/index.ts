@@ -20,11 +20,13 @@ Deno.serve(createAccountDeleteHandler({
   },
   // Recent identity verification: re-check the password with a fresh, non-persisting public client,
   // then revoke that verification session immediately.
-  async verifyPassword({email,password,userId}: {email: string, password: string, userId: string}) {
+  // SEC2.2: with hosted CAPTCHA enabled, the browser's Turnstile token is forwarded (the public-key call needs it).
+  async verifyPassword({email,password,userId,captchaToken}: {email: string, password: string, userId: string, captchaToken?: string}) {
     const verifier = createClient(url, publicKey, options);
-    const {data,error} = await verifier.auth.signInWithPassword({email,password});
+    const {data,error} = await verifier.auth.signInWithPassword({email,password,...(captchaToken ? {options:{captchaToken}} : {})});
     if (error) {
       if (error.status === 429) throw {code:'rate_limited'};
+      if (error.code === 'captcha_failed') throw {code:'captcha_failed'};
       return false;
     }
     const ok = data.user?.id === userId;

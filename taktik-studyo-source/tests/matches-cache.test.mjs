@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createMatchesHandler,seasonTTL,CACHE_LIMITS} from '../supabase/functions/matches/handler.js';
 import {fetchDetail,fetchSeason,PROVIDER_LIMITED,retryAfterMs} from '../supabase/functions/matches/provider.js';
-import {match,event,deferred} from './helpers/matches-fixture.mjs';
+import {match,event,deferred,seasonOf} from './helpers/matches-fixture.mjs';
 import {detail,resources} from './helpers/match-detail-fixture.mjs';
 
 const user={id:'u',email_confirmed_at:'2026-10-01'};
@@ -87,7 +87,7 @@ test('access denied (401/402/403): caches purged, retained data never served, re
 
 test('details: stale only for temporary failures, never for unknown ids; concurrent misses share one request',async()=>{
   let time=0,calls=0,mode='ok';const gate=deferred();const full=detail();
-  const h=createMatchesHandler({token:'t',now:()=>time,authenticate:async()=>user,loadDetail:async({id})=>{calls++;if(mode==='wait')await gate.promise;if(mode==='fail')throw Error('PROVIDER_UNAVAILABLE');if(mode==='missing')throw Error('MATCH_NOT_FOUND');return {...full,id};}});
+  const h=createMatchesHandler({token:'t',now:()=>time,authenticate:async()=>user,load:seasonOf('215997','300001'),loadDetail:async({id})=>{calls++;if(mode==='wait')await gate.promise;if(mode==='fail')throw Error('PROVIDER_UNAVAILABLE');if(mode==='missing')throw Error('MATCH_NOT_FOUND');return {...full,id};}});
   const fresh=await withoutFreshness(await h(req('?id=215997')));assert.equal(calls,1);assert.equal(fresh.freshness.stale,false);
   time=6*H+1;mode='fail';const stale=await withoutFreshness(await h(req('?id=215997')));assert.deepEqual(stale.rest,fresh.rest);assert.equal(stale.freshness.stale,true);
   mode='missing';time+=CACHE_LIMITS.failureCooldownMs+1;assert.equal((await h(req('?id=215997'))).status,404,'MATCH_NOT_FOUND is never masked');
@@ -102,11 +102,13 @@ test('optional resources: 429 keeps the partial body and backs off; 401 on any r
   assert.equal(partial.availability.stats,'error');assert.deepEqual(partial[PROVIDER_LIMITED],{retryAfterMs:20000});
   assert.doesNotMatch(JSON.stringify(partial),/retryAfter|providerLimited/);
   await assert.rejects(fetchDetail({id:'215997',token:'t',fetchImpl:fetchWith({'lineups/':()=>new Response('{}',{status:401})})}),e=>e.accessDenied===true&&e.message==='PROVIDER_UNAVAILABLE');
-  let time=0,seasonLoads=0;
-  const h=createMatchesHandler({token:'t',now:()=>time,authenticate:async()=>user,loadDetail:async()=>partial,load:async()=>{seasonLoads++;return {season:'2026-2027',matches:[]};}});
+  let time=0,seasonLoads=0,detailCalls=0;
+  const h=createMatchesHandler({token:'t',now:()=>time,authenticate:async()=>user,loadDetail:async()=>{detailCalls++;return partial;},load:async()=>{seasonLoads++;return {season:'2026-2027',matches:[match({id:215997}),match({id:215998})]};}});
   const res=await h(req('?id=215997'));assert.equal(res.status,200);assert.equal((await res.json()).availability.stats,'error');
-  assert.equal((await h(req())).status,503,'fixtures wait for the 20 s Retry-After');assert.equal(seasonLoads,0);
-  time=20001;assert.equal((await h(req())).status,200);assert.equal(seasonLoads,1);
+  // Provider-wide back-off: another scheduled match waits for the 20 s Retry-After; fixtures stay cached.
+  assert.equal((await h(req('?id=215998'))).status,503);assert.equal(detailCalls,1);
+  assert.equal((await h(req())).status,200);assert.equal(seasonLoads,1,'cached season, no provider call');
+  time=20001;assert.equal((await h(req('?id=215998'))).status,200);assert.equal(detailCalls,2);
   // Provider errors map to the unchanged outward messages.
   await assert.rejects(fetchSeason({token:'t',fetchImpl:async()=>new Response('{}',{status:403})}),e=>e.accessDenied&&e.message==='matches_unavailable');
   await assert.rejects(fetchSeason({token:'t',fetchImpl:async()=>new Response('{}',{status:429,headers:{'Retry-After':'1'}})}),e=>e.limited&&e.retryAfterMs===1000&&e.message==='provider_limited');

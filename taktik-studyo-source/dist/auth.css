@@ -27,3 +27,10 @@ noscript { display: block; margin-top: 16px; line-height: 1.5; }
 .legal-links a { color: var(--text-secondary); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 @media (max-width: 400px) { .auth-card { padding: 24px; } }
+/* SEC2.2: Google sign-in (secondary to e-mail) and Auth Turnstile. */
+.oauth-actions { margin-top: 8px; }
+.oauth-divider { display: flex; align-items: center; gap: 12px; margin: 20px 0 0; color: var(--text-secondary); font-size: .8rem; }
+.oauth-divider::before, .oauth-divider::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+.oauth-google { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 14px; background: var(--control-bg); color: var(--text-primary); border: 1px solid var(--border); }
+.oauth-google:disabled { background: var(--control-bg); color: var(--text-secondary); opacity: .7; }
+.auth-captcha { margin-top: 20px; min-height: 65px; }

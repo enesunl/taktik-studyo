@@ -21,7 +21,7 @@ import {createMatchDetailApi} from './match-detail.js';
 import {mountMatchDetail} from './match-detail-ui.js';
 import {mountMatchStudio} from './match-studio-ui.js';
 import {createPlayerOverrides} from './player-overrides.js';
-import {clearUserData} from './account-delete.js';
+import {clearUserData,deletionMethod} from './account-delete.js';
 
 export function startPage({auth,document,window,backend,client,accountDeletion}) {
   const route = resolvePage(window.location);
@@ -108,7 +108,8 @@ export function startPage({auth,document,window,backend,client,accountDeletion})
           window.location.replace('/');
         };
         return mountProfile({document,api,validatedUser,current,weeklyRecords,weeklyStores,eventTarget:window,catalogue:teamCatalogue,projects:createStudioProjects({client,validatedUser,current}),onSignOut:()=>guard.signOut(),
-          accountDeletion:accountDeletion?{deleteAccount:accountDeletion.deleteAccount,onDeleted}:undefined}).dispose;
+          accountDeletion:accountDeletion?{deleteAccount:accountDeletion.deleteAccount,onDeleted,reauthenticate:accountDeletion.reauthenticate,
+            captchaSiteKey:accountDeletion.captchaSiteKey,method:deletionMethod(validatedUser.providers||[])}:undefined}).dispose;
       }
       // Open the user's own draft directly. Device-wide legacy drafts are
       // neither imported nor deleted as a side effect of opening a board.

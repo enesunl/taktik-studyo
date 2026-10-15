@@ -1,5 +1,9 @@
 import {createStudioAutosave} from './studio-autosave.js';
 import {createStudioDialog} from './studio-dialog.js';
+import {ACCOUNT_LIMITS} from './studio-project-snapshot.js';
+
+const limitMessages={quota_exceeded:`Çalışma sınırına ulaştın (${ACCOUNT_LIMITS.projects}). Kaydetmek için Çalışmalarım'dan bir çalışmayı sil. Değişikliklerin bu cihazda korunuyor.`,
+  rate_limited:'Çok sık kaydediliyor. Birkaç dakika sonra tekrar dene; değişikliklerin bu cihazda korunuyor.'};
 
 export function mountStudioSave({document,window,host,api,current,capture,project,restored,recovery,userId,newId,storage}){
   const listeners=[],node=(tag,text)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;};
@@ -19,7 +23,7 @@ export function mountStudioSave({document,window,host,api,current,capture,projec
     onState(s){
       // Avoid replacing selection/caret while editing the title.
       if(title.value!==s.title)title.value=s.title;
-      status.textContent=({new:'Henüz kaydedilmedi',saved:'Kaydedildi ✓',dirty:'Kaydedilmedi',saving:'Kaydediliyor…',error:'Kaydetme hatası',conflict:'Bu çalışma başka bir sekmede güncellendi.'})[s.status]+(!s.recoveryOk?' Yerel kurtarma kopyası yazılamadı.':'');
+      status.textContent=(limitMessages[s.error]||{new:'Henüz kaydedilmedi',saved:'Kaydedildi ✓',dirty:'Kaydedilmedi',saving:'Kaydediliyor…',error:'Kaydetme hatası',conflict:'Bu çalışma başka bir sekmede güncellendi.'}[s.status])+(!s.recoveryOk?' Yerel kurtarma kopyası yazılamadı.':'');
       save.disabled=s.saving||s.conflict;const saveLabel=s.saving?'Kaydediliyor…':s.status==='error'?'Tekrar Dene':'Kaydet';save.setAttribute('aria-label',saveLabel);save.title=saveLabel;save.setAttribute('aria-busy',String(s.saving));toggle.setAttribute('aria-checked',String(s.autosave));toggle.title='Otomatik kaydet: '+(s.autosave?'Açık':'Kapalı');
       copy.hidden=reload.hidden=options.hidden=!s.conflict;copy.disabled=s.saving;reload.href='/mac-studyosu?project='+s.id;if(s.conflict)options.open=true;
     },onSaved({id}){if(active())window.history?.replaceState(null,'','/mac-studyosu?project='+id);},

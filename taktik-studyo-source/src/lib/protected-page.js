@@ -48,7 +48,7 @@ export function createProtectedPage({auth, storage, path, mount, show, navigate,
       }
       if (verified.user?.id !== id) {show('error'); return;}
       authVerified = true;
-      const validatedUser = Object.freeze({id,email:verified.user.email || null});
+      const validatedUser = Object.freeze({id,email:verified.user.email || null,providers:verified.user.providers || Object.freeze([])});
       if (beforeMount) {
         const redirect = await beforeMount({validatedUser,current});
         if (!current()) return;

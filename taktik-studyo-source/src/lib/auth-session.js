@@ -1,4 +1,4 @@
-import {usernameValid, emailValid, emailTokenValid, confirmationUrlValid, recoveryUrlValid} from './auth-validation.js';
+import {usernameValid, emailValid, emailTokenValid, confirmationUrlValid, recoveryUrlValid, termsVersionValid} from './auth-validation.js';
 import {isAuthApiError, isAuthSessionMissingError} from '@supabase/supabase-js';
 // Verified against auth-js 2.116.0 error-codes.ts and Supabase Auth error docs.
 // Unknown errors (including bare 401/403) are non-destructive validation failures.
@@ -8,9 +8,11 @@ const invalidSessionError = error => isAuthSessionMissingError(error)
   || (isAuthApiError(error) && invalidSessionCodes.has(error.code));
 const failure = code => Object.freeze({ok:false, error:Object.freeze({code})});
 const success = value => Object.freeze({ok:true, ...value});
+// providers comes from server-set app_metadata (users cannot write it); UI hint only, never authorization.
 const userView = user => user && typeof user.id === 'string' && user.id
   ? Object.freeze({id:user.id, email:typeof user.email === 'string' ? user.email : null,
-    emailConfirmedAt:typeof user.email_confirmed_at === 'string' ? user.email_confirmed_at : null})
+    emailConfirmedAt:typeof user.email_confirmed_at === 'string' ? user.email_confirmed_at : null,
+    providers:Object.freeze((Array.isArray(user.app_metadata?.providers) ? user.app_metadata.providers : []).filter(p => typeof p === 'string'))})
   : null;
 
 // SDK owns session persistence and token refresh. This controller keeps only a
@@ -203,9 +205,9 @@ export function createAuthSession(client, createRecoveryClient = null) {
       return failure(cleaning ? 'session_cleanup_failed' : 'user_validation_failed');
     }
   }
-  async function signUpWithPassword({email, password, username, emailRedirectTo, captchaToken} = {}) {
+  async function signUpWithPassword({email, password, username, emailRedirectTo, captchaToken, termsVersion} = {}) {
     if (typeof email !== 'string' || !emailValid(email.trim()) || !usernameValid(username) || typeof password !== 'string'
-      || password.length < 12 || !confirmationUrlValid(emailRedirectTo)) return failure('invalid_form');
+      || password.length < 12 || !confirmationUrlValid(emailRedirectTo) || !termsVersionValid(termsVersion)) return failure('invalid_form');
     const entered = state.status === 'idle' ? null : captureIdentity();
     const ready = await initialize();
     if (!ready.ok) return ready;
@@ -215,7 +217,8 @@ export function createAuthSession(client, createRecoveryClient = null) {
     const operation = beginSignIn();
     try {
       const result = await client.auth.signUp({email:email.trim(), password,
-        options:{data:{username}, emailRedirectTo, ...(typeof captchaToken === 'string' ? {captchaToken} : {})}});
+        // SEC2.3: the accepted Terms version travels with the signup; the profile records it with a server time.
+        options:{data:{username, terms_version:termsVersion}, emailRedirectTo, ...(typeof captchaToken === 'string' ? {captchaToken} : {})}});
       if (generation !== epoch || !(result.data?.session
         ? operation.accepts(result.data.user) : operation.unchanged())) return failure('state_changed');
       // Supabase can obfuscate existing accounts; do not disclose account existence.
@@ -250,6 +253,46 @@ export function createAuthSession(client, createRecoveryClient = null) {
       const verified = await validateUser(result.data.user.id);
       return verified.ok && !isCurrentResult(verified) ? failure('state_changed') : verified;
     } catch { return failure(operation.unchanged() ? 'confirmation_failed' : 'state_changed'); }
+  }
+  // SEC2.2 Google OAuth (PKCE). Sign-in requires no session; reauthentication requires the current one.
+  // The SDK redirects the browser and keeps the code verifier; only the default Google scopes are requested.
+  async function startOAuth({redirectTo, reauthenticate = false} = {}) {
+    if (!confirmationUrlValid(redirectTo)) return failure('invalid_form');
+    const ready = await initialize(); if (!ready.ok) return ready;
+    if (recoveryBusy || recovery || state.status === 'password_recovery') return failure('existing_session');
+    if (!!state.user !== reauthenticate) return failure(reauthenticate ? 'unauthenticated' : 'existing_session');
+    try {
+      const result = await client.auth.signInWithOAuth({provider:'google', options:{redirectTo,
+        ...(reauthenticate ? {queryParams:{prompt:'select_account'}} : {})}});
+      return result.error ? failure('oauth_unavailable') : success({status:'redirecting'});
+    } catch { return failure('oauth_unavailable'); }
+  }
+  async function exchangeOAuthCode(code) {
+    if (!emailTokenValid(code)) return failure('oauth_failed');
+    const entered = state.status === 'idle' ? null : captureIdentity();
+    const ready = await initialize(); if (!ready.ok) return ready;
+    if (entered && !entered()) return failure('state_changed');
+    if (recoveryBusy || recovery || state.status === 'password_recovery') return failure('existing_session');
+    const previous = state.user?.id || null, generation = epoch, start = revision;
+    const operation = beginSignIn();
+    try {
+      const result = await client.auth.exchangeCodeForSession(code);
+      if (generation !== epoch) return failure('state_changed');
+      const user = result.data?.user;
+      if (result.error || !result.data?.session || !userView(user)) return failure('oauth_failed');
+      // Reauthentication with a different Google account must never switch accounts silently.
+      if (previous && user.id !== previous) {
+        const cleaned = await client.auth.signOut({scope:'local'}).catch(() => ({error:true}));
+        if (cleaned.error) return failure('session_cleanup_failed');
+        if (generation === epoch && state.user) {revision++; liveEvent = true; publish(null, 'SIGNED_OUT');}
+        return failure('account_changed');
+      }
+      if (!operation.accepts(user)) return failure('state_changed');
+      if (revision === start) {revision++; liveEvent = true; publish(user, 'SIGNED_IN');}
+      else if (state.user?.id !== user.id) return failure('state_changed');
+      const verified = await validateUser(user.id);
+      return verified.ok && !isCurrentResult(verified) ? failure('state_changed') : verified;
+    } catch { return failure(operation.unchanged() ? 'oauth_failed' : 'state_changed'); }
   }
   async function requestPasswordReset({email, redirectTo, captchaToken} = {}) {
     if (typeof email !== 'string' || !emailValid(email.trim()) || !recoveryUrlValid(redirectTo)) return failure('invalid_form');
@@ -392,6 +435,6 @@ export function createAuthSession(client, createRecoveryClient = null) {
   }
   return Object.freeze({initialize, getState:() => state, getCurrentUser:() => state.user, isCurrentResult,
     onInvalidate(callback) {invalidators.add(callback); return () => invalidators.delete(callback);},
-    signInWithPassword, signUpWithPassword, verifyEmailToken, requestPasswordReset, completePasswordRecovery,
+    signInWithPassword, signUpWithPassword, verifyEmailToken, requestPasswordReset, completePasswordRecovery, startOAuth, exchangeOAuthCode,
     signOut, subscribe, validateUser, dispose});
 }

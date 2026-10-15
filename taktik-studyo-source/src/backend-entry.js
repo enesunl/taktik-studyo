@@ -10,12 +10,17 @@ import { mountRecoveryPage } from './lib/recovery-ui.js';
 import { startPage } from './lib/page-bootstrap.js';
 import { resolvePage } from './lib/page-routes.js';
 import { createAccountDeletion } from './lib/account-delete.js';
+import { rememberOAuthNext } from './lib/auth-redirects.js';
+import { confirmationUrl } from './lib/auth-validation.js';
 const authPage = document.body?.dataset.authPage;
 if (['login','register','callback','forgot','reset'].includes(authPage)) {
   const mount = ['forgot','reset'].includes(authPage) ? mountRecoveryPage : mountAuthPage;
-  mount({document,location:window.location,history:window.history,eventTarget:window,page:authPage,
-    api:createAuthPageApi({auth,client:supabase,origin:window.location.origin,
-      captchaConfigured:typeof __AUTH_TURNSTILE_SITE_KEY__ === 'string' && !!__AUTH_TURNSTILE_SITE_KEY__})});
+  const captchaSiteKey=typeof __AUTH_TURNSTILE_SITE_KEY__ === 'string' ? __AUTH_TURNSTILE_SITE_KEY__ : '';
+  let storage=null;try{storage=window.sessionStorage;}catch{}
+  mount({document,location:window.location,history:window.history,eventTarget:window,page:authPage,storage,captchaSiteKey,
+    api:createAuthPageApi({auth,client:supabase,origin:window.location.origin,captchaConfigured:!!captchaSiteKey,
+      // SEC2.2: public Auth settings decide whether the Google button is shown.
+      providerSettings:()=>supabase?fetch(publicConfig.url+'/auth/v1/settings',{headers:{apikey:publicConfig.key},signal:AbortSignal.timeout(8000)}).then(r=>r.ok?r.json():null):Promise.resolve(null)})});
 }
 function prepareShare(state){
   const payload=toShare(state),body=JSON.stringify(payload);
@@ -66,7 +71,7 @@ window.TAKTIK_BACKEND={
     const response=await fetch(publicConfig.url+'/functions/v1/lineups',{
       method:'POST',headers:{'Content-Type':'application/json',apikey:publicConfig.key,Authorization:'Bearer '+access,'x-bot-token':token},body,signal:AbortSignal.timeout(12000)
     });
-    if(!response.ok)throw new Error(response.status===429?'Çok sık paylaşım yapıldı. Biraz sonra tekrar dene.':'Kadro paylaşılamadı.');
+    if(!response.ok)throw new Error(response.status===429?'Paylaşım sınırına ulaşıldı. Günde en fazla 10 yeni bağlantı oluşturabilirsin; biraz sonra tekrar dene.':'Kadro paylaşılamadı.');
     const result=await response.json();
     if(!/^[0-9a-f-]{36}$/.test(result.public_id))throw new Error('Kadro paylaşılamadı.');
     return result.public_id;
@@ -85,7 +90,11 @@ if (!authPage && document.body) {
   // Auth callback/recovery sanitization above stays synchronous, before any await.
   let lifecycle;
   const start = () => {lifecycle?.dispose?.();lifecycle=startPage({auth,document,window,backend:window.TAKTIK_BACKEND,client:supabase,
-    accountDeletion:supabase?createAccountDeletion({client:supabase,url:publicConfig.url,key:publicConfig.key}):null});};
+    accountDeletion:supabase?createAccountDeletion({client:supabase,url:publicConfig.url,key:publicConfig.key,
+      captchaSiteKey:typeof __AUTH_TURNSTILE_SITE_KEY__ === 'string' ? __AUTH_TURNSTILE_SITE_KEY__ : '',
+      // SEC2.2: Google-only accounts reauthenticate through the same callback, then return to the profile.
+      startReauthentication:()=>{let s=null;try{s=window.sessionStorage;}catch{}rememberOAuthNext(s,'/profil.html');
+        return auth.startOAuth({redirectTo:confirmationUrl(window.location.origin),reauthenticate:true});}}):null});};
   if (document.readyState === 'loading' || document.readyState === 'interactive')
     document.addEventListener('DOMContentLoaded',start,{once:true});
   else start();

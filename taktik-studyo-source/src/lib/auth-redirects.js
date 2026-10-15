@@ -14,6 +14,17 @@ export function loginDestination(search = '') {
     ? safeInternalRedirect(params.get('next')) || '/studyo.html' : '/studyo.html';
 }
 
+// SEC2.2: where to continue after a Google redirect (tab-scoped sessionStorage, allowlisted on read).
+export const OAUTH_NEXT_KEY = 'taktik:oauth:next';
+export function rememberOAuthNext(storage, path) {
+  try { storage?.setItem(OAUTH_NEXT_KEY, safeInternalRedirect(path) || '/studyo.html'); return true; } catch { return false; }
+}
+export function takeOAuthNext(storage) {
+  let value = null;
+  try { value = storage?.getItem(OAUTH_NEXT_KEY) ?? null; storage?.removeItem(OAUTH_NEXT_KEY); } catch {}
+  return safeInternalRedirect(value) || '/studyo.html';
+}
+
 export function loginUrl(path) {
   return '/giris.html?next=' + encodeURIComponent(safeInternalRedirect(path) || '/studyo.html');
 }

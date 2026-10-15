@@ -1,4 +1,4 @@
-import {normalizeStudioProjectSnapshot,projectIdValid,projectTitle} from './studio-project-snapshot.js';
+import {normalizeStudioProjectSnapshot,projectIdValid,projectTitle,limitError} from './studio-project-snapshot.js';
 export const PROJECT_PAGE_SIZE=20;
 export const PROJECT_COLUMNS='id,user_id,title,studio_mode,match_id,match_week,snapshot_version,revision,created_at,updated_at';
 const fail=code=>({ok:false,error:{code}});
@@ -13,7 +13,7 @@ export function createStudioProjects({client,validatedUser,current}){
     return Object.fromEntries(PROJECT_COLUMNS.split(',').filter(k=>k!=='user_id').map(k=>[k,row[k]]));
   }
   function result(response,{snapshot=false,empty='project_unavailable'}={}){
-    if(!active())return fail('state_changed');if(response.error)return fail('project_request_failed');
+    if(!active())return fail('state_changed');if(response.error)return fail(limitError(response.error)||'project_request_failed');
     if(!response.data)return fail(empty);
     const project=metadata(response.data);if(!project)return fail('project_unavailable');
     if(snapshot){project.snapshot=response.data.snapshot_version===1?normalizeStudioProjectSnapshot(response.data.snapshot):null;if(!project.snapshot)return fail('invalid_snapshot');}
@@ -26,10 +26,11 @@ export function createStudioProjects({client,validatedUser,current}){
   async function listProjects(offset=0,pageSize=PROJECT_PAGE_SIZE){
     const b=blocked();if(b)return b;if(!Number.isSafeInteger(offset)||offset<0||!Number.isInteger(pageSize)||pageSize<1||pageSize>PROJECT_PAGE_SIZE)return fail('invalid_form');
     try{
-      const r=await own().select(PROJECT_COLUMNS).eq('user_id',owner).order('updated_at',{ascending:false}).order('id',{ascending:false}).range(offset,offset+pageSize);
+      // SEC2.2: exact total in the same request, for the usage line (accounts may already be above the limit).
+      const r=await own().select(PROJECT_COLUMNS,{count:'exact'}).eq('user_id',owner).order('updated_at',{ascending:false}).order('id',{ascending:false}).range(offset,offset+pageSize);
       if(!active())return fail('state_changed');if(r.error||!Array.isArray(r.data))return fail('project_request_failed');
       const projects=r.data.slice(0,pageSize).map(metadata);if(projects.some(p=>!p))return fail('project_request_failed');
-      return {ok:true,projects,more:r.data.length>pageSize,nextOffset:offset+pageSize};
+      return {ok:true,projects,more:r.data.length>pageSize,nextOffset:offset+pageSize,total:Number.isSafeInteger(r.count)?r.count:null};
     }catch{return fail(active()?'project_request_failed':'state_changed');}
   }
   async function getWorkspaceSummary(){

@@ -58,7 +58,8 @@ export function mountMatchStudio({document,window,api,current,projects,userId,pl
     if(!free)for(const side of ['home','away'])identity.append(node('p',model[side].name+' · '+LINEUP_LABELS[model[side].lineupKind]));
     const sidebar=node('aside',undefined,'match-workspace-sidebar'),toggle=node('button','‹','match-sidebar-toggle'),toolbarHost=node('div',undefined,'match-tactical-host');
     toggle.type='button';toolbarHost.id='studioTools';toggle.setAttribute('aria-controls','studioTools');sidebar.append(toggle,toolbarHost);
-    const pref=createStudioPreferences({getStorage:()=>window.localStorage,onSidebar(collapsed){content.classList.toggle('sidebar-collapsed',collapsed);toolbarHost.hidden=collapsed;toggle.setAttribute('aria-expanded',String(!collapsed));toggle.setAttribute('aria-label',collapsed?'Araç panelini aç':'Araç panelini daralt');toggle.textContent=collapsed?'›':'‹';}});
+    let narrow=false;try{narrow=!!window.matchMedia?.('(max-width:700px)').matches;}catch{}
+    const pref=createStudioPreferences({getStorage:()=>window.localStorage,defaultCollapsed:narrow,onSidebar(collapsed){content.classList.toggle('sidebar-collapsed',collapsed);toolbarHost.hidden=collapsed;toggle.setAttribute('aria-expanded',String(!collapsed));toggle.setAttribute('aria-label',collapsed?'Araç panelini aç':'Araç panelini daralt');toggle.textContent=collapsed?'›':'‹';}});
     const togglePanel=()=>{if(active())pref.toggleSidebar();};toggle.addEventListener('click',togglePanel);offSidebar=()=>toggle.removeEventListener('click',togglePanel);toolbarHost.setAttribute('aria-label','Maç stüdyosu araçları');
     const stage=node('section',undefined,'match-workspace-stage');stage.setAttribute('aria-label','Taktik çalışma alanı');
     const help=node('details',undefined,'match-workspace-help');help.append(node('summary','Kullanım ve kısayollar'));

@@ -68,6 +68,21 @@ test('sidebar collapses without changing active Pass tool; size/color reset pres
   const pitch=node(root,'match-pitch');assert.equal(pitch.attrs['--match-pitch-width'],'1400px');assert.equal(pitch.attrs['--match-pitch-height'],'900px');
   fire(allNodes(root).find(n=>n.textContent==='Varsayılana Dön'),'click');assert.equal(pitch.attrs['--match-pitch-width'],'1200px');assert.equal(pitch.attrs['--match-pitch-height'],'650px');assert.equal(JSON.stringify(layer.children[0].children.map(n=>n.attrs)),before);page.dispose();
 });
+test('MOBILE1.1: narrow screens open with the tool panel collapsed until the user chooses; wide screens unchanged',async()=>{
+  // The fixture window's storage throws, so the stored-choice rule is covered by the preference unit below.
+  const open=async narrow=>{const f=localFixture();if(narrow!==null)f.window.matchMedia=q=>({matches:narrow&&q==='(max-width:700px)'});
+    const page=mountMatchStudio({document:f.document,window:f.window,current:()=>true,api:{load(){throw Error();}}});await page.ready;
+    const root=f.nodes.matchStudioContent;return {page,toggle:node(root,'match-sidebar-toggle'),host:node(root,'match-tactical-host')};};
+  let s=await open(true);assert.equal(s.toggle.attrs['aria-expanded'],'false');assert.equal(s.host.hidden,true);assert.equal(s.toggle.attrs['aria-label'],'Araç panelini aç');
+  fire(s.toggle,'click');assert.equal(s.toggle.attrs['aria-expanded'],'true');assert.equal(s.host.hidden,false);s.page.dispose();
+  for(const wide of [false,null]){s=await open(wide);assert.equal(s.toggle.attrs['aria-expanded'],'true');assert.equal(s.host.hidden,false);s.page.dispose();}
+  // Preference unit: the phone default applies only without a valid stored choice.
+  const get=value=>({getItem:()=>value,setItem(){}});let collapsed;
+  createStudioPreferences({getStorage:()=>get(null),defaultCollapsed:true,onSidebar:v=>collapsed=v});assert.equal(collapsed,true);
+  createStudioPreferences({getStorage:()=>get('expanded'),defaultCollapsed:true,onSidebar:v=>collapsed=v});assert.equal(collapsed,false);
+  createStudioPreferences({getStorage:()=>get('true'),defaultCollapsed:true,onSidebar:v=>collapsed=v});assert.equal(collapsed,true);
+  createStudioPreferences({getStorage(){throw Error();},defaultCollapsed:true,onSidebar:v=>collapsed=v});assert.equal(collapsed,true);
+});
 test('changing only home preserves away player coordinates, substitutions and drawings',()=>{
   const f=boardFixture(),initial=f.board.getState(),away=markers(f.root)[12];fire(away,'keydown',{key:'ArrowDown'});draw(f.root);
   const before=f.board.getState().players.filter(p=>p.side==='away'),drawings=f.board.getDrawings();
@@ -94,7 +109,7 @@ test('upcoming without provider/history uses shared local XI with probable-local
 });
 test('most recent valid completed same-season XI before target and now; bounded candidates and deduped cache',async()=>{
   const target=future(),old=detail(),invalid={...detail(),id:'215998',kickoff:'2026-09-22T18:00:00Z',lineups:null};old.kickoff='2026-09-20T18:00:00Z';
-  const fixtures=[old,invalid,{...old,id:'215999',season:'2025-2026'},{...old,id:'216000',kickoff:'2026-11-01T00:00:00Z'}];let seasonCalls=0,detailCalls=0;
+  const fixtures=[old,invalid,{...old,id:'215999',season:'2025-2026'},{...old,id:'216000',kickoff:'2026-11-01T00:00:00Z'},target];let seasonCalls=0,detailCalls=0;
   const handler=createMatchesHandler({token:'fixture-only',now:()=>Date.parse('2026-09-23T00:00:00Z'),authenticate:async()=>({id:'u',email_confirmed_at:'x'}),load:async()=>{seasonCalls++;return {matches:fixtures};},loadDetail:async({id})=>{detailCalls++;return id===target.id?target:id===invalid.id?invalid:old;}});
   const request=()=>handler(new Request('https://local.invalid/matches?id='+target.id,{headers:{authorization:'Bearer fixture'}}));
   const [a,b]=await Promise.all([request(),request()]);assert.equal(a.status,200);assert.equal(b.status,200);const value=await a.json();
@@ -138,7 +153,7 @@ test('resize after moving player and drawing arrow, zone, circle preserves norma
 });
 test('confirmed source replaces cached probable XI after the upcoming cache TTL',async()=>{
   let clock=Date.parse('2026-09-23'),calls=0,confirmed=false;const upcoming=future();upcoming.lineups=detail().lineups;upcoming.lineups.status='predicted';
-  const handler=createMatchesHandler({now:()=>clock,authenticate:async()=>({id:'u',email_confirmed_at:'x'}),loadDetail:async()=>{calls++;return {...upcoming,lineups:{...upcoming.lineups,status:confirmed?'confirmed':'predicted'}};}});
+  const handler=createMatchesHandler({now:()=>clock,load:async()=>({season:'2026-2027',matches:[upcoming]}),authenticate:async()=>({id:'u',email_confirmed_at:'x'}),loadDetail:async()=>{calls++;return {...upcoming,lineups:{...upcoming.lineups,status:confirmed?'confirmed':'predicted'}};}});
   const load=async()=>{const r=await handler(new Request('https://local.invalid/?id=216231',{headers:{authorization:'Bearer fixture'}}));assert.equal(r.status,200);return r.json();};
   assert.equal(resolveStudioLineups(await load()).home.lineupKind,'probable-provider');confirmed=true;
   assert.equal(resolveStudioLineups(await load()).home.lineupKind,'probable-provider');assert.equal(calls,1);

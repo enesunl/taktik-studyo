@@ -5,6 +5,7 @@ import {mountWeeklyPreview} from './weekly-xi-preview.js';
 import {latestPlayedWeek} from './weekly-xi-panel.js';
 import {createWeeklyPoster} from './weekly-xi-poster.js';
 import {canonicalWeeklySnapshot} from './weekly-lineups.js';
+import {ACCOUNT_LIMITS} from './studio-project-snapshot.js';
 
 const ROLE_NAMES={GK:'Kaleci',LB:'Sol bek',CB:'Stoper',RB:'Sağ bek',DM:'Ön libero',CM:'Merkez orta saha',AM:'Ofansif orta saha',LM:'Sol orta saha',RM:'Sağ orta saha',LW:'Sol kanat',RW:'Sağ kanat',ST:'Forvet'};
 
@@ -154,7 +155,14 @@ export function mountWeeklyXI({document,window,current,userId,catalogue,playerOv
   if(!records){const ok=store.write(state);if(ok){saveState.textContent='Kaydedildi';saveState.dataset.dirty='false';}notify(ok?'Kadron kaydedildi.':'Kaydetme başarısız. Tarayıcı depolamasını kontrol edip tekrar dene.',!ok);return;}
   saving=true;lock();const turn=editRevision;saveState.textContent='Kaydediliyor…';
   try{recordId??=window.crypto.randomUUID();const r=await records.save({id:recordId,revision,title:nameInput.value,season:seasonInput.value.trim()||null,week:weekInput.value===''?null:Number(weekInput.value),snapshot:state});
-   if(!active())return;if(!r.ok){saveState.textContent='Kaydedilemedi';notify(r.error?.code==='conflict'?'Kadro başka bir sekmede değişti. Yeniden açarak devam et.':'Kaydetme başarısız. Kadro adını, sezonu, haftayı ve bağlantını kontrol et.',true);return;}
+   if(!active())return;if(!r.ok){saveState.textContent='Kaydedilemedi';const code=r.error?.code;
+    // SEC2.2: at a limit the lineup stays open; it is also kept in this browser if that slot is free (never overwritten).
+    const kept=['quota_exceeded','rate_limited'].includes(code)&&(()=>{const local=store.read();return local.ok&&!local.state&&store.write(state);})();
+    const where=kept?' Kadron bu tarayıcıya da kaydedildi; “Bu tarayıcıdaki eski kadroyu içe aktar” ile geri alabilirsin.':' Kadron bu sayfada açık; sayfayı kapatmadan tekrar kaydet.';
+    notify(code==='conflict'?'Kadro başka bir sekmede değişti. Yeniden açarak devam et.'
+    :code==='quota_exceeded'?`İlk 11 kayıt sınırına ulaştın (${ACCOUNT_LIMITS.weekly}). Yeni kayıt için İlk 11’lerim’den bir kaydı sil.`+where
+    :code==='rate_limited'?'Çok sık kaydediliyor. Birkaç dakika sonra tekrar dene.'+where
+    :'Kaydetme başarısız. Kadro adını, sezonu, haftayı ve bağlantını kontrol et.',true);return;}
    revision=r.record.revision;window.history?.replaceState(null,'','/haftanin-ilk-11i?id='+recordId);
    saveState.textContent=turn===editRevision?'Kaydedildi':'Kaydedilmedi';saveState.dataset.dirty=String(turn!==editRevision);notify('Kadron hesabına kaydedildi.');
   }catch{if(active()){saveState.textContent='Kaydedilemedi';notify('Kayıt tamamlanamadı. Tekrar dene.',true);}}

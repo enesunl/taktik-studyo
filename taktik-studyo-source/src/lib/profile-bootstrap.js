@@ -1,4 +1,4 @@
-import {usernameValid} from './auth-validation.js';
+import {usernameValid, TERMS_VERSION} from './auth-validation.js';
 export const profileColumns = 'id,username,display_name,created_at,updated_at';
 const outcome = (ok, status) => ({ok, status});
 
@@ -16,10 +16,12 @@ export function createProfileBootstrap(client, isCurrentUser) {
       const own = await selectOwn();
       if (!isCurrentUser(id) || own.error) return outcome(false,'profile_error');
       if (own.data) return outcome(own.data.id === id, own.data.id === id ? 'ready' : 'profile_error');
-      const username = user.user_metadata?.username;
-      if (!usernameValid(username)) return outcome(false,'profile_incomplete');
+      const username = user.user_metadata?.username, terms = user.user_metadata?.terms_version;
+      // SEC2.3: only a registration that accepted the CURRENT Terms creates the profile here; other accounts
+      // (older registrations or Terms, first Google sign-in) accept the current Terms in onboarding instead.
+      if (!usernameValid(username) || terms !== TERMS_VERSION) return outcome(false,'profile_incomplete');
       if (!isCurrentUser(id)) return outcome(false,'profile_error');
-      const inserted = await client.from('profiles').insert({id,username});
+      const inserted = await client.from('profiles').insert({id,username,terms_version:terms});
       if (!isCurrentUser(id)) return outcome(false,'profile_error');
       if (!inserted.error) return outcome(true,'ready');
       // A concurrent own-profile insert is success, never an upsert/overwrite.

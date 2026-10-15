@@ -14,12 +14,12 @@ const origin='https://taktikstudyo.com';
 const tick=()=>new Promise(r=>setTimeout(r,0));
 
 // ---------- Server handler ----------
-function server({users={'token-a':{id:A,email:'a@example.test',email_confirmed_at:'2026-10-14T00:00:00Z'},'token-b':{id:B,email:'b@example.test',email_confirmed_at:'2026-10-14T00:00:00Z'}},password='correct horse battery',counts,deleteError,verifyError}={}){
+function server({now,users={'token-a':{id:A,email:'a@example.test',email_confirmed_at:'2026-10-14T00:00:00Z'},'token-b':{id:B,email:'b@example.test',email_confirmed_at:'2026-10-14T00:00:00Z'}},password='correct horse battery',counts,deleteError,verifyError}={}){
   const calls={auth:0,verify:[],deleted:[],counted:[]};
   const owned=new Map([[A,{profiles:1,studio_projects:2,player_overrides:1,weekly_lineups:1,shared_lineups:3}],[B,{profiles:1,studio_projects:1,player_overrides:0,weekly_lineups:2,shared_lineups:1}]]);
-  const handler=createAccountDeleteHandler({origins:accountDeleteOrigins(),
+  const handler=createAccountDeleteHandler({origins:accountDeleteOrigins(),...(now?{now}:{}),
     async authenticate(jwt){calls.auth++;if(jwt==='throws')throw Error('expired');return users[jwt]??null;},
-    async verifyPassword({email,password:given,userId}){calls.verify.push({email,userId});if(verifyError)throw verifyError;return given===password;},
+    async verifyPassword({email,password:given,userId,captchaToken}){calls.verify.push({email,userId,...(captchaToken?{captchaToken}:{})});if(verifyError)throw verifyError;return given===password;},
     async countOwned(userId){calls.counted.push(userId);if(counts)return counts(userId,calls);return {...(owned.get(userId)??{})};},
     async deleteUser(userId){if(deleteError)throw deleteError;calls.deleted.push(userId);owned.set(userId,Object.fromEntries(OWNED_TABLES.map(([t])=>[t,0])));}});
   const send=({token='token-a',body={password,confirmation:CONFIRMATION},headers={},method='POST',raw}={})=>handler(new Request('https://db.test/functions/v1/account-delete',{method,
@@ -103,7 +103,10 @@ test('real SQL: deleting an Auth user cascades to every owned table, keeps other
     // The handler's owned-table list must match every public FK to auth.users.
     const fks=(await db.query(`select c.conrelid::regclass::text as t,a.attname as col,c.confdeltype as rule from pg_constraint c join pg_attribute a on a.attrelid=c.conrelid and a.attnum=c.conkey[1]
       where c.contype='f' and c.confrelid='auth.users'::regclass order by 1`)).rows;
-    assert.deepEqual(fks.map(r=>[r.t.replace('public.',''),r.col]).sort(),[...OWNED_TABLES].map(x=>[...x]).sort());
+    const own=fks.filter(r=>!r.t.startsWith('tactics_private.'));
+    assert.deepEqual(own.map(r=>[r.t.replace('public.',''),r.col]).sort(),[...OWNED_TABLES].map(x=>[...x]).sort());
+    // SEC2.2: the only private per-account table is the write budget (not API-visible); it cascades too.
+    assert.deepEqual(fks.filter(r=>r.t.startsWith('tactics_private.')).map(r=>r.t),['tactics_private.write_budget']);
     assert(fks.every(r=>r.rule==='c'),'every owned table cascades');
     await db.query('insert into auth.users values ($1),($2)',[A,B]);
     const weekly=pickWeeklyPlayer(emptyWeeklyXI(),1,{id:B,teamId:'galatasaray',name:'Test Player',teamName:'Galatasaray',number:10,positionGroup:'M',specificPosition:'AM',color:'#a61931',color2:'#f5bd28'});
@@ -175,11 +178,11 @@ class Node {
   async emit(e,extra={}){let prevented=false;await this.listeners.get(e)?.({preventDefault(){prevented=true;},...extra});return prevented;}
   focus(){Node.focused=this;} showModal(){this.open=true;} close(){this.open=false;}
 }
-function ui({result={ok:true},onDeleted}={}){
+function ui({result={ok:true},onDeleted,method,reauthenticate}={}){
   const calls=[],deletedCalls=[];let resolve;
   const document={createElement:tag=>new Node(tag)},root=new Node('section');
   const deleteAccount=async args=>{calls.push(args);return typeof result==='function'?result():result;};
-  const page=mountAccountDeletion({document,root,deleteAccount,onDeleted:onDeleted??(async()=>{deletedCalls.push(true);})});
+  const page=mountAccountDeletion({document,root,deleteAccount,onDeleted:onDeleted??(async()=>{deletedCalls.push(true);}),method,reauthenticate});
   const all=(n=root)=>[n,...n.children.flatMap(all)];
   const find=pred=>all().find(pred);
   const by=id=>find(n=>n.id===id),button=text=>find(n=>n.tagName==='button'&&n.textContent===text);
@@ -258,4 +261,68 @@ test('profile template hosts the danger zone and no admin secret reaches browser
   assert.equal(CONFIRMATION,ACCOUNT_DELETE_CONFIRMATION);
   const config=readFileSync(new URL('../supabase/config.toml',import.meta.url),'utf8');
   assert.match(config,/\[functions\.account-delete\]\r?\n[^\[]*verify_jwt = true/);
+});
+
+// ---------- SEC2.2: Google-only accounts and captcha forwarding ----------
+const jwt=claims=>['e30',Buffer.from(JSON.stringify(claims)).toString('base64url'),'sig'].join('.');
+test('Google-only account: deletion needs a Google sign-in within 10 minutes; an old session token is not enough',async()=>{
+  const nowMs=Date.parse('2026-10-15T12:00:00Z'),now=nowMs/1000,google={id:A,email:'a@example.test',email_confirmed_at:'2026-10-14T00:00:00Z',app_metadata:{providers:['google']}};
+  const tokens={fresh:jwt({sub:A,amr:[{method:'oauth',timestamp:now-60}]}),old:jwt({sub:A,amr:[{method:'oauth',timestamp:now-3600}]}),
+    password:jwt({sub:A,amr:[{method:'password',timestamp:now-10}]}),future:jwt({sub:A,amr:[{method:'oauth',timestamp:now+600}]}),
+    other:jwt({sub:B,amr:[{method:'oauth',timestamp:now-10}]}),garbage:'not.a-jwt'};
+  const s=server({now:()=>nowMs,users:Object.fromEntries(Object.values(tokens).map(t=>[t,google]))});
+  for(const t of ['old','password','future','other','garbage']){
+    const r=await s.send({token:tokens[t],body:{confirmation:CONFIRMATION}});assert.equal(r.status,403,t);assert.equal(await code(r),'reauthentication_required',t);
+  }
+  // No password field on this path, and a password cannot replace the fresh Google sign-in.
+  const withPassword=await s.send({token:tokens.fresh,body:{confirmation:CONFIRMATION,password:'x'}});assert.equal(withPassword.status,400);
+  assert.equal(s.calls.verify.length,0);assert.deepEqual(s.calls.deleted,[]);
+  const ok=await s.send({token:tokens.fresh,body:{confirmation:CONFIRMATION}});assert.equal(ok.status,200);assert.deepEqual(s.calls.deleted,[A]);
+});
+
+test('accounts with a password keep the password check; captcha token is forwarded; missing provider data stays on the password path',async()=>{
+  const linked={id:A,email:'a@example.test',email_confirmed_at:'2026-10-14T00:00:00Z',app_metadata:{providers:['email','google']}};
+  const s=server({users:{'token-a':linked}});
+  const fresh=jwt({sub:A,amr:[{method:'oauth',timestamp:Math.floor(Date.now()/1000)}]});
+  // A Google sign-in does not replace the password for an account that has one.
+  assert.equal((await s.send({body:{confirmation:CONFIRMATION}})).status,400);
+  const r=await s.send({body:{password:'correct horse battery',confirmation:CONFIRMATION,captchaToken:'tok'}});assert.equal(r.status,200);
+  assert.deepEqual(s.calls.verify,[{email:'a@example.test',userId:A,captchaToken:'tok'}]);
+  for(const bad of ['',1,'x'.repeat(2049)])assert.equal((await server().send({body:{password:'correct horse battery',confirmation:CONFIRMATION,captchaToken:bad}})).status,400);
+  const captcha=server({verifyError:{code:'captcha_failed'}});const c=await captcha.send();assert.equal(c.status,400);assert.equal(await code(c),'captcha_failed');
+  // No app_metadata (old fixtures/users): password required, a fresh OAuth token alone is refused.
+  const legacy=server({users:{[fresh]:{id:A,email:'a@example.test',email_confirmed_at:'2026-10-14T00:00:00Z'}}});
+  assert.equal((await legacy.send({token:fresh,body:{confirmation:CONFIRMATION}})).status,400);
+});
+
+test('Google-only dialog: no password field, reauthentication button, submit needs only the confirmation',async()=>{
+  let reauth=0;const f=ui({method:'oauth',reauthenticate:async()=>{reauth++;return {ok:true};}});
+  await f.button('Hesabımı Sil').emit('click');
+  assert.equal(f.by('accountDeletePassword'),undefined);assert.equal(Node.focused,f.by('accountDeleteConfirm'));
+  await f.button('Google ile yeniden doğrula').emit('click');assert.equal(reauth,1);
+  const g=ui({method:'oauth',result:{ok:false,code:'reauthentication_required'}});await g.button('Hesabımı Sil').emit('click');
+  const submit=g.button('Hesabımı kalıcı olarak sil');assert.equal(submit.disabled,true);
+  await g.type('accountDeleteConfirm','HESABIMI SİL');assert.equal(submit.disabled,false);await g.submit();
+  assert.deepEqual(g.calls,[{confirmation:ACCOUNT_DELETE_CONFIRMATION}]);assert.match(g.all().map(n=>n.textContent).join(' '),/Google ile yeniden doğrula/);
+  assert.deepEqual(g.deletedCalls,[]);
+});
+
+test('SEC2.3 Google reauthentication fails closed on missing or malformed authentication data and other sign-in methods',async()=>{
+  const nowMs=Date.parse('2026-10-15T12:00:00Z'),now=nowMs/1000;
+  const google={id:A,email:'a@example.test',email_confirmed_at:'2026-10-14T00:00:00Z',app_metadata:{providers:['google']}};
+  const bad=[{sub:A},{sub:A,amr:null},{sub:A,amr:'oauth'},{sub:A,amr:[{method:'oauth'}]},{sub:A,amr:[{method:'oauth',timestamp:String(now)}]},
+    {sub:A,amr:[{method:'id_token',timestamp:now}]},{sub:A,amr:[{method:'password',timestamp:now}]},{sub:A,amr:[{method:'otp',timestamp:now}]},
+    {amr:[{method:'oauth',timestamp:now}]}].map(jwt);
+  const s=server({now:()=>nowMs,users:Object.fromEntries(bad.map(t=>[t,google]))});
+  for(const token of bad){const r=await s.send({token,body:{confirmation:CONFIRMATION}});assert.equal(r.status,403,token);assert.equal(await code(r),'reauthentication_required');}
+  assert.deepEqual(s.calls.deleted,[]);
+  // A revoked/expired session is rejected before any method decision (authenticate() fails).
+  assert.equal((await s.send({token:'throws',body:{confirmation:CONFIRMATION}})).status,401);
+  // Missing provider metadata never selects the Google path: the password is required and checked.
+  const fresh=jwt({sub:A,amr:[{method:'oauth',timestamp:now}]});
+  for(const meta of [undefined,{},{providers:null},{providers:'google'},{providers:[]}]){
+    const m=server({now:()=>nowMs,users:{[fresh]:{id:A,email:'a@example.test',email_confirmed_at:'2026-10-14T00:00:00Z',app_metadata:meta}}});
+    assert.equal((await m.send({token:fresh,body:{confirmation:CONFIRMATION}})).status,400);
+    assert.equal((await m.send({token:fresh,body:{password:'wrong',confirmation:CONFIRMATION}})).status,403);assert.equal(m.calls.verify.length,1);
+  }
 });

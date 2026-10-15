@@ -76,7 +76,7 @@ test('installed SDK builds only production matches?id; local transport only same
 test('local M2 requires local getUser verification before detail load; anonymous denied',async()=>{
   const requests=[];let loads=0;
   const handler=createLocalMatches({url:'http://127.0.0.1:54321',key:'sb_publishable_testonly',token:'test-only',port:4173,
-    fetchImpl:async(url)=>{requests.push(String(url));return Response.json({id:'u',email_confirmed_at:'yes'});},loadDetail:async({id})=>{assert.equal(id,'215997');loads++;return detail();}});
+    fetchImpl:async(url)=>{requests.push(String(url));return Response.json({id:'u',email_confirmed_at:'yes'});},load:async()=>({season:'2026-2027',matches:[detail()]}),loadDetail:async({id})=>{assert.equal(id,'215997');loads++;return detail();}});
   assert.equal((await handler(new Request('http://localhost:4173/__local/matches?id=215997'))).status,401);assert.equal(loads,0);
   const res=await handler(new Request('http://localhost:4173/__local/matches?id=215997',{headers:{Authorization:'Bearer test-jwt'}}));assert.equal(res.status,200);assert.equal(loads,1);assert.deepEqual(requests,['http://127.0.0.1:54321/auth/v1/user']);
 });

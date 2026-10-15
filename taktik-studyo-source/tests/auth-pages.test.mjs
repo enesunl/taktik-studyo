@@ -87,7 +87,7 @@ test('register form validates password match/length and username before sending 
   await f.fields.authForm.emit('submit'); assert.match(f.fields.authMessage.textContent,/3–24/);
   assert.equal(f.calls.length,0);
   f.fields.username.value = 'Name_1'; await f.fields.authForm.emit('submit');
-  assert.deepEqual(f.calls,[{kind:'signup',args:{email:'test@example.test',password:' twelve chars ',username:'Name_1'}},{kind:'replace',url:'/giris.html?reason=confirmation_pending'}]);
+  assert.deepEqual(f.calls,[{kind:'signup',args:{email:'test@example.test',password:' twelve chars ',username:'Name_1',termsAccepted:true}},{kind:'replace',url:'/giris.html?reason=confirmation_pending'}]);
   assert.equal(f.fields.password.value,''); assert.equal(f.fields.passwordConfirmation.value,'');
   assert.match(f.fields.authMessage.textContent,/Kayıt işlemi uygunsa/); page.dispose();
 });

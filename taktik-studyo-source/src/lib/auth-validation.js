@@ -1,3 +1,6 @@
+// SEC2.3: version of the Terms the user accepts (the published Terms' effective date; update with the Terms).
+export const TERMS_VERSION = '2026-10-15';
+export const termsVersionValid = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 export const usernameValid = value => typeof value === 'string' && value.length >= 3 && value.length <= 24 && !/[^A-Za-z0-9_]/.test(value);
 export const emailValid = value => typeof value === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 export const emailTokenValid = value => typeof value === 'string' && value.length > 0 && value.length <= 2048 && !/[\s\u0000-\u001f\u007f-\u009f]/u.test(value);
@@ -25,6 +28,19 @@ export function consumeRecoveryLink(location, history) {
     || params.getAll('type').length !== 1 || params.get('type') !== 'recovery'
     || !emailTokenValid(params.get('token_hash'))) return {ok:false, error:{code:'recovery_invalid'}};
   return {ok:true, tokenHash:params.get('token_hash')};
+}
+
+// SEC2.2 Google OAuth (PKCE) return on the same callback page: ?code=… or ?error=…[&error_code&error_description].
+export const isOAuthReturn = search => {const params = new URLSearchParams(search); return params.has('code') || params.has('error');};
+export function consumeOAuthReturn(location, history) {
+  const search = location.search;
+  try { history.replaceState(null, '', location.pathname); }
+  catch { return {ok:false, error:{code:'oauth_failed'}}; }
+  let params; try { params = new URLSearchParams(search); } catch { return {ok:false, error:{code:'oauth_failed'}}; }
+  if (params.has('error')) return {ok:false, error:{code:params.get('error') === 'access_denied' ? 'oauth_cancelled' : 'oauth_failed'}};
+  if ([...params.keys()].length !== 1 || params.getAll('code').length !== 1 || !emailTokenValid(params.get('code')))
+    return {ok:false, error:{code:'oauth_failed'}};
+  return {ok:true, code:params.get('code')};
 }
 
 // Parse then clean synchronously, before any async initialization. No storage/logging.

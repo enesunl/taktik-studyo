@@ -49,7 +49,7 @@ test('invalid/unauthenticated/stale input starts no request; save foreign respon
 
 test('missing profile reuses server-validated metadata bootstrap; canonical row wins over seed',async()=>{
   let exists=false;
-  const f=make(c=>{if(c.kind==='insert'){exists=true;assert.deepEqual(c.values,{id:A,username:'SeedName'});return {error:null};}return {data:exists?row():null};});
+  const f=make(c=>{if(c.kind==='insert'){exists=true;assert.deepEqual(c.values,{id:A,username:'SeedName',terms_version:'2026-10-15'});return {error:null};}return {data:exists?row():null};});
   assert.deepEqual(await f.api.load(),{ok:true,profile:row()});
   assert.deepEqual(f.calls.map(c=>c.kind),['select','getUser','select','insert','select']);
 });
@@ -61,6 +61,14 @@ test('incomplete bootstrap leaves missing profile recoverable via explicit own I
   assert.equal(f.calls.some(c=>c.kind==='insert'),false);
   assert.deepEqual(await f.api.save(input),{ok:true,profile:{...row(),...values}});
   assert.deepEqual(f.calls.at(-1),{kind:'insert',table:'profiles',filters:[],values:{id:A,...values},columns:profileColumns,single:true});
+});
+
+test('SEC2.3 creating a profile records the Terms version only when the caller collected the acceptance (onboarding)',async()=>{
+  const f=make(c=>({data:c.kind==='insert'?{...row(),...values}:null}));
+  f.client.auth.getUser=async()=>({data:{user:{id:A,email_confirmed_at:'yes',user_metadata:{}}}});
+  await f.api.save({...input,termsAccepted:true});
+  assert.deepEqual(f.calls.at(-1).values,{id:A,...values,terms_version:'2026-10-15'});
+  for(const termsAccepted of [undefined,false,'true']){await f.api.save({...input,termsAccepted});assert.equal('terms_version' in f.calls.at(-1).values,false);}
 });
 
 test('INSERT 23505 rereads only own id then applies requested UPDATE, or reports username conflict',async()=>{

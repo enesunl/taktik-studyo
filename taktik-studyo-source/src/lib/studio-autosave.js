@@ -8,10 +8,10 @@ export function createStudioAutosave({api,current,capture,project=null,newId,sto
   let snapshot=capture(),title=restored?.title||project?.title||defaultProjectTitle(snapshot),titleTouched=!!project||!!restored;
   let id=restored?.id||project?.id||newId(),revision=restored?restored.revision:project?.revision??null;
   let saved=restored?'':signature(title,snapshot),status=restored?'dirty':project?'saved':'new',auto=true,timer=null,flight=null,stopped=false,conflict=false,manualQueued=false;
-  let recoveryOk=true;
+  let recoveryOk=true,error=null;
   try{auto=storage?.getItem(autosaveKey(userId))!=='off';}catch{}
   const active=()=>!stopped&&current(),dirty=()=>signature(title,snapshot)!==saved;
-  const state=()=>({id,revision,title,status,dirty:dirty(),saving:!!flight,autosave:auto,conflict,recoveryOk});
+  const state=()=>({id,revision,title,status,dirty:dirty(),saving:!!flight,autosave:auto,conflict,recoveryOk,error:status==='error'?error:null});
   const publish=()=>{if(active())onState(state());};
   function backup(){if(!snapshot)return;recoveryOk=recovery?.write({id,revision,title,snapshot})!==false;}
   function cancel(){if(timer!==null)clearTimer(timer);timer=null;}
@@ -40,7 +40,7 @@ export function createStudioAutosave({api,current,capture,project=null,newId,sto
     const result=await flight;flight=null;
     if(!active())return result;
     if(result.ok){revision=result.project.revision;saved=sentSignature;status=dirty()?'dirty':'saved';if(dirty())backup();else recovery?.clear();onSaved({id,revision});}
-    else{conflict=result.error?.code==='conflict';status=conflict?'conflict':'error';backup();}
+    else{conflict=result.error?.code==='conflict';status=conflict?'conflict':'error';error=result.error?.code||null;backup();}
     const queued=manualQueued;manualQueued=false;publish();
     if(result.ok&&dirty()){if(queued)void save({manual:true});else schedule();}
     return result;

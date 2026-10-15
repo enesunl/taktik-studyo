@@ -3,7 +3,7 @@
 Güncelleme: 15 Ekim 2026 (LEGAL2.1). Bu belge `LEGAL2_REVIEW.md` ve `LEGAL2_OPERATOR_CHECKLIST.md`'nin
 yerini alır; ayrıntı ve gerekçe için onlara bakılabilir.
 
-Beş yasal sayfa taslak olarak kalır: `noindex`, taslak notu ve 42 `[REVIEW REQUIRED]` işareti yerinde.
+Beş yasal sayfa taslak olarak kalır: `noindex`, taslak notu ve 47 `[REVIEW REQUIRED]` işareti yerinde.
 
 Etiketler:
 - **[O] Operatör:** senin tamamlaman gereken.
@@ -74,3 +74,14 @@ Metinler MVP yayın yapılandırmasını anlatır. Dört sayfadaki kapsam notu, 
 | --- | --- |
 | 🔴 [T] | Kapsam notundaki her özellik canlıya alınır ve yayın günü doğrulanır (`PROD1_RELEASE_PLAN.md`). Alınmayan özellik metinden çıkarılır. |
 | 🔴 [T] | Son metin geçişi, yalnızca hukukçu onayı ve senin ayrı onayınla yapılır: kimlik bilgileri, yürürlük tarihi, yalnızca çözülmüş işaretlerin kaldırılması, kapsam notu, taslak notu ve `noindex`. |
+
+## 7. Google ile giriş (SEC2.2; yalnızca canlıya alınırsa)
+
+Kod hazır ama kapalı: Supabase'de Google etkinleşmedikçe düğme görünmez. Taslaklarda "SEC2.2" işaretli yerler eklendi.
+
+| | Yapılacak |
+| --- | --- |
+| 🔴 [D] | KVKK metni ve Gizlilik: Google'dan alınan veriler (e-posta, ad, profil fotoğrafı bağlantısı, Google hesap kimliği), amaç, hukuki sebep, saklama süresi ve Google LLC için m.9 aktarım dayanağı. |
+| 🔴 [O] | Google OAuth uygulamasını yayımlamadan önce Gizlilik ve Kullanım Koşulları sayfaları taslak olmaktan çıkmalı; Google bu bağlantıları ister. |
+| [T] + [D] | Koşulları kabul kaydı (SEC2.3): `profiles.terms_version` ve sunucu saatiyle `profiles.terms_accepted_at`.<br>• E-postayla kayıtta form onay kutusu; Google ile kayıtta tanıtımın son adımındaki onay kutusu.<br>• Mevcut hesaplar kabul etmiş sayılmaz.<br>• Yayından önce `TERMS_VERSION`, yayımlanan Kullanım Koşulları'nın yürürlük tarihine eşitlenmeli.<br>• Hukukçu kaydın yeterliliğini onaylar; koşullar değişince yeniden kabul akışı ayrı iştir. |
+| [D] | Turnstile giriş, kayıt, şifre sıfırlama ve hesap silmede de açılırsa Çerez Politikası ve KVKK metnindeki Cloudflare satırı güncellenmeli (işaretlendi). |

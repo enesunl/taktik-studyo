@@ -1,5 +1,6 @@
 import {createTeamChoice,syncTeamChoice,teamColors} from './team-choice.js';
 import {needsOnboarding,onboardingDestination} from './onboarding.js';
+import {usernameValid} from './auth-validation.js';
 import {showcaseTeams,studioShowcase,boardShowcase,matchesShowcase,weeklyShowcase} from './onboarding-showcase.js';
 
 // OB3: six in-memory steps. Only the final favorite-team step can complete onboarding.
@@ -42,6 +43,18 @@ export function mountOnboarding({document,window,api,catalogue,current}) {
   const grid=el('div','onboarding-grid'),copy=el('section','onboarding-copy'),visual=el('section','onboarding-visual');
   grid.append(copy,visual);
   const message=el('p','onboarding-message');message.setAttribute('role','alert');
+  // SEC2.2: an account without a profile (first Google sign-in) picks a username and accepts the Terms here,
+  // with the same controls as e-mail registration, before onboarding can complete.
+  let needsProfile=false;
+  const account=el('div','onboarding-account');
+  const usernameLabel=el('label',null,'Kullanıcı adı'),username=el('input');usernameLabel.htmlFor=username.id='onboardingUsername';
+  Object.assign(username,{type:'text',autocomplete:'username',maxLength:24,spellcheck:false});username.setAttribute('autocapitalize','none');
+  const usernameHint=el('p','onboarding-hint','3–24 karakter: A–Z, a–z, 0–9 veya _.');
+  const notice=el('p','onboarding-hint');notice.append(el('span',null,'Kişisel verilerin '),link('/kvkk-aydinlatma-metni.html','KVKK Aydınlatma Metni'),el('span',null,' ve '),link('/gizlilik-politikasi.html','Gizlilik Politikası'),el('span',null,'’nda açıklandığı şekilde işlenir.'));
+  const terms=el('div','onboarding-terms'),termsBox=el('input'),termsLabel=el('label');termsBox.type='checkbox';termsLabel.htmlFor=termsBox.id='onboardingTerms';
+  termsLabel.append(link('/kullanim-kosullari.html','Kullanım Koşulları'),el('span',null,'’nı okudum ve kabul ediyorum.'));terms.append(termsBox,termsLabel);
+  account.append(usernameLabel,username,usernameHint,notice,terms);
+  function link(href,text){const a=el('a',null,text);a.href=href;a.target='_blank';a.rel='noopener';return a;}
   const retry=button('Tekrar dene','onboarding-link',()=>{void initialize();});retry.hidden=true;
   const footer=el('div','onboarding-footer'),left=el('div','onboarding-back-actions');
   const back=button('← Geri','onboarding-link',()=>move(-1));
@@ -60,7 +73,7 @@ export function mountOnboarding({document,window,api,catalogue,current}) {
   function controls(){
     back.hidden=step===0;
     skip.textContent=step===last?'Şimdilik atla':'Turu geç';
-    back.disabled=skip.disabled=busy||finished;
+    back.disabled=skip.disabled=busy||finished;username.disabled=termsBox.disabled=busy||finished;
     next.disabled=busy||finished||(step===last&&selected===undefined);
     next.textContent=busy?'Kaydediliyor…':step===last?"Taktik Stüdyo'ya Başla →":step===0?'Başla →':'Devam →';
     root.setAttribute('aria-busy',String(busy||initializing));
@@ -161,7 +174,7 @@ export function mountOnboarding({document,window,api,catalogue,current}) {
     const heading=el('h1','onboarding-title',current.title);heading.tabIndex=-1;
     copy.append(el('p','onboarding-eyebrow',`${String(step+1).padStart(2,'0')} · ${current.name}`),heading,el('p','onboarding-body',current.body));
     if(current.hints)copy.append(h('ul','onboarding-hints',...current.hints.map(hint=>el('li',null,hint))));
-    if(step===last)picker();else artwork();
+    if(step===last){if(needsProfile)copy.append(account);picker();}else artwork();
     footer.hidden=false;controls();if(focus)heading.focus();
   }
   function go(index){
@@ -186,7 +199,17 @@ export function mountOnboarding({document,window,api,catalogue,current}) {
   }
   async function complete(slug){
     if(!active()||!initialized||busy||finished||step!==last||slug===undefined)return;
+    if(needsProfile){
+      if(!usernameValid(username.value.trim())){message.textContent='Kullanıcı adı 3–24 karakter olmalı; yalnızca A–Z, a–z, 0–9 ve _ kullanılabilir.';username.focus();return;}
+      if(!termsBox.checked){message.textContent='Devam etmek için Kullanım Koşulları’nı kabul etmelisin.';termsBox.focus();return;}
+    }
     busy=true;message.textContent='';controls();
+    if(needsProfile){
+      let saved;try{saved=await api.save({username:username.value.trim(),display_name:'',termsAccepted:true});}catch{saved={ok:false};}
+      if(!active())return;
+      if(!saved.ok){busy=false;message.textContent=saved.error?.code==='username_conflict'?'Bu kullanıcı adı kullanılıyor. Başka bir kullanıcı adı seç.':'Profilin oluşturulamadı. Tekrar dene.';controls();return;}
+      needsProfile=false;account.hidden=true;
+    }
     let result;
     try{result=await api.completeOnboarding({favoriteTeamSlug:slug});}catch{result={ok:false};}
     if(!active())return;
@@ -204,6 +227,7 @@ export function mountOnboarding({document,window,api,catalogue,current}) {
     initializing=false;controls();
     if(!result.ok){progress.textContent='Karşılama';message.textContent='Karşılama şu anda yüklenemedi. Tekrar dene.';retry.hidden=false;return;}
     if(!needsOnboarding(result.profile)){finished=true;if(active())window.location.replace(onboardingDestination(window.location.search));return;}
+    needsProfile=!result.profile;
     initialized=true;render(true);
   }
   const ready=initialize();
