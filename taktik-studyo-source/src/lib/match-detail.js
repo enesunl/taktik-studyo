@@ -48,6 +48,6 @@ export function createMatchDetailApi({client,current,location,fetchImpl,identity
       if (!detailValid(match,id)) throw Error('PROVIDER_UNAVAILABLE');
       if(identity&&!identity.validateMatch(match))throw Error('PROVIDER_UNAVAILABLE');
       return {ok:true,match,freshness:readFreshness(freshness)};
-    } catch (error) {return {ok:false,error:{code:!current() ? 'state_changed' : ['INVALID_MATCH_ID','MATCH_NOT_FOUND','UNAUTHORIZED'].includes(error?.message) ? error.message : 'PROVIDER_UNAVAILABLE'}};}
+    } catch (error) {return {ok:false,error:{code:!current() ? 'state_changed' : ['INVALID_MATCH_ID','MATCH_NOT_FOUND','UNAUTHORIZED','RATE_LIMITED'].includes(error?.message) ? error.message : 'PROVIDER_UNAVAILABLE'}};}
   }};
 }

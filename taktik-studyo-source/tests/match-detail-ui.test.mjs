@@ -81,7 +81,7 @@ test('local M2 requires local getUser verification before detail load; anonymous
   const res=await handler(new Request('http://localhost:4173/__local/matches?id=215997',{headers:{Authorization:'Bearer test-jwt'}}));assert.equal(res.status,200);assert.equal(loads,1);assert.deepEqual(requests,['http://127.0.0.1:54321/auth/v1/user']);
 });
 test('detail API maps SDK/local status errors, rejects mismatched response and discards stale result',async()=>{
-  for(const [status,code] of [[400,'INVALID_MATCH_ID'],[401,'UNAUTHORIZED'],[404,'MATCH_NOT_FOUND'],[503,'PROVIDER_UNAVAILABLE']]){
+  for(const [status,code] of [[400,'INVALID_MATCH_ID'],[401,'UNAUTHORIZED'],[404,'MATCH_NOT_FOUND'],[429,'RATE_LIMITED'],[503,'PROVIDER_UNAVAILABLE']]){
     const api=createMatchDetailApi({client:{functions:{invoke:async()=>({error:{context:{status},message:'private'}})}},current:()=>true});assert.deepEqual(await api.load('215997'),{ok:false,error:{code}});
   }
   const wait=deferred();let current=true;const api=createMatchDetailApi({client:{functions:{invoke:()=>wait.promise}},current:()=>current});const pending=api.load('215997');current=false;wait.resolve({data:detail()});assert.equal((await pending).error.code,'state_changed');

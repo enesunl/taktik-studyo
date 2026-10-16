@@ -63,6 +63,16 @@ Decisions recorded on 15 Oct 2026:
 - Frontend: before launch, fix forward behind the password. Rolling back to the old deploy restores FotMob data, and its share POST no longer works after step 3.
 - Database: additive; fix forward; dump/PITR as a last resort.
 
+### Matches release (PROD5.3/5.4; migrations #1–#12 applied to production on 16 Oct 2026)
+
+`matches` is not deployed. It ships only with migration #13, which adds per-account detail limits (30 per 10 minutes, 150 per UTC day; 429 with `Retry-After`; fails closed). Order, each step ⛔:
+
+1. Commit and push the limiter (`feat(matches): add database-backed detail rate limits`); publish the locked build (rate-limit message).
+2. `supabase db push --linked --dry-run` must list **only** #13; apply it. Read-only check: `public.matches_detail_allowed(uuid)` is executable by `service_role` only.
+3. BSD release decision: licence v4.0 sign-off (`MATCHES_RELEASE_REVIEW.md` §6) and the plan (free 7,500 requests/UTC day, or Unlimited).
+4. Operator sets the Supabase secret `BSD_API_TOKEN` (own shell, value never printed), then deploys `matches`. Never deploy `matches` before #13: without the RPC every match detail answers 503.
+5. `verify-live-backend.mjs` (strict): the three `matches` checks pass.
+
 ## PROD1.5 update — BSD catalogue first (15 Oct 2026, tested locally only)
 
 This section **supersedes** the migration row in section 2, steps C–E of section 5 and section 6.
@@ -85,6 +95,7 @@ The new frontend is a BSD-only build (SEC1.1). It must not go live before the ho
 | 10 | `20261015120100_catalogue_sync` (PROD1.5) | 2 (explicit guard) | none (adds sync function + audit table) |
 | 11 | `20261015190000_account_limits` (SEC2.2/2.3) | 5, 8 | none (limits, profile gate, owner share bucket) |
 | 12 | `20261015200000_terms_acceptance` (SEC2.3) | profiles | none (new nullable columns; no backfill) |
+| 13 | `20261016150000_matches_detail_limits` (PROD5.3; pending, see "Matches release") | share_limits | none (adds one service-role RPC; own `matches:` buckets) |
 
 - Wrong orders fail loudly; this is tested.
 - Every migration except #8 leaves existing projects, overrides, shares, profiles and the legacy catalogue untouched; this is tested.

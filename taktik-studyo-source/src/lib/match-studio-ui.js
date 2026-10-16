@@ -42,7 +42,7 @@ export function mountMatchStudio({document,window,api,current,projects,userId,pl
     busy=true;retry.hidden=true;status.textContent='Maç stüdyosu hazırlanıyor…';
     let result;try{result=await api.load(route.id);}catch{result={ok:false};}
     if(!active())return;busy=false;
-    if(!result.ok){const code=result.error?.code;status.textContent=['INVALID_MATCH_ID','MATCH_NOT_FOUND'].includes(code)?'Maç bulunamadı.':code==='UNAUTHORIZED'?'Oturum doğrulanamadı. Giriş yapıp tekrar dene.':'Maç bilgileri şu anda alınamıyor.';retry.hidden=['INVALID_MATCH_ID','MATCH_NOT_FOUND'].includes(code);return;}
+    if(!result.ok){const code=result.error?.code;status.textContent=['INVALID_MATCH_ID','MATCH_NOT_FOUND'].includes(code)?'Maç bulunamadı.':code==='UNAUTHORIZED'?'Oturum doğrulanamadı. Giriş yapıp tekrar dene.':code==='RATE_LIMITED'?'Kısa sürede çok fazla maç açtın. Biraz sonra tekrar dene.':'Maç bilgileri şu anda alınamıyor.';retry.hidden=['INVALID_MATCH_ID','MATCH_NOT_FOUND'].includes(code);return;}
     const match=result.match,model=createMatchLayout(match,local);
     if(!model){status.textContent='Bu maç için başlangıç kadroları mevcut değil. Eksiksiz iki kadro gerekli.';return;}
     setup(model,{source:{mode:'match',matchId:route.id,week:requestedRound(window.location.search)||null}});

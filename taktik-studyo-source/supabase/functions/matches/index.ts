@@ -12,10 +12,18 @@ const authClient = createClient(url,key,{auth:{persistSession:false,autoRefreshT
 // this function (catalogue/mapping reads only); MATCHES_CATALOGUE=legacy disables it for rollback.
 const serverKey = Deno.env.get('MATCHES_SECRET_KEY') || JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS') || '{}').default
   || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-const catalogueClient = serverKey && Deno.env.get('MATCHES_CATALOGUE') !== 'legacy' ? createClient(url,serverKey,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false},
+const serverClient = serverKey ? createClient(url,serverKey,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false},
   global:{fetch:(url,options = {}) => fetch(url,{...options,signal:options.signal || AbortSignal.timeout(8000)})}}) : null;
+const catalogueClient = Deno.env.get('MATCHES_CATALOGUE') !== 'legacy' ? serverClient : null;
 Deno.serve(createMatchesHandler({
   canonical:catalogueClient ? loaders => createCanonicalMatches({loadState:() => readCatalogueState(catalogueClient),...loaders}) : undefined,
+  // PROD5.3: per-account detail limits (migration 20261016150000). No server key or RPC error -> 503.
+  async allowDetail(account) {
+    if (!serverClient) throw Error('limiter unavailable');
+    const {data,error} = await serverClient.rpc('matches_detail_allowed',{account});
+    if (error) throw error;
+    return data;
+  },
   token:Deno.env.get('BSD_API_TOKEN'),
   origins:matchesOrigins(Deno.env.get('MATCHES_ALLOWED_ORIGINS')),
   async authenticate(jwt) {

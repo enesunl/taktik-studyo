@@ -59,7 +59,7 @@ test('DEV1 every repository migration initializes from zero in timestamp order w
    create function auth.uid() returns uuid language sql stable set search_path='' as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
    grant usage on schema auth to anon,authenticated;grant execute on function auth.uid() to anon,authenticated;`);
   const dir=new URL('../supabase/migrations/',import.meta.url);
-  const files=(await readdir(dir)).filter(f=>f.endsWith('.sql')).sort();assert.equal(files.length,17);
+  const files=(await readdir(dir)).filter(f=>f.endsWith('.sql')).sort();assert.equal(files.length,18);
   for(const name of files)await db.exec(await readFile(new URL(name,dir),'utf8'));
   for(const table of ['profiles','studio_projects','player_overrides','shared_lineups'])assert.equal((await db.query(`select relrowsecurity from pg_class where oid=$1::regclass`,['public.'+table])).rows[0].relrowsecurity,true);
   const columns=(await db.query("select column_name,column_default,is_nullable from information_schema.columns where table_schema='public' and table_name='profiles' and column_name in ('favorite_team_slug','onboarding_completed_at','onboarding_version') order by column_name")).rows;

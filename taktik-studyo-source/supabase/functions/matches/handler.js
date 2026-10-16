@@ -61,7 +61,8 @@ export function matchesOrigins(value = 'https://taktikstudyo.com') {
 
 // `canonical` (PROD1.5, optional): factory receiving this handler's cached loaders and returning
 // {events, match} presenters that attach BSD canonical catalogue identities (canonical.js).
-export function createMatchesHandler({authenticate,token,origins = matchesOrigins(),load = fetchSeason,loadDetail = fetchDetail,now = Date.now,canonical}) {
+// `allowDetail` (PROD5.3): async account id -> 0 (allowed) or seconds until retry; throws when unavailable.
+export function createMatchesHandler({authenticate,token,origins = matchesOrigins(),load = fetchSeason,loadDetail = fetchDetail,now = Date.now,canonical,allowDetail}) {
   let seasonEntry = null, seasonPending = null, blockedUntil = 0, limitedStreak = 0, accessDeniedUntil = 0;
   // SEC2: ids of the last successfully loaded season; details are fetched only for these.
   let scheduledIds = new Set();
@@ -185,10 +186,17 @@ export function createMatchesHandler({authenticate,token,origins = matchesOrigin
     if (url.search && (!wantsDetail || [...url.searchParams.keys()].some(key => key !== 'id'))) return reply(400,'invalid_request');
     const authorization = request.headers.get('authorization') || '';
     if (!/^Bearer \S+$/.test(authorization)) return reply(401,wantsDetail ? 'UNAUTHORIZED' : 'unauthenticated');
-    try {
-      const user = await authenticate(authorization.slice(7));
-      if (!user?.id || user.is_anonymous || !user.email_confirmed_at) return reply(401,wantsDetail ? 'UNAUTHORIZED' : 'unauthenticated');
-    } catch {return reply(401,wantsDetail ? 'UNAUTHORIZED' : 'unauthenticated');}
+    let user = null;
+    try {user = await authenticate(authorization.slice(7));} catch {user = null;}
+    if (!user?.id || user.is_anonymous || !user.email_confirmed_at) return reply(401,wantsDetail ? 'UNAUTHORIZED' : 'unauthenticated');
+    if (wantsDetail && allowDetail) {
+      // PROD5.3: per-account detail budget (database-backed, shared by all instances), checked before
+      // any season/detail work so a rejected request never reaches the provider. Fails closed.
+      let wait;
+      try {wait = await allowDetail(user.id);} catch {wait = null;}
+      if (!Number.isSafeInteger(wait) || wait < 0) return reply(503,'PROVIDER_UNAVAILABLE');
+      if (wait > 0) {headers['Retry-After'] = String(wait); return reply(429,'RATE_LIMITED');}
+    }
     if (wantsDetail) {
       // SEC2: only fixtures of the configured season reach the provider. Any other well-formed id
       // would cost a provider request per id (quota exhaustion by enumeration), so it is answered

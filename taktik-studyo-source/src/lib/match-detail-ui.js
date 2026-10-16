@@ -113,7 +113,7 @@ export function mountMatchDetail({document,window,api,current,playerOverrides}) 
     busy=true;lastMatch=null;retry.hidden=true;content.replaceChildren();status.textContent='Maç bilgileri yükleniyor…';
     let result;try{result=await api.load(id);}catch{result={ok:false};}
     if(!active())return;busy=false;
-    if(!result.ok){const code=result.error?.code;status.textContent=['INVALID_MATCH_ID','MATCH_NOT_FOUND'].includes(code)?'Maç bulunamadı.':code==='UNAUTHORIZED'?'Oturum doğrulanamadı. Giriş yapıp tekrar dene.':'Maç bilgileri şu anda alınamıyor.';retry.hidden=['INVALID_MATCH_ID','MATCH_NOT_FOUND'].includes(code);return;}
+    if(!result.ok){const code=result.error?.code;status.textContent=['INVALID_MATCH_ID','MATCH_NOT_FOUND'].includes(code)?'Maç bulunamadı.':code==='UNAUTHORIZED'?'Oturum doğrulanamadı. Giriş yapıp tekrar dene.':code==='RATE_LIMITED'?'Kısa sürede çok fazla maç açtın. Biraz sonra tekrar dene.':'Maç bilgileri şu anda alınamıyor.';retry.hidden=['INVALID_MATCH_ID','MATCH_NOT_FOUND'].includes(code);return;}
     status.textContent='';render(result.match);status.textContent=staleNotice(result.freshness);
   }
   retry.addEventListener('click',load);

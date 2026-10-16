@@ -21,4 +21,4 @@ export async function requestMatches({client,current,location,fetchImpl = fetch,
   if (!response.ok) throw Error(id === undefined ? 'matches_unavailable' : detailError(response.status));
   return {data:await response.json(),error:null};
 }
-export const detailError = status => ({400:'INVALID_MATCH_ID',401:'UNAUTHORIZED',404:'MATCH_NOT_FOUND'}[status] || 'PROVIDER_UNAVAILABLE');
+export const detailError = status => ({400:'INVALID_MATCH_ID',401:'UNAUTHORIZED',404:'MATCH_NOT_FOUND',429:'RATE_LIMITED'}[status] || 'PROVIDER_UNAVAILABLE');
