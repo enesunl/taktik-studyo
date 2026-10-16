@@ -21,7 +21,8 @@ export function mountWeeklyXI({document,window,current,userId,catalogue,playerOv
  const store=createWeeklyStore({userId,source,storage,current:active,now}),saved=store.read();if(!records&&saved.ok&&saved.state)state=saved.state;
  let recordId=null,revision=null,saving=false,loading=!!records&&params.has('id'),loadFailed=false,editRevision=0,imported=false;
  const players=weeklyCatalogue(catalogue.model);
- const metadata={week:null};
+ // PROD5: matches only pre-fill the week; the account editor's week field is what the poster and export show.
+ const metadata={week:null};let playedWeek=null;
  const effective=p=>playerOverrides?.effective(playerOverrides.key(p.id),p)||p;
  const header=node('div',undefined,'weekly-toolbar'),heading=node('div');heading.append(node('p','SENİN SEÇİMİN. SENİN KADRON.','weekly-eyebrow'),node('h1','Haftanın İlk 11’i'));
  const controls=node('div',undefined,'weekly-controls'),label=node('label'),formation=node('select');formation.setAttribute('aria-label','Diziliş');
@@ -54,7 +55,8 @@ export function mountWeeklyXI({document,window,current,userId,catalogue,playerOv
  for(const cls of ['weekly-half','weekly-circle','weekly-box-top','weekly-box-bottom','weekly-goal-top','weekly-goal-bottom'])markings.append(node('i',undefined,cls));
  const slots=node('div',undefined,'weekly-slots'),count=node('span','','weekly-count');field.append(markings,slots);fieldWrap.append(field,count);
  const right=node('aside',undefined,'weekly-poster weekly-poster-right');right.setAttribute('aria-label','Süper Lig hafta bilgisi');
- function renderPanel(){right.replaceChildren(createWeeklyPoster({document,slots:state.slots,week:metadata.week,idPrefix:'weekly-page'}));}
+ function renderPanel(){const typed=Number(weekInput.value);metadata.week=!records?playedWeek:weekInput.value!==''&&Number.isInteger(typed)?typed:null;
+  right.replaceChildren(createWeeklyPoster({document,slots:state.slots,week:metadata.week,idPrefix:'weekly-page'}));}
  workspace.dataset.composition='weekly-xi';workspace.append(left,fieldWrap,right);
  const note=node('p','Oyuncuları sürükle veya ok tuşlarıyla taşı (Shift: büyük adım). Dokunarak değiştir ya da kaldır. Kayıt bu tarayıcıda hesabına göre ayrılır; cihazlar arasında eşitlenmez. Ortak tarayıcıda gizli veri saklama.','weekly-local-note');note.id='weeklyMovementHint';note.dataset.editControl='true';
  const dialog=node('dialog',undefined,'weekly-picker');dialog.setAttribute('aria-labelledby','weeklyPickerTitle');
@@ -148,6 +150,7 @@ export function mountWeeklyXI({document,window,current,userId,catalogue,playerOv
  formation.addEventListener('change',()=>{if(!active()||!Object.hasOwn(WEEKLY_FORMATIONS,formation.value))return;state=changeWeeklyFormation(state,formation.value);render();dirty();notify('Diziliş değişti. Oyuncuların korundu.');});
  function lock(){for(const b of slotButtons)b.disabled=loading||loadFailed;formation.disabled=loading||loadFailed;for(const input of [nameInput,seasonInput,weekInput])input.disabled=loading;save.disabled=loading||saving||loadFailed;fresh.disabled=loading||saving;importDraft.disabled=loading||saving;}
  for(const input of [nameInput,seasonInput,weekInput])input.addEventListener('input',dirty);
+ weekInput.addEventListener('input',()=>{if(active()){renderPanel();preview.refresh();}});
  fresh.addEventListener('click',()=>{if(!active()||loading||saving)return;recordId=revision=null;loadFailed=false;imported=false;state=emptyWeeklyXI();nameInput.value='Haftanın ilk 11’i';seasonInput.value=weekInput.value='';window.history?.replaceState(null,'','/haftanin-ilk-11i');render();dirty();lock();});
  importDraft.addEventListener('click',()=>{if(!active()||loading||saving)return;const local=localSources.find(item=>item.key===importSource.value);if(!canonicalWeeklySnapshot(local?.state)){notify('Eski oyuncu kimlikleri güncel katalogla uyumlu değil. Oyuncuları yeniden seçerek yeni kadro oluştur.',true);return;}state=local.state;recordId=revision=null;imported=true;seasonInput.value=weekInput.value='';window.history?.replaceState(null,'','/haftanin-ilk-11i');render();dirty();notify('Yerel kadro açıldı. Hesabına yüklemek için Kaydet’e bas.');});
  save.addEventListener('click',async()=>{
@@ -180,13 +183,13 @@ export function mountWeeklyXI({document,window,current,userId,catalogue,playerOv
  const recordReady=(async()=>{if(!loading)return;try{const r=params.getAll('id').length===1?await records.get(params.get('id')):{ok:false};if(!active())return;if(!r.ok)throw Error();const row=r.record;recordId=row.id;revision=row.revision;state=row.snapshot;nameInput.value=row.title;seasonInput.value=row.season??'';weekInput.value=row.week===null?'':String(row.week);render();saveState.textContent='Kaydedildi';}catch{if(active()){loadFailed=true;saveState.textContent='Kadro açılamadı';notify('Kadro bulunamadı veya erişilemiyor. Yeni kadro açabilir ya da koleksiyondan tekrar deneyebilirsin.',true);}}finally{loading=false;if(active())lock();}})();
  const ready=(async()=>{
   let resultMatches=[];
-  try{const result=await matchesApi?.load();if(!active())return;resultMatches=result?.ok?result.matches:[];metadata.week=latestPlayedWeek(resultMatches,now());}
-  catch{if(!active())return;metadata.week=null;}
+  try{const result=await matchesApi?.load();if(!active())return;resultMatches=result?.ok?result.matches:[];playedWeek=latestPlayedWeek(resultMatches,now());}
+  catch{if(!active())return;playedWeek=null;}
   if(active()){
    // Only a new, untouched record gets real match context. Imports retain unknown metadata.
-   if(records&&!recordId&&!loading&&!loadFailed&&!imported&&editRevision===0&&metadata.week!==null){
-    weekInput.value=String(metadata.week);
-    const played=resultMatches.find(m=>m.round===metadata.week&&m.status==='finished'&&Date.parse(m.kickoff)<=now());
+   if(records&&!recordId&&!loading&&!loadFailed&&!imported&&editRevision===0&&playedWeek!==null){
+    weekInput.value=String(playedWeek);
+    const played=resultMatches.find(m=>m.round===playedWeek&&m.status==='finished'&&Date.parse(m.kickoff)<=now());
     if(/^\d{4}-\d{4}$/.test(played?.season||''))seasonInput.value=played.season.replace('-','/');
    }
    renderPanel();preview.refresh();

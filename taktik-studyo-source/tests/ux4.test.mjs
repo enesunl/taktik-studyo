@@ -103,6 +103,32 @@ test('FIX1 editor saves shortened season normalized and blocks invalid season wi
  season.value='';fire(find('weekly-save'),'click');await tick();assert.equal(calls[1].season,null);page.dispose();
 });
 
+test('PROD5 poster week follows the week field: matches unavailable, typed week, reopened record and signed-out fallback',async()=>{
+ const played={ok:true,matches:[{status:'finished',round:8,season:'2026-2027',kickoff:'2026-10-10T18:00:00Z'}]};
+ const mount=(extra,url='/haftanin-ilk-11i')=>{const f=exportFixture();f.window.location=new URL(url,'http://localhost:4173');f.nodes.weeklyXIContent=new ExportNode();
+  const page=mountWeeklyXI({...f,userId:owner,current:()=>true,catalogue:{source:'canonical',model:{teams:[],players:[]}},now:()=>Date.parse('2026-10-14'),...extra});
+  const nodes=()=>allNodes(f.nodes.weeklyXIContent);return {page,nodes,shown:()=>nodes().find(n=>n.attrs?.class==='weekly-week-number').textContent,week:()=>nodes().find(n=>n.type==='number')};};
+ const calls=[],save=async value=>{calls.push(value);return {ok:true,record:record({id:value.id,week:value.week})};};
+ // matches not deployed: no week is invented; a typed week is shown and saved.
+ const a=mount({matchesApi:{load:async()=>({ok:false,error:{code:'matches_unavailable'}})},records:{save}});await a.page.ready;
+ assert.ok(!a.week().value);assert.equal(a.shown(),'—');
+ a.week().value='8';fire(a.week(),'input');assert.equal(a.shown(),'8');
+ // preview/PNG surface (same graphic the PNG download renders) shows the typed week and follows edits.
+ const exported=()=>allNodes(a.nodes().find(n=>n.className==='week-xi-export-surface')).filter(n=>n.attrs?.class==='weekly-week-number').map(n=>n.textContent);
+ fire(a.nodes().find(n=>n.className==='weekly-preview-trigger'),'click');assert.deepEqual(exported(),['8']);
+ a.week().value='9';fire(a.week(),'input');assert.deepEqual(exported(),['9']);assert.equal(a.shown(),'9');
+ fire(a.nodes().find(n=>n.tagName==='button'&&n.textContent==='Geri Dön'),'click');a.week().value='8';fire(a.week(),'input');
+ fire(a.nodes().find(n=>n.className==='weekly-save'),'click');await tick();assert.equal(calls[0].week,8);a.page.dispose();
+ // a reopened record keeps its own week even when a later round has been played.
+ const b=mount({matchesApi:{load:async()=>played},records:{get:async()=>({ok:true,record:record({week:5})}),save}},'/haftanin-ilk-11i?id='+id);await b.page.ready;
+ assert.equal(b.week().value,'5');assert.equal(b.shown(),'5');b.page.dispose();
+ // a new lineup the user already touched is never overwritten by late match data.
+ const late=deferred(),d=mount({matchesApi:{load:()=>late.promise},records:{save}});
+ d.week().value='3';fire(d.week(),'input');late.resolve(played);await d.page.ready;assert.equal(d.week().value,'3');assert.equal(d.shown(),'3');d.page.dispose();
+ // signed out (no account records, no week field): the detected played week is still shown.
+ const c=mount({matchesApi:{load:async()=>played}});await c.page.ready;assert.equal(c.shown(),'8');c.page.dispose();
+});
+
 test('new account lineup takes real played season/week only, not URL week, and safe shell keeps protected content hidden',async()=>{
  const f=exportFixture();f.window.location=new URL('/haftanin-ilk-11i?hafta=30','http://localhost:4173');f.nodes.weeklyXIContent=new ExportNode();const calls=[];
  const page=mountWeeklyXI({...f,userId:owner,current:()=>true,catalogue:{source:'canonical',model:{teams:[],players:[]}},now:()=>Date.parse('2026-10-14'),matchesApi:{load:async()=>({ok:true,matches:[{status:'finished',round:8,season:'2026-2027',kickoff:'2026-10-10T18:00:00Z'}]})},records:{save:async value=>{calls.push(value);return {ok:true,record:record({id:value.id})};}}});await page.ready;
