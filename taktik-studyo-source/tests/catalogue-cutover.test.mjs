@@ -168,3 +168,21 @@ test('D3 canonical errors stay distinct and never call legacy tables',async()=>{
  await assert.rejects(legacy.load(),e=>e.code==='network_failure');
  await assert.rejects(createCatalogueSource({config:{source:'canonical'},client:null,window:{location:{origin:'https://taktikstudyo.com'}}}).load(),e=>e.code==='network_failure');
 });
+
+// PROD5.7: with a Supabase client the catalogue comes only from catalogue_for_app(), once per cache window.
+test('PROD5.7 canonical catalogue uses catalogue_for_app for players, teams and team checks; never the tables',async()=>{
+ const team={id:'galatasaray',display_name:'Galatasaray',short_name:'GS',color_primary:'#a61931',color_secondary:'#f5bd28',sort_order:1,catalogue_active:true};
+ const players=Array.from({length:11},(_,i)=>({id:'aaaaaaaa-aaaa-4aaa-8aaa-'+String(i).padStart(12,'0'),team_id:'galatasaray',display_name:'P'+i,position_group:'M',specific_position:'CM',shirt_number:i+1,catalogue_active:true}));
+ const calls=[];let reply={data:{teams:[team],players}};
+ const client={rpc(name,args){calls.push([name,args]);return Promise.resolve(reply);},from(table){throw Error('direct table read: '+table);}};
+ const catalogue=createCanonicalCatalogue(client);
+ const model=await catalogue.load();assert.equal(model.teams.length,1);assert.equal(model.players.length,11);
+ assert.deepEqual((await catalogue.loadTeams()).map(t=>t.id),['galatasaray']);
+ assert.equal(await catalogue.hasActiveTeam('galatasaray'),true);assert.equal(await catalogue.hasActiveTeam('fenerbahce'),false);
+ assert.deepEqual(calls,[['catalogue_for_app',undefined]],'one RPC serves load, loadTeams and hasActiveTeam');
+ for(const [error,code] of [[{code:'P0001',message:'rate_limited'},'network_failure'],[{code:'42501'},'network_failure'],[{code:'PGRST205'},'schema_unavailable']]){
+  reply={error};await assert.rejects(createCanonicalCatalogue(client).load(),e=>e.code===code);
+ }
+ reply={data:{teams:[team],players:players.slice(0,10)}};await assert.rejects(createCanonicalCatalogue(client).load(),e=>e.code==='catalogue_malformed');
+ reply={data:null};await assert.rejects(createCanonicalCatalogue(client).load(),e=>e.code==='catalogue_malformed');
+});

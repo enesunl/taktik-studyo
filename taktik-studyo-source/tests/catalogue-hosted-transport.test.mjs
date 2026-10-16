@@ -6,7 +6,8 @@ import {createClient} from '@supabase/supabase-js';
 import {createCatalogueSource} from '../src/lib/catalogue-source.js';
 
 // SEC1.1: on a hosted origin the BSD catalogue is read through the app's own Supabase client
-// (authenticated catalogue_* tables). No legacy tables, no local transport, no static roster.
+// (PROD5.7: the catalogue_for_app() RPC with the user session). No legacy tables, no local transport,
+// no static roster.
 const url='https://abcdefghijklmnopqrst.supabase.co',key='sb_publishable_test_only',jwt='signed-in-jwt';
 const read=p=>JSON.parse(readFileSync(new URL(p,import.meta.url),'utf8'));
 const bsd=read('./fixtures/bsd-catalogue-clean.json'),registry=read('../scripts/catalogue/team-registrations.json');
@@ -20,8 +21,7 @@ function hosted({status=200}={}){
     const target=new URL(input),headers=new Headers(init.headers);calls.push({path:target.pathname,auth:headers.get('authorization')});
     assert.equal(target.origin,url);
     if(status!==200)return Response.json({code:'42501',message:'permission denied'},{status});
-    if(target.pathname==='/rest/v1/catalogue_teams')return Response.json(teams);
-    if(target.pathname==='/rest/v1/catalogue_players')return Response.json(players.filter(p=>!target.searchParams.get('id')||p.id>target.searchParams.get('id').replace(/^gt\./,'')).sort((a,b)=>a.id.localeCompare(b.id)).slice(0,1000));
+    if(target.pathname==='/rest/v1/rpc/catalogue_for_app'&&init.method==='POST')return Response.json({teams,players});
     throw Error('unexpected request '+target.pathname);
   };
   const client=createClient(url,key,{accessToken:async()=>jwt,global:{fetch:fetchImpl}});
@@ -29,11 +29,11 @@ function hosted({status=200}={}){
   return {calls,window,source:createCatalogueSource({config:{source:'canonical'},client,window,fetchImpl:()=>{throw Error('local transport must not be used');}})};
 }
 
-test('hosted canonical catalogue: 18 teams / 543 BSD players via catalogue_* with the user session; boards get internal identities',async()=>{
+test('hosted canonical catalogue: 18 teams / 543 BSD players via catalogue_for_app with the user session; boards get internal identities',async()=>{
   const h=hosted();assert.equal(h.source.local,false);
   const model=await h.source.load();
   assert.equal(model.teams.length,18);assert.equal(model.players.length,543);
-  assert.ok(h.calls.length>=2&&h.calls.every(c=>['/rest/v1/catalogue_teams','/rest/v1/catalogue_players'].includes(c.path)),JSON.stringify(h.calls));
+  assert.deepEqual(h.calls.map(c=>c.path),['/rest/v1/rpc/catalogue_for_app'],'one RPC, never the tables');
   assert.ok(h.calls.every(c=>c.auth==='Bearer '+jwt),'every catalogue read carries the signed-in session');
   const rosters=h.window.TAKTIK_ROSTERS.teams;assert.equal(Object.keys(rosters).length,18);
   for(const [name,squad] of Object.entries(rosters)){
@@ -49,5 +49,5 @@ test('hosted canonical failure is explicit (no legacy tables, no bundled roster)
   const h=hosted({status:401});
   await assert.rejects(h.source.load(),e=>['network_failure','schema_unavailable'].includes(e.code));
   assert.equal(h.window.TAKTIK_ROSTERS,undefined);assert.equal(h.window.TAKTIK_TEAMS,undefined);
-  assert.ok(h.calls.every(c=>c.path==='/rest/v1/catalogue_teams'));
+  assert.ok(h.calls.every(c=>c.path==='/rest/v1/rpc/catalogue_for_app'));
 });

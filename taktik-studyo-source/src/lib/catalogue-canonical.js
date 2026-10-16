@@ -31,8 +31,16 @@ export function normalizeCanonical(teams,players){
 }
 export function createCanonicalCatalogue(client,now=Date.now){
  let cache,expires=0,pending;
+ // PROD5.7: the Supabase client reads the catalogue through catalogue_for_app() (selected fields,
+ // per-account limits); the loopback PGlite transport has no RPC and keeps its table reads.
+ const viaRpc=typeof client?.rpc==='function';
  async function read(){
   try{
+   if(viaRpc){
+    const r=await client.rpc('catalogue_for_app');
+    if(r.error)throw failure(r.error);
+    cache=normalizeCanonical(r.data?.teams,r.data?.players);expires=now()+300000;return cache;
+   }
    const t=await client.from('catalogue_teams').select('id,display_name,short_name,color_primary,color_secondary,sort_order,catalogue_active').eq('catalogue_active',true).order('id').limit(501);
    if(t.error)throw failure(t.error);if(!Array.isArray(t.data)||t.data.length>500)throw catalogueError('catalogue_malformed');
    const rows=[];
@@ -48,6 +56,7 @@ export function createCanonicalCatalogue(client,now=Date.now){
  }
  return {
   async loadTeams(){
+   if(viaRpc)return (await load()).teams;
    try{
     const r=await client.from('catalogue_teams').select('id,display_name,short_name,color_primary,color_secondary,sort_order,catalogue_active').eq('catalogue_active',true).order('id').limit(501);
     if(r.error)throw failure(r.error);
@@ -56,9 +65,11 @@ export function createCanonicalCatalogue(client,now=Date.now){
   },
   async hasActiveTeam(id){
    if(typeof id!=='string'||!/^[a-z][a-z0-9-]{0,79}$/.test(id)||/^(fotmob|bsd)-/.test(id))return false;
+   if(viaRpc)return (await load()).teams.some(t=>t.id===id);
    const r=await client.from('catalogue_teams').select('id').eq('id',id).eq('catalogue_active',true).maybeSingle();
    if(r.error)throw failure(r.error);
    return r.data?.id===id;
   },
-  load(){if(cache&&now()<expires)return Promise.resolve(cache);if(!pending)pending=read().finally(()=>pending=null);return pending;}};
+  load};
+ function load(){if(cache&&now()<expires)return Promise.resolve(cache);if(!pending)pending=read().finally(()=>pending=null);return pending;}
 }
