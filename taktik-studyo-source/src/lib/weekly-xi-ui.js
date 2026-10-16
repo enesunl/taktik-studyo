@@ -4,7 +4,7 @@ import {WEEKLY_FORMATIONS,WEEKLY_BOUNDS,emptyWeeklyXI,weeklyCatalogue,searchWeek
 import {mountWeeklyPreview} from './weekly-xi-preview.js';
 import {latestPlayedWeek} from './weekly-xi-panel.js';
 import {createWeeklyPoster} from './weekly-xi-poster.js';
-import {canonicalWeeklySnapshot} from './weekly-lineups.js';
+import {canonicalWeeklySnapshot,weeklySeason} from './weekly-lineups.js';
 import {ACCOUNT_LIMITS} from './studio-project-snapshot.js';
 
 const ROLE_NAMES={GK:'Kaleci',LB:'Sol bek',CB:'Stoper',RB:'Sağ bek',DM:'Ön libero',CM:'Merkez orta saha',AM:'Ofansif orta saha',LM:'Sol orta saha',RM:'Sağ orta saha',LW:'Sol kanat',RW:'Sağ kanat',ST:'Forvet'};
@@ -153,8 +153,11 @@ export function mountWeeklyXI({document,window,current,userId,catalogue,playerOv
  save.addEventListener('click',async()=>{
   if(!active()||saving||loading||loadFailed)return;cancelGesture?.();
   if(!records){const ok=store.write(state);if(ok){saveState.textContent='Kaydedildi';saveState.dataset.dirty='false';}notify(ok?'Kadron kaydedildi.':'Kaydetme başarısız. Tarayıcı depolamasını kontrol edip tekrar dene.',!ok);return;}
+  const season=weeklySeason(seasonInput.value);
+  if(season===undefined){seasonInput.setAttribute('aria-invalid','true');seasonInput.focus();notify('Sezon 2026/27 veya 26/27 biçiminde olmalı ve ikinci yıl ilk yılı izlemeli.',true);return;}
+  seasonInput.removeAttribute('aria-invalid');seasonInput.value=season??'';
   saving=true;lock();const turn=editRevision;saveState.textContent='Kaydediliyor…';
-  try{recordId??=window.crypto.randomUUID();const r=await records.save({id:recordId,revision,title:nameInput.value,season:seasonInput.value.trim()||null,week:weekInput.value===''?null:Number(weekInput.value),snapshot:state});
+  try{recordId??=window.crypto.randomUUID();const r=await records.save({id:recordId,revision,title:nameInput.value,season,week:weekInput.value===''?null:Number(weekInput.value),snapshot:state});
    if(!active())return;if(!r.ok){saveState.textContent='Kaydedilemedi';const code=r.error?.code;
     // SEC2.2: at a limit the lineup stays open; it is also kept in this browser if that slot is free (never overwritten).
     const kept=['quota_exceeded','rate_limited'].includes(code)&&(()=>{const local=store.read();return local.ok&&!local.state&&store.write(state);})();

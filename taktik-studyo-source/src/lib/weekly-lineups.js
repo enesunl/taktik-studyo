@@ -8,6 +8,14 @@ export function weeklyGroup(row){
  const season=row.season?.replace(/^(\d{4})\/(\d{2})$/,(_,start,end)=>start+'/'+(Number(start)-Number(start)%100+Number(end)+(Number(end)<Number(start)%100?100:0)));
  return row.week===null?'Hafta atanmamış':(season||'Sezon belirtilmemiş')+' · Hafta '+row.week;
 }
+// FIX1: optional season field. Accepts 2026/27, 2026/2027 and the shortened 26/27 (stored as 2026/27);
+// the second year must follow the first. Returns null when empty and undefined when invalid.
+export function weeklySeason(value){
+ const text=String(value??'').trim(),m=/^(\d{2}|\d{4})\/(\d{2}|\d{4})$/.exec(text);if(!text)return null;if(!m)return undefined;
+ const start=m[1].length===2?2000+Number(m[1]):Number(m[1]),end=Number(m[2]);
+ if(m[2].length===4?end!==start+1:end!==(start+1)%100)return undefined;
+ return start+'/'+m[2];
+}
 // All three views use the Auth database, never the local sports-data transport.
 export function createWeeklyLineups({client,validatedUser,current}){
  const owner=validatedUser?.id,active=()=>!!owner&&current(),table=()=>client.from('weekly_lineups');

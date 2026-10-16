@@ -28,4 +28,5 @@ test('the committed bundle targets the hosted project with public values only',(
   const js=readFileSync(bundle,'utf8'),project=JSON.parse(readFileSync(new URL('../supabase/project.json',import.meta.url),'utf8'));
   assert.ok(js.includes(project.url));
   assert.doesNotMatch(js,/sb_secret_[A-Za-z0-9]|service_role|SUPABASE_SECRET|BSD_API_TOKEN|TURNSTILE_SECRET|127\.0\.0\.1:54321/);
+  assert.ok(!js.includes('startsWith("sb_secret_")'),'browser-only key safeguard applied to the committed bundle');
 });

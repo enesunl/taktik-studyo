@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {PGlite} from '@electric-sql/pglite';
-import {createWeeklyLineups,canonicalWeeklySnapshot,weeklyGroup} from '../src/lib/weekly-lineups.js';
+import {createWeeklyLineups,canonicalWeeklySnapshot,weeklyGroup,weeklySeason} from '../src/lib/weekly-lineups.js';
 import {mountWeeklyCollection} from '../src/lib/weekly-lineups-ui.js';
 import {emptyWeeklyXI,pickWeeklyPlayer,createWeeklyStore} from '../src/lib/weekly-xi.js';
 import {mountWeeklyXI} from '../src/lib/weekly-xi-ui.js';
@@ -83,6 +83,24 @@ test('account editor reopens exact record then updates it, keeps unknown metadat
  const page=mountWeeklyXI({...f,userId:owner,current:()=>true,catalogue:{source:'canonical',model:{teams:[],players:[]}},records:{get:async key=>{assert.equal(key,id);return {ok:true,record:record({snapshot:state,week:null,season:null})};},save:async value=>{calls.push(value);return {ok:false,error:{code:'weekly_request_failed'}};}}});await page.ready;
  const find=cls=>allNodes(f.nodes.weeklyXIContent).find(n=>n.className===cls),slot=allNodes(f.nodes.weeklyXIContent).find(n=>n.className==='weekly-slot'&&n.dataset.slotId==='1');assert.equal(slot.style.left,'33%');assert.equal(slot.style.top,'40%');assert.equal(find('weekly-save-state').textContent,'Kaydedildi');
  fire(find('weekly-save'),'click');await tick();assert.equal(calls[0].id,id);assert.equal(calls[0].revision,1);assert.equal(calls[0].week,null);assert.equal(calls[0].season,null);assert.deepEqual(calls[0].snapshot,state);assert.equal(find('weekly-save-state').textContent,'Kaydedilemedi');page.dispose();
+});
+
+test('FIX1 season input accepts 2026/27, 2026/2027 and 26/27, rejects invalid or inconsistent seasons',()=>{
+ for(const [input,stored] of [['2026/27','2026/27'],[' 2026/2027 ','2026/2027'],['26/27','2026/27'],['26/2027','2026/2027'],['1999/00','1999/00'],['',null],['   ',null],[null,null]])assert.equal(weeklySeason(input),stored,String(input));
+ for(const input of ['2026/28','26/28','2026/2028','2026/26','2026-27','26-27','2026','26','2026/027','026/27','2026/27/28','abcd/ef','2026 /27','٢٠٢٦/٢٧'])assert.equal(weeklySeason(input),undefined,input);
+ for(const input of ['2026/27','26/27','2026/2027'])assert.match(weeklySeason(input),/^\d{4}\/\d{2,4}$/);
+});
+
+test('FIX1 editor saves shortened season normalized and blocks invalid season with a field message, without a request',async()=>{
+ const f=exportFixture();f.nodes.weeklyXIContent=new ExportNode();const calls=[];
+ const page=mountWeeklyXI({...f,userId:owner,current:()=>true,catalogue:{source:'canonical',model:{teams:[],players:[]}},records:{save:async value=>{calls.push(value);return {ok:true,record:record({id:value.id,season:value.season})};}}});await page.ready;
+ const nodes=()=>allNodes(f.nodes.weeklyXIContent),find=cls=>nodes().find(n=>n.className===cls),season=nodes().find(n=>n.placeholder==='2026/27');
+ season.value='26/28';fire(find('weekly-save'),'click');await tick();
+ assert.equal(calls.length,0);assert.equal(season.attrs['aria-invalid'],'true');assert.equal(season.focused,true);
+ assert.match(find('weekly-status').textContent,/Sezon 2026\/27 veya 26\/27/);assert.equal(find('weekly-save').disabled,false);
+ season.value=' 26/27 ';fire(find('weekly-save'),'click');await tick();
+ assert.equal(calls.length,1);assert.equal(calls[0].season,'2026/27');assert.equal(season.value,'2026/27');assert.equal(season.attrs['aria-invalid'],undefined);
+ season.value='';fire(find('weekly-save'),'click');await tick();assert.equal(calls[1].season,null);page.dispose();
 });
 
 test('new account lineup takes real played season/week only, not URL week, and safe shell keeps protected content hidden',async()=>{

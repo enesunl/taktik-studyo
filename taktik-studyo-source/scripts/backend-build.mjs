@@ -4,7 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {assertLocalUrl,assertLocalPublicKey} from './local-supabase.mjs';
 // The pinned SDK contains a generic server-key recognition branch. This browser
 // build supports public keys (local legacy anon JWTs included), never server keys.
-const browserOnlyKeys={name:'publishable-only-browser-client',setup(builder){builder.onLoad({filter:/@supabase\/supabase-js\/dist\/index\.mjs$/},args=>{
+const browserOnlyKeys={name:'publishable-only-browser-client',setup(builder){builder.onLoad({filter:/@supabase[\\/]supabase-js[\\/]dist[\\/]index\.mjs$/},args=>{
   const source=readFileSync(args.path,'utf8');
   const generic='key.startsWith("sb_publishable_") || key.startsWith("sb_secret_")';
   if(source.split(generic).length!==2)throw new Error('Review SDK key recognition before upgrading.');

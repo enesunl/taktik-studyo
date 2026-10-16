@@ -46,6 +46,8 @@ test('DEV1 local memory bundle uses only local URL/public key while production b
  await assert.rejects(buildBrowserBackend({url:'https://zwhoailuklwtxaaawfaq.supabase.co',key:local.PUBLISHABLE_KEY,local:true}),/forbidden/);
  const prod=Buffer.from(await buildBrowserBackend({url:'https://zwhoailuklwtxaaawfaq.supabase.co',key:local.PUBLISHABLE_KEY})).toString();
  assert(prod.includes('https://zwhoailuklwtxaaawfaq.supabase.co'));assert(!prod.includes(local.API_URL));
+ // FIX1.1: the SDK server-key branch is stripped on every platform (Windows paths use backslashes).
+ for(const bundle of [localBundle,prod])assert(!bundle.includes('startsWith("sb_secret_")')&&bundle.includes('startsWith("sb_publishable_")'));
 });
 
 test('DEV1 every repository migration initializes from zero in timestamp order with only Supabase Auth prerequisites',async()=>{
