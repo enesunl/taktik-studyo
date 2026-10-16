@@ -33,7 +33,7 @@ Decisions recorded on 15 Oct 2026:
 | Edge Runtime (supabase-edge-runtime 1.74.3, Deno 2.1.4): `matches`, `lineups`, `account-delete` | All three boot (the shared `src/lib` imports resolve under Deno). Checks: no session → 401; foreign origin → 403; `matches` without `BSD_API_TOKEN` → controlled 502/503; anonymous or unconfirmed share POST → 401; unverifiable Turnstile token → 403 (action and hostname enforced); public share GET works; account deletion (wrong phrase 400, wrong password 403, extra field 400, success 200) removes profile, projects, overrides, Weekly XI and the owned share (link 404, login refused). **24/24 behaviour checks.** |
 | Edge Runtime limits | The local Kong gateway answers CORS preflights itself (`*`), so the functions' own preflight logic is verified only by unit tests; check hosted preflights with `verify-live-backend.mjs` after deploy. A successful Turnstile share needs a real browser with the production site key (post-deploy smoke test). |
 | Live BSD (token from the shell, read-only GETs) | The first live run was refused: one live name had a trailing space (`invalid_catalogue`). Fixed: provider names are space-normalized; control characters still abort (test added). Dry run: 635 live players vs 543 in the 24 Sep fixture (108 new, 16 to deactivate, 70 position, 9 number, 1 name changes), 25 duplicate shirt numbers, 15 position conflicts (warnings). **Applied to Supabase Local only:** run 5, 635 active, all 652 mappings deterministic, no existing UUID changed. The frontend reader loads 18/635 with a valid XI for every team. |
-| Database | Anonymous access to `catalogue_*`, mappings and legacy tables → 401. Pending order unchanged (10 migrations, `tests/migration-order.test.mjs`). The 8 test share links are removed only by `20261014150000` during the approved rollout. |
+| Database | Anonymous access to `catalogue_*`, mappings and legacy tables → 401. Pending order: 12 migrations (`tests/migration-order.test.mjs`; restore rehearsal PROD2.1, 16 Oct 2026). The 8 test share links are removed only by `20261014150000` during the approved rollout. |
 
 ### Operator setup for the hosted import (step 4 below)
 
@@ -51,7 +51,7 @@ Decisions recorded on 15 Oct 2026:
 0. ⛔ Netlify: stop auto publishing (deploy lock); restrict or disable previews and branch deploys; confirm `NODE_VERSION`, `SECRETS_SCAN_OMIT_KEYS` and that no secrets are in Netlify.
 1. ⛔ Commit; then ⛔ push. The build runs but is **not** published while the lock is on. Check that the build log ends with `Backend adapter built: configured; catalogue canonical`.
 2. ⛔ Backup: hosted schema and data dump outside the repo; confirm the backup/PITR plan; record the Netlify deploy ID.
-3. ⛔ Database: the 10 migrations in order (`db push --dry-run` must list exactly them). This includes the approved removal of the 8 test links (#8).
+3. ⛔ Database: the 12 migrations in order (`db push --dry-run` must list exactly them). This includes the approved removal of the 8 test links (#8).
 4. ⛔ Hosted catalogue import (setup above); verify 18 teams and about 635 players signed-in, and anonymous 401.
 5. ⛔ Edge: `lineups` immediately after step 3; then `account-delete`; then `matches` with `BSD_API_TOKEN` (licence cleared). Supabase secrets: `TURNSTILE_SECRET_KEY`, `BSD_API_TOKEN`.
 6. ⛔ Netlify: publish the locked build. Verify the `/backend.js` hash and that `/rosters.js` is 404. The password stays on.
@@ -83,11 +83,13 @@ The new frontend is a BSD-only build (SEC1.1). It must not go live before the ho
 | 8 | `20261014150000_shared_lineup_owner` | lineups RPC | **deletes all ownerless share links (the 8 test links)** |
 | 9 | `20261015120000_player_override_internal_keys` (PROD1.5) | player_overrides | none (widens the key check) |
 | 10 | `20261015120100_catalogue_sync` (PROD1.5) | 2 (explicit guard) | none (adds sync function + audit table) |
+| 11 | `20261015190000_account_limits` (SEC2.2/2.3) | 5, 8 | none (limits, profile gate, owner share bucket) |
+| 12 | `20261015200000_terms_acceptance` (SEC2.3) | profiles | none (new nullable columns; no backfill) |
 
 - Wrong orders fail loudly; this is tested.
 - Every migration except #8 leaves existing projects, overrides, shares, profiles and the legacy catalogue untouched; this is tested.
 - **#8 conflicts with "do not delete the 8 share links"** (decision P5-1 below).
-- `supabase db push` applies all ten in one run.
+- `supabase db push` applies all twelve in one run.
 
 ### Release order (⛔ = explicit approval)
 
@@ -97,9 +99,9 @@ The new frontend is a BSD-only build (SEC1.1). It must not go live before the ho
    - Keep Netlify password protection **on** until step 7.
 2. **Back up.**
    - ⛔ Dump the hosted schema and data outside the repo; confirm PITR.
-   - Record the Netlify deploy ID and the `lineups` v6 reference.
-   - `supabase db push --linked --dry-run` must list exactly the 10 migrations above.
-3. **Database.** ⛔ Apply the 10 migrations. Read-only checks:
+   - Record the Netlify deploy ID and the `lineups` v7 reference (= repo `c16751c`).
+   - `supabase db push --linked --dry-run` must list exactly the 12 migrations above.
+3. **Database.** ⛔ Apply the 12 migrations. Read-only checks:
    - `catalogue_teams` = 18, `catalogue_players` = 0;
    - anon gets 401 on `teams`, `players` and `catalogue_*`.
 4. **Catalogue import** (operator machine; secret key in the shell only):
@@ -131,7 +133,26 @@ The new frontend is a BSD-only build (SEC1.1). It must not go live before the ho
 | `matches` problem | Redeploy the previous `matches` version, or set `MATCHES_CATALOGUE=legacy`. Match pages then show their unavailable state; the rest of the app is unaffected. | `tests/matches-canonical-handler.test.mjs` |
 | Frontend defect **before** launch | Password still on: fix forward and redeploy. Do **not** restore the old FotMob deploy. | — |
 | Frontend defect **after** launch | Netlify rollback only to an earlier **canonical** deploy, or a maintenance page. The pre-cutover deploy still ships `rosters.js` (FotMob) and must not be republished. | — |
-| Schema problem | Every migration is additive (except #8); fix forward. PITR or dump restore as a last resort (it loses later user work). | — |
+| Schema problem | Every migration is additive (except #8); fix forward. PITR or dump restore as a last resort (it loses later user work). Restore only with the sequence below. | PROD2.2: restored copy identical to production (grants, RLS, policies, data); after the 12 migrations identical to the migration-built reference. |
+
+**Dump restore sequence (PROD2.2, tested on a fresh Supabase stack with production versions).**
+
+Root cause it fixes: `schema.sql` recreates the tables, so the restoring role's default privileges grant ALL to `anon`/`authenticated`/`service_role`; the dump only adds GRANTs, never REVOKEs. The dump re-creates the `postgres` defaults at its end.
+
+Run each step only if the previous one succeeded; each is one transaction with `ON_ERROR_STOP`. `roles.sql` alters the reserved `supabase_admin` role and therefore needs a superuser:
+
+```sh
+PSQL='psql --single-transaction -v ON_ERROR_STOP=1'
+$PSQL -U supabase_admin -f roles.sql \
+&& $PSQL -U postgres \
+  -c 'ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON TABLES FROM postgres, anon, authenticated, service_role' \
+  -c 'ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON SEQUENCES FROM postgres, anon, authenticated, service_role' \
+  -c 'ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM postgres, anon, authenticated, service_role' \
+  -f schema.sql -c 'SET session_replication_role = replica' -f data.sql \
+&& $PSQL -U postgres -f history_schema.sql -f history_data.sql
+```
+
+Then apply pending migrations with the CLI against the restored database only.
 
 ### New decisions
 
@@ -147,8 +168,8 @@ The new frontend is a BSD-only build (SEC1.1). It must not go live before the ho
 | --- | --- |
 | Git | Local `release/netlify-migration` at `35e90ab` + uncommitted PROD1.1 changes; **19 commits ahead** of `origin` (remote at `5a32a19`). |
 | Netlify | `taktikstudyo.com` is served by Netlify. **Site password protection is on (401).** `www`/http → apex 301; HSTS set. TLS: Let's Encrypt, apex + www, valid until 19 Dec 2026. Dashboard settings are not verifiable from here (section 4). |
-| Supabase | `eu-central-1`, Postgres 17, healthy. **5 of 12** repo migrations applied. |
-| Edge Functions | `lineups` **v6** = repo `37381c1` (anonymous POST, 2-argument RPC, sharing live with Turnstile configured). `matches` and `account-delete` absent (404). |
+| Supabase | `eu-central-1`, Postgres 17, healthy. **5 of 17** repo migrations applied (12 pending). |
+| Edge Functions | `lineups` **v7** = repo `c16751c` (anonymous POST, 2-argument RPC, sharing live with Turnstile configured). `matches` and `account-delete` absent (404). |
 | Data (counts only) | 2 Auth users (1 confirmed, 1 without profile); 1 profile; 2 projects; 2 overrides; 8 disposable share links; legacy catalogue 18 teams / 539 players; no `catalogue_teams` table. |
 | Security | RLS on every public table; grants as designed. Advisors: INFO no-policy on server-only tables (intended); **WARN leaked-password protection disabled**. |
 | Email | Contact: Google Workspace (MX `smtp.google.com`, SPF Google, DMARC `p=none`); send/receive confirmed by the operator. Auth sender DNS: Resend-style DKIM + `send.` subdomain. Supabase Auth SMTP/templates/URLs are **not readable here**. |
@@ -159,7 +180,7 @@ The new frontend is a BSD-only build (SEC1.1). It must not go live before the ho
 | Component | Local | Production |
 | --- | --- | --- |
 | Migrations missing in production (apply order) | `20260925035438_catalogue_identity_foundation`, `20261004234326_profile_onboarding_foundation`, `20261013165455_weekly_lineups`, `20261014074114_weekly_snapshot_validation`, **`20261014140000_seed_catalogue_teams` (new)**, `20261014150000_shared_lineup_owner` | — |
-| `lineups` | JWT-owned shares, 3-arg RPC | v6 anonymous, 2-arg RPC |
+| `lineups` | JWT-owned shares, 3-arg RPC | v7 anonymous, 2-arg RPC |
 | `account-delete` | Implemented | Absent |
 | `matches` | Implemented; now also returns `canonicalId` | Absent; **blocked on licensing** |
 | Frontend | `35e90ab` + PROD1.1 favourite fix | Unknown deploy (password-protected) |
@@ -226,7 +247,7 @@ The new frontend is a BSD-only build (SEC1.1). It must not go live before the ho
 
 1. ⛔ Logical backup of hosted schema + data (`supabase db dump --linked` schema and data-only), stored
    outside the repo. Confirm backup/PITR status in the Dashboard.
-2. Record rollback references: Netlify deploy ID; `lineups` v6 = repo `37381c1`.
+2. Record rollback references: Netlify deploy ID; `lineups` v7 = repo `c16751c`.
 3. `supabase db push --linked --dry-run` must list **exactly** these 6 migrations, in this order:
    `20260925035438`, `20261004234326`, `20261013165455`, `20261014074114`, `20261014140000`,
    `20261014150000`.
@@ -284,8 +305,8 @@ The new frontend is a BSD-only build (SEC1.1). It must not go live before the ho
 | --- | --- |
 | C1 schema | Additive and forward-only. Prefer fix-forward; a down-script would drop new tables/columns (data loss). |
 | C2 seed | Reversible (`delete from catalogue_teams` where no profile references the slug); normally unnecessary. |
-| C3 owner migration | **Irreversible data deletion** of the 8 disposable links. Restoring the old contract needs the 2-arg RPC re-created, `owner_id` dropped, links restored from the B1 dump and `lineups` v6 redeployed. |
-| D functions | Redeployable. `lineups` v6 does **not** work after C3 (RPC gone). Previous `matches`/`account-delete`: none (just undeploy). |
+| C3 owner migration | **Irreversible data deletion** of the 8 disposable links. Restoring the old contract needs the 2-arg RPC re-created, `owner_id` dropped, links restored from the B1 dump and `lineups` v7 (`c16751c`) redeployed. |
+| D functions | Redeployable. `lineups` v7 does **not** work after C3 (RPC gone). Previous `matches`/`account-delete`: none (just undeploy). |
 | E frontend | Netlify instant rollback. The old frontend works with the new backend except share POST (no JWT → 401). |
 | Account deletions | Irreversible by design. |
 
