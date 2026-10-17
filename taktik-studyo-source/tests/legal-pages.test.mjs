@@ -6,15 +6,16 @@ import {pageFixture} from './helpers/auth-fixture.mjs';
 
 const read = file => readFileSync(new URL('../dist/'+file,import.meta.url),'utf8');
 const legal = ['kvkk-aydinlatma-metni','gizlilik-politikasi','kullanim-kosullari','cerez-politikasi','iletisim'];
+const cookiesPage = () => read('cerez-politikasi.html');
 
-test('LEGAL1 draft pages share theme shell, navigation, draft notice, noindex and review markers',()=>{
+test('legal pages share theme shell and navigation, with no draft notice, noindex or review markers',()=>{
   for(const slug of legal){
     const html=read(slug+'.html'),head=html.split('</head>')[0];
-    assert.match(head,/<meta name="robots" content="noindex">/,slug);
+    // Public beta (operator decision, 17 Oct 2026): draft notice and noindex removed; effective date 18 Oct 2026.
+    assert.doesNotMatch(html,/noindex|legal-draft|legal-review|REVIEW REQUIRED|\(taslak\)|TODO|TBD/,slug);
     assert.match(head,/href="legal.css"/,slug);
     assert.equal((html.match(/<h1\b/g)||[]).length,1,slug);
-    assert.match(html,/class="legal-draft" role="note"/,slug);
-    assert.match(html,/\[REVIEW REQUIRED/,slug);
+    assert.match(html,/Yürürlük tarihi: 18 Ekim 2026/,slug);
     assert.match(html,new RegExp(`href="/${slug}.html" aria-current="page"`),slug);
     for(const other of legal)assert.match(html,new RegExp(`href="/${other}.html"`),`${slug} -> ${other}`);
     assert.doesNotMatch(html,/<script(?! src="theme.js")/,`${slug} loads no app/backend scripts`);
@@ -27,7 +28,9 @@ test('legal copy keeps the KVKK notice separate from consent and invents no oper
   assert.match(kvkk,/açık rıza alınması anlamına gelmez/);
   // LEGAL1.2: only the operator-supplied contact email is filled; identity and postal address stay placeholders.
   for(const page of [kvkk,contact]){
-    for(const field of ['Ad Soyad','tebligata elverişli posta adresi'])assert.match(page,new RegExp(`\\[REVIEW REQUIRED: ${field}\\]`));
+    // The operator-confirmed name is published; no postal address is published and there is no KEP row.
+    assert.match(page,/gerçek kişi Enes Ünal\. Taktik Stüdyo bir şirket değildir\./);
+    assert.match(page,/<dt>Posta adresi<\/dt><dd>Yayımlanmaz; tüm soru ve talepler e-posta ile alınır\./);assert.doesNotMatch(page,/<dt>KEP adresi<\/dt>|tebligata elverişli posta adresi/);
     assert.match(page,/<dt>E-posta<\/dt><dd><a href="mailto:iletisim@taktikstudyo.com">iletisim@taktikstudyo.com<\/a><\/dd>/);
     assert.doesNotMatch(page,/REVIEW REQUIRED: iletişim ve KVKK başvuru e-posta adresi/);
   }
@@ -49,10 +52,15 @@ test('LEGAL1.2 contact page explains access, correction and deletion requests wi
   // ACCOUNT1: owned share links are deleted with the account; the in-app flow is not claimed as live.
   assert.match(contact,/oluşturduğun paylaşım bağlantıları veritabanından silinir/);
   assert.match(contact,/Silinen paylaşım bağlantıları artık açılmaz/);
-  for(const slug of ['gizlilik-politikasi','kullanim-kosullari','iletisim'])assert.match(read(slug+'.html'),/Tehlikeli Bölge[\s\S]{0,200}REVIEW REQUIRED: hesap silme özelliği yalnızca yerel ortamda doğrulandı; yayından önce canlıya alınmalı/,slug);
+  // LAUNCH-LEGAL2: in-app deletion is live (account-delete deployed, production smoke test passed), incl. Google-only reauth.
+  for(const slug of ['gizlilik-politikasi','kullanim-kosullari','iletisim']){
+    const html=read(slug+'.html');
+    assert.match(html,/Tehlikeli Bölge/,slug);assert.match(html,/Google ile yeniden giriş yapman/,slug);
+    assert.doesNotMatch(html,/yalnızca yerel ortamda doğrulandı/,slug);
+  }
   for(const slug of legal)assert.doesNotMatch(read(slug+'.html'),/hesab(ın)?a bağlı değildir|süresiz saklanır/,slug);
-  assert.match(contact,/REVIEW REQUIRED: sağlayıcı yedek ve kayıt süreleri doğrulanmalı/);
-  for(const slug of legal){const html=read(slug+'.html');assert.doesNotMatch(html,/type="checkbox"|<form/,slug);assert.match(html,/<meta name="robots" content="noindex">/,slug);assert.match(html,/class="legal-draft"/,slug);}
+  assert.match(contact,/Elle alınan veritabanı yedeklerinde ve hizmet sağlayıcıların teknik günlüklerinde bulunabilecek kopyalar, yedek silinene veya günlük süresi dolana kadar kalabilir/);
+  for(const slug of legal){const html=read(slug+'.html');assert.doesNotMatch(html,/type="checkbox"|<form/,slug);}
   assert.equal((read('kayit.html').match(/type="checkbox"/g)||[]).length,1);
 });
 
@@ -102,33 +110,79 @@ test('LEGAL1.1 drafts reflect verified providers and keep unresolved items marke
   const kvkk=read('kvkk-aydinlatma-metni.html'),cookies=read('cerez-politikasi.html');
   // LEGAL2: Google appears only as the verified Google Workspace contact mailbox, never Google Fonts.
   assert.match(kvkk,/Netlify, Inc\./);assert.doesNotMatch(kvkk,/Google Fonts|fonts\.googleapis/);
-  assert.match(kvkk,/Resend kullanımına işaret ediyor; Supabase Auth SMTP ayarı doğrulanmalı/);
+  // LAUNCH-LEGAL4: Resend is the operator-confirmed Auth e-mail provider (domain DKIM/send records verified).
+  assert.match(kvkk,/<tr><td>Doğrulama ve şifre sıfırlama e-postaları<\/td><td>Resend, Inc\.<\/td>/);
   assert.doesNotMatch(read('gizlilik-politikasi.html'),/yazı tipleri\)/);
   assert.match(cookies,/Google Fonts veya başka bir yazı tipi servisine istek yapılmaz/);
-  assert.match(cookies,/__cf_bm/);assert.match(cookies,/Turnstile’ın çerez veya tarayıcı depolaması kullanıp kullanmadığı <mark class="legal-review">\[REVIEW REQUIRED/);
+  // LAUNCH-LEGAL3: measured — rendering Turnstile created no cookie on any domain and no site storage.
+  assert.match(cookies,/__cf_bm/);assert.match(cookies,/Turnstile doğrulaması çerez oluşturmadı ve sitemizin tarayıcı depolamasına veri yazmadı/);
 });
 
 test('LEGAL2 drafts reflect verified providers, separate live from planned features and keep review gates',()=>{
   const kvkk=read('kvkk-aydinlatma-metni.html'),privacy=read('gizlilik-politikasi.html'),terms=read('kullanim-kosullari.html'),contact=read('iletisim.html');
-  // Not yet live features are named in one explicit review marker on every content page.
-  for(const [slug,html] of [['kvkk',kvkk],['gizlilik',privacy],['kosullar',terms],['iletisim',contact]]){
-    assert.match(html,/<p class="legal-scope"><mark class="legal-review">\[REVIEW REQUIRED: Bu taslak, yayın için planlanan hizmeti anlatır\.[^<]*uygulama içi hesap silme[^<]*yayımlanmamalı\.\]<\/mark><\/p>/,slug);
+  // LAUNCH-LEGAL2 (17 Oct 2026): every described feature is live, so the "planned features" scope note is gone,
+  // and nothing claims the old FotMob roster or a conditional (SEC2.2) Google sign-in.
+  for(const slug of legal){
+    const html=read(slug+'.html');
+    assert.match(html,/Son güncelleme: 17 Ekim 2026/,slug);
+    assert.doesNotMatch(html,/class="legal-scope"|FotMob|SEC2\.2|planlanan hizmeti/,slug);
   }
-  for(const slug of legal)assert.match(read(slug+'.html'),/Taslak tarihi: 15 Ekim 2026/,slug);
+  // Google sign-in is enabled in production: described as a live feature with Google LLC as a recipient.
+  assert.match(kvkk,/<tr><td>Google ile giriş<\/td><td>Google’ın ilettiği/);assert.match(kvkk,/<tr><td>Google ile giriş<\/td><td>Google LLC<\/td>/);
+  assert.match(privacy,/Google ile giriş yaparsan Google’ın ilettiği/);
+  // SEC2.3 Terms acceptance record and per-account counters are disclosed.
+  assert.match(kvkk,/Kabul ettiğin Kullanım Koşulları sürümü ve kabul zamanı \(sunucu saatiyle\)/);
+  assert.match(kvkk,/hesap kimliğinle ilişkili istek ve yazma sayaçları/);
+  assert.match(kvkk,/PNG görselleri tarayıcında oluşturulur ve sunucularımıza gönderilmez/);
+  // Turnstile is used only for sharing (Auth CAPTCHA is off in the published build).
+  assert.match(kvkk,/<td>Cloudflare, Inc\. \(Turnstile\)<\/td><td>Yalnızca kadro paylaşırken/);
   // Verified facts: Google Workspace mailbox, Supabase Frankfurt region, BSD as the sports-data source.
-  assert.match(kvkk,/Google \(Google Workspace e-posta hizmeti\)/);assert.match(privacy,/Google Workspace/);
+  assert.match(kvkk,/<tr><td>İletişim e-postası<\/td><td>Google \(Google Workspace\)<\/td>/);assert.match(privacy,/Google Workspace/);
+  assert.match(kvkk,/Veritabanı Frankfurt’taki \(Almanya\) sunucularda tutulur/);
   assert.doesNotMatch(kvkk,/Frankfurt, Almanya <mark class="legal-review">\[REVIEW REQUIRED: canlı ayar doğrulanmalı\]/);
   for(const html of [kvkk,privacy,terms])assert.match(html,/BSD Sports Data/);
   assert.match(terms,/resmî lig, kulüp veya federasyon verisi değildir/);
   assert.match(terms,/toplu olarak kopyalamak, ham veri olarak yeniden dağıtmak/);
-  // Unverified items stay gated: identity, transfers, provider agreements, retention, licence.
-  assert.match(kvkk,/Bu metindeki bilgilendirme tek başına aktarımı hukuka uygun hâle getirmez/);
-  assert.match(kvkk,/E-posta yazışmaları ve KVKK başvuru kayıtları: <mark class="legal-review">\[REVIEW REQUIRED: saklama süresi/);
-  // LEGAL2.1: the 8 old links are decided test data; account linkage and retention stay gated.
-  for(const html of [kvkk,privacy])assert.match(html,/\[REVIEW REQUIRED: hesaba bağlama yayın güncellemesiyle canlıya alınacak \(canlıdaki 8 eski test bağlantısı bu güncellemede kaldırılır\); ayrı bir saklama süresi operatör kararı\]/);
-  assert.match(contact,/hesaba bağlama yayın güncellemesiyle canlıya alınacak/);
-  assert.match(kvkk,/Supabase Auth SMTP ayarı doğrulanmalı; sağlayıcı adı ve konumu buna göre yazılmalı/);
-  assert.match(terms,/BSD lisansının \(sürüm 4\.0\)[^<]*hukukçu tarafından onaylanmalı/);
+  // The m.9 gap is stated plainly: Frankfurt is not "EU only", DPAs/EU SCCs are not m.9 safeguards, safeguards incomplete.
+  assert.match(kvkk,/tüm verilerin yalnızca Almanya’da veya Avrupa Birliği’nde kaldığı anlamına gelmez/);
+  assert.match(kvkk,/Avrupa Birliği standart sözleşme maddeleri, KVKK m\.9’un aradığı güvencelerin yerine geçmez/);
+  assert.match(kvkk,/bu aktarımlar için henüz tamamlanmamıştır/);
+  // LAUNCH-LEGAL3 retention: active records, counters, backups, logs and legally retained records are distinct.
+  for(const label of ['Etkin kayıtlar:','Kullanım sayaçları:','Yedekler:','Sistem günlükleri:','Yazışmalar ve başvurular:'])assert.match(kvkk,new RegExp('<strong>'+label+'</strong>'),label);
+  assert.match(kvkk,/talep veya başvuru kapandıktan sonra 12 ay saklanır/);assert.match(kvkk,/Süresi dolan yazışmalar düzenli olarak elle silinir/);
+  assert.match(kvkk,/ücretsiz planında otomatik veritabanı yedeği alınmaz/);assert.match(kvkk,/API ve veritabanı günlüğü saklama süresi 1 gündür/);
+  // LAUNCH-LEGAL4: manual backups 90 days (operator confirmation tracked in the checklist), last recovery copy kept until replaced.
+  assert.match(kvkk,/alındıktan sonra en geç 90 gün içinde elle silinir/);assert.match(kvkk,/en son kurtarma yedeği bu süreden sonra da tutulabilir/);
+  assert.doesNotMatch(kvkk+privacy+contact,/güvenli (biçimde )?imha|kalıcı olarak yok edilir/);
+  for(const html of [kvkk,privacy,contact])assert.doesNotMatch(html,/yedeklerden (de )?hemen silinir|yazışmalar otomatik olarak silinir/);
+  // Age: no minimum age, no date of birth; a legal-representative statement without a review marker.
+  for(const html of [privacy,terms]){assert.match(html,/Reşit değilsen[^<]*yasal temsilcinin/);assert.doesNotMatch(html,/18 yaşından küçüksen|yaş sınırı/);}
+  // Cookies: no tracking; essential storage vs. optional, user-initiated preferences; no banner.
+  assert.match(cookiesPage(),/Çerez Uygulamaları Hakkında Rehberi/);
+  assert.equal((cookiesPage().match(/İsteğe bağlı tercih<\/td>/g)||[]).length,2);assert.match(cookiesPage(),/yalnızca temayı değiştirdiğinde yazılır/);
+  // LAUNCH-LEGAL4 BSD licence v4.0 wording: in-app display, no raw redistribution, no permission claimed beyond the licence.
+  assert.match(terms,/API Veri Kullanımı ve Lisansı \(sürüm 4\.0\) çerçevesinde alınır ve yalnızca Hizmet içinde/);assert.match(terms,/Hizmet ham veri sunmaz veya yeniden dağıtmaz/);
+  assert.doesNotMatch(terms+privacy,/BSD(’nin)? (onayı|izni) (alınmıştır|vardır)/);
+  // Terms: no exclusive jurisdiction or absolute disclaimer; consumer rights preserved.
+  assert.match(terms,/tüketici hakem heyetine veya tüketici mahkemesine başvuru dahil/);assert.doesNotMatch(terms,/münhasır|“olduğu gibi”/);
+  // Review markers are resolved in text only; the open legal obligations are tracked outside the pages.
+  for(const html of [kvkk,terms,contact])assert.match(html,/gerçek kişi Enes Ünal/);
+  // Football data: purpose explained; the BSD licence is not presented as a KVKK basis, nor is public availability.
+  assert.match(privacy,/kadro kurmak, Haftanın İlk 11’i için oyuncu seçmek ve Maçlar bölümünde/);
+  assert.match(privacy,/KVKK’nın aradığı hukuki sebebin yerine geçmez/);assert.doesNotMatch(privacy,/kamuya açık/);
+  // Share links are live, owner-linked and deleted with the account (verified in production).
+  assert.match(privacy,/Paylaşılan kadro[^<]*hesabın silindiğinde birlikte silinir/);
+  assert.match(kvkk,/paylaşılan kadrolar hesabın açık olduğu sürece saklanır\. Hesabını sildiğinde bu kayıtlar veritabanından hemen silinir; paylaşım bağlantıların da artık açılmaz/);
+  for(const html of [kvkk,privacy,contact])assert.doesNotMatch(html,/hesaba bağlama yayın güncellemesiyle/);
+  // No postal address is published; written applications are routed via e-mail first (as on the contact page).
+  assert.match(kvkk,/yazılı başvurunu nereye göndereceğini sana yazılı olarak bildiririz/);
+  for(const html of [kvkk,privacy,contact])assert.doesNotMatch(html,/güvenceler (tamamlanmıştır|sağlanmıştır)|standart sözleşme imzalanmıştır/);
+  assert.match(kvkk,/sonraki bir istek veya paylaşım sırasında çalışan otomatik temizlikle silinir/);
+  // LAUNCH-LEGAL2 Terms: the enforced free-account limits, sharing rules and Weekly XI self-service deletion.
+  for(const limit of ['10 kayıtlı Stüdyo çalışması','40 kayıtlı Haftanın İlk 11’i','500 oyuncu düzeltmesi','her UTC gününde en fazla 10 yeni paylaşım bağlantısı','400 kayıt işlemi ve toplam 50 MB'])assert.match(terms,new RegExp(limit,'i'),limit);
+  assert.match(terms,/e-posta adresi doğrulanmış bir hesap/);assert.doesNotMatch(terms,/ödeme|abonelik|ücretli plan/i);
+  assert.match(contact,/<tr><td>Haftanın İlk 11’i kayıtlarını silmek<\/td><td>“İlk 11’lerim” sayfası<\/td><\/tr>/);
+  assert.match(cookiesPage(),/<code>taktik:oauth:next<\/code>/);
   // No invented identity, legal entity or private data.
   for(const slug of legal)assert.doesNotMatch(read(slug+'.html'),/T\.C\. kimlik no:|\bKEP adresi:\s*\S+@|Mah\.|Sok\.|Cad\./,slug);
 });
