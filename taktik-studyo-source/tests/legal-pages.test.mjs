@@ -134,8 +134,9 @@ test('LEGAL2 drafts reflect verified providers, separate live from planned featu
   assert.match(kvkk,/Kabul ettiğin Kullanım Koşulları sürümü ve kabul zamanı \(sunucu saatiyle\)/);
   assert.match(kvkk,/hesap kimliğinle ilişkili istek ve yazma sayaçları/);
   assert.match(kvkk,/PNG görselleri tarayıcında oluşturulur ve sunucularımıza gönderilmez/);
-  // Turnstile is used only for sharing (Auth CAPTCHA is off in the published build).
-  assert.match(kvkk,/<td>Cloudflare, Inc\. \(Turnstile\)<\/td><td>Yalnızca kadro paylaşırken/);
+  // Turnstile protects the Auth forms (published build sets the Auth key), account deletion and sharing.
+  assert.match(kvkk,/<tr><td>Giriş, kayıt, şifre sıfırlama isteği, hesap silme ve kadro paylaşımında bot koruması<\/td><td>Cloudflare, Inc\. \(Turnstile\)<\/td>/);
+  for(const html of [kvkk,privacy,cookiesPage()])assert.doesNotMatch(html,/Yalnızca kadro paylaşırken|Yalnızca “Kadroyu paylaş” özelliğini kullandığında/);
   // Verified facts: Google Workspace mailbox, Supabase Frankfurt region, BSD as the sports-data source.
   assert.match(kvkk,/<tr><td>İletişim e-postası<\/td><td>Google \(Google Workspace\)<\/td>/);assert.match(privacy,/Google Workspace/);
   assert.match(kvkk,/Veritabanı Frankfurt’taki \(Almanya\) sunucularda tutulur/);
