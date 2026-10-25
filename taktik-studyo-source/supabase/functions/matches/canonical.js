@@ -50,36 +50,62 @@ export function canonicalService(state, {loadSeason, loadDetail, now = Date.now}
     }
     return result;
   }
+  // Latest same-season finished match (one provider detail each, shared within the run) of the given teams.
+  async function recentMatches(teams) {
+    const matches = [];
+    if (loadSeason && loadDetail) {
+      try {
+        const season = await loadSeason(), detailCache = new Map();
+        for (const team of teams) {
+          const pid = state.teamMappings.find(m => m.team_id === team.id && m.provider === 'bsd')?.provider_id;
+          const match = season.matches.filter(m => m.season === SEASON && m.status === 'finished' && [m.home.providerId, m.away.providerId].includes(pid))
+            .sort((a, b) => Date.parse(b.kickoff) - Date.parse(a.kickoff))[0];
+          if (!match) continue;
+          if (!detailCache.has(match.id)) detailCache.set(match.id, await loadDetail({id:match.id}));
+          const d = detailCache.get(match.id), side = d.home.providerId === pid ? 'home' : 'away';
+          if (d.id !== match.id || d.season !== SEASON || d[side].providerId !== pid) continue;
+          matches.push({id:d.id, teamId:team.id, seasonId:String(SEASON_ID), kickoff:d.kickoff, status:d.status, kind:d.lineups?.status,
+            lineup:resolveLineup(d.lineups?.[side], team.id) ? d.lineups[side] : null});
+        }
+      } catch {/* Confirmed data unavailable: labelled deterministic arrangement, never a legacy roster. */}
+    }
+    return matches;
+  }
+  const arrangement = (teamId, matches) => defaultXI({teamId, seasonId:String(SEASON_ID), players:state.players, matches, resolver});
+  // All league teams (local catalogue service `defaults` action).
   async function defaults() {
     if (cached && now() < until) return cached;
     if (pending) return pending;
     pending = (async () => {
-      const matches = [];
-      if (loadSeason && loadDetail) {
-        try {
-          const season = await loadSeason(), detailCache = new Map();
-          for (const team of state.teams) {
-            const pid = state.teamMappings.find(m => m.team_id === team.id && m.provider === 'bsd')?.provider_id;
-            const match = season.matches.filter(m => m.season === SEASON && m.status === 'finished' && [m.home.providerId, m.away.providerId].includes(pid))
-              .sort((a, b) => Date.parse(b.kickoff) - Date.parse(a.kickoff))[0];
-            if (!match) continue;
-            if (!detailCache.has(match.id)) detailCache.set(match.id, await loadDetail({id:match.id}));
-            const d = detailCache.get(match.id), side = d.home.providerId === pid ? 'home' : 'away';
-            if (d.id !== match.id || d.season !== SEASON || d[side].providerId !== pid) continue;
-            matches.push({id:d.id, teamId:team.id, seasonId:String(SEASON_ID), kickoff:d.kickoff, status:d.status, kind:d.lineups?.status,
-              lineup:resolveLineup(d.lineups?.[side], team.id) ? d.lineups[side] : null});
-          }
-        } catch {/* Confirmed data unavailable: labelled deterministic arrangement, never a legacy roster. */}
-      }
-      cached = Object.fromEntries(state.teams.map(t => [t.id, defaultXI({teamId:t.id, seasonId:String(SEASON_ID), players:state.players, matches, resolver})]));
+      const matches = await recentMatches(state.teams);
+      cached = Object.fromEntries(state.teams.map(t => [t.id, arrangement(t.id, matches)]));
       until = now() + CATALOGUE_STATE_TTL_MS;
       return cached;
     })().finally(() => pending = null);
     return pending;
   }
+  // A match detail needs only its two teams, so it loads at most their latest finished details
+  // (not one per league team). Same arrangement per team as defaults(); per-team cache and
+  // in-flight sharing, so concurrent details of overlapping teams load each team once.
+  const teamCache = new Map(), teamPending = new Map();
+  async function teamDefaults(ids) {
+    if (cached && now() < until) return cached;
+    const missing = ids.filter(id => !(now() < teamCache.get(id)?.until) && !teamPending.has(id));
+    if (missing.length) {
+      const job = recentMatches(state.teams.filter(t => missing.includes(t.id))).then(matches => {
+        const expires = now() + CATALOGUE_STATE_TTL_MS;
+        for (const id of missing) teamCache.set(id, {value:arrangement(id, matches), until:expires});
+      }).finally(() => missing.forEach(id => teamPending.delete(id)));
+      missing.forEach(id => teamPending.set(id, job));
+    }
+    await Promise.all(ids.map(id => teamPending.get(id)));
+    return Object.fromEntries(ids.map(id => [id, teamCache.get(id).value]));
+  }
   async function canonicalMatch(match) {
     match = canonicalEvent(match);
-    const arrangements = await defaults(), model = {matchId:match.id}, goals = matchGoals(match);
+    const ids = ['home', 'away'].map(side => resolver.team(match[side].providerId, 'bsd'));
+    if (!ids.every(id => state.teams.some(t => t.id === id))) return {...match, canonicalModel:null, canonicalError:'provider_mapping_unresolved'};
+    const arrangements = await teamDefaults(ids), model = {matchId:match.id}, goals = matchGoals(match);
     for (const side of ['home', 'away']) {
       const id = resolver.team(match[side].providerId, 'bsd'), team = state.teams.find(t => t.id === id);
       if (!team) return {...match, canonicalModel:null, canonicalError:'provider_mapping_unresolved'};

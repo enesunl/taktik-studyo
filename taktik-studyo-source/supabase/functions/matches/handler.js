@@ -155,7 +155,8 @@ export function createMatchesHandler({authenticate,token,origins = matchesOrigin
     return pendingResolved.get(id);
   }
 
-  // Canonical presentation reuses the cached season/detail loaders (no extra provider calls).
+  // Canonical presentation reuses the cached season/detail loaders. Its default XIs load at most the
+  // two teams' latest finished details (usually already cached by the probable-XI lookup).
   // If the catalogue is unavailable, details carry no canonical model (the client shows its
   // unavailable state); fixture lists keep their provider fields. Never a legacy roster.
   const presenter = canonical ? canonical({loadSeason:async () => (await season()).data, loadDetail:async ({id}) => (await rawDetail(id)).data}) : null;

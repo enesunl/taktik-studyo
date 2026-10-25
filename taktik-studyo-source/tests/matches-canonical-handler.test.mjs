@@ -5,7 +5,7 @@ import {PGlite} from '@electric-sql/pglite';
 import {pgliteClient} from './helpers/pglite-supabase-client.mjs';
 import {inputFromDocument,readRemoteState,planImport,bsdPlayerUuid} from '../scripts/catalogue/import.mjs';
 import {createMatchesHandler} from '../supabase/functions/matches/handler.js';
-import {createCanonicalMatches,readCatalogueState} from '../supabase/functions/matches/canonical.js';
+import {createCanonicalMatches,readCatalogueState,canonicalService} from '../supabase/functions/matches/canonical.js';
 import {event} from './helpers/matches-fixture.mjs';
 import {normalizeDetail} from '../supabase/functions/matches/detail.js';
 import {normalizeEvent} from '../supabase/functions/matches/provider.js';
@@ -76,6 +76,26 @@ test('catalogue unavailable or empty: explicit unavailable model, provider data 
     for(const name of readdirSync(dir).filter(f=>f.endsWith('.sql')).sort())await db.exec(readFileSync(new URL(name,dir),'utf8'));
     await assert.rejects(readCatalogueState(pgliteClient(db)),/catalogue_empty/,'seeded teams without players is not a usable catalogue');
     await assert.rejects(readCatalogueState(pgliteClient(db,'anon')),/catalogue_unavailable/);
+  }finally{await db.close();}
+});
+
+// BSD quota: a match detail loads default-XI history for its two teams only, never one detail per league team.
+test('match detail default XIs load only the two teams latest details and equal the all-team defaults',async()=>{
+  const {db,client}=await imported();
+  try{
+    const state=await readCatalogueState(client),ids=bsd.teams.map(t=>Number(t.provider_id));
+    // Staggered schedule: every team's latest finished match is a different fixture (worst case for the old loop).
+    const raws=ids.map((h,i)=>event({id:310000+i,round_number:1,event_date:new Date(Date.parse('2026-09-01T12:00:00Z')+i*6*3600e3).toISOString().replace('.000Z','+00:00'),
+      home_team_id:h,home_team:'H'+i,away_team_id:ids[(i+1)%ids.length],away_team:'A'+i}));
+    const empty={lineups:{value:null},incidents:{value:null},stats:{value:null}};
+    let loads=0;const loadDetail=async({id})=>{loads++;const e=raws.find(x=>String(x.id)===id);return normalizeDetail(normalizeEvent(e),e,empty);};
+    const options={loadSeason:async()=>({season:'2026-2027',matches:raws.map(e=>normalizeEvent(e))}),loadDetail,now:()=>Date.parse('2026-10-15T12:00:00Z')};
+    const target=normalizeDetail(normalizeEvent(raws[5]),raws[5],empty);
+    const scoped=canonicalService(state,options);
+    const [a,b]=await Promise.all([scoped.canonicalMatch(target),scoped.canonicalMatch(target)]);
+    assert.equal(loads,2,'two teams, two latest details, shared by concurrent requests');assert.deepEqual(a,b);
+    const full=canonicalService(state,options);await full.defaults();loads=0;
+    assert.deepEqual(await full.canonicalMatch(target),a,'same canonical model as the all-team defaults');assert.equal(loads,0);
   }finally{await db.close();}
 });
 
