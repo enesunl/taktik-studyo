@@ -1,6 +1,7 @@
 import {createClient} from 'npm:@supabase/supabase-js@2.116.0';
 import {createMatchesHandler,matchesOrigins} from './handler.js';
 import {createCanonicalMatches,readCatalogueState} from './canonical.js';
+import {fetchSeason,fetchDetail,pacedFetch} from './provider.js';
 
 const url = Deno.env.get('SUPABASE_URL')!;
 const key = Deno.env.get('MATCHES_PUBLISHABLE_KEY') || Deno.env.get('SUPABASE_PUBLISHABLE_KEY')
@@ -15,7 +16,11 @@ const serverKey = Deno.env.get('MATCHES_SECRET_KEY') || JSON.parse(Deno.env.get(
 const serverClient = serverKey ? createClient(url,serverKey,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false},
   global:{fetch:(url,options = {}) => fetch(url,{...options,signal:options.signal || AbortSignal.timeout(8000)})}}) : null;
 const catalogueClient = Deno.env.get('MATCHES_CATALOGUE') !== 'legacy' ? serverClient : null;
+// Every BSD request of this isolate shares one pacer (provider burst limit per client address).
+const bsdFetch = pacedFetch();
 Deno.serve(createMatchesHandler({
+  load:options => fetchSeason({...options,fetchImpl:bsdFetch}),
+  loadDetail:options => fetchDetail({...options,fetchImpl:bsdFetch}),
   canonical:catalogueClient ? loaders => createCanonicalMatches({loadState:() => readCatalogueState(catalogueClient),...loaders}) : undefined,
   // PROD5.3: per-account detail limits (migration 20261016150000). No server key or RPC error -> 503.
   async allowDetail(account) {

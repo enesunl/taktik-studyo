@@ -11,6 +11,9 @@ import {matchGoals} from '../../../src/lib/match-goals.js';
 import {SEASON,SEASON_ID} from './provider.js';
 
 export const CATALOGUE_STATE_TTL_MS = 5 * 60 * 1000;
+// Marks a presented match whose default XI fell back because a provider detail lookup failed
+// (a temporary state): callers do not keep it long.
+export const LOOKUP_FAILED = Symbol.for('taktik.matches.lookupFailed');
 
 // Reads the four canonical tables with a server client (all rows; RLS bypassed by the server role).
 export async function readCatalogueState(client) {
@@ -53,6 +56,7 @@ export function canonicalService(state, {loadSeason, loadDetail, now = Date.now}
   // Latest same-season finished match (one provider detail each, shared within the run) of the given teams.
   async function recentMatches(teams) {
     const matches = [];
+    let failed = false;
     if (loadSeason && loadDetail) {
       try {
         const season = await loadSeason(), detailCache = new Map();
@@ -67,9 +71,9 @@ export function canonicalService(state, {loadSeason, loadDetail, now = Date.now}
           matches.push({id:d.id, teamId:team.id, seasonId:String(SEASON_ID), kickoff:d.kickoff, status:d.status, kind:d.lineups?.status,
             lineup:resolveLineup(d.lineups?.[side], team.id) ? d.lineups[side] : null});
         }
-      } catch {/* Confirmed data unavailable: labelled deterministic arrangement, never a legacy roster. */}
+      } catch {failed = true;} // Confirmed data unavailable: labelled deterministic arrangement, never a legacy roster.
     }
-    return matches;
+    return {matches, failed};
   }
   const arrangement = (teamId, matches) => defaultXI({teamId, seasonId:String(SEASON_ID), players:state.players, matches, resolver});
   // All league teams (local catalogue service `defaults` action).
@@ -77,7 +81,7 @@ export function canonicalService(state, {loadSeason, loadDetail, now = Date.now}
     if (cached && now() < until) return cached;
     if (pending) return pending;
     pending = (async () => {
-      const matches = await recentMatches(state.teams);
+      const {matches} = await recentMatches(state.teams);
       cached = Object.fromEntries(state.teams.map(t => [t.id, arrangement(t.id, matches)]));
       until = now() + CATALOGUE_STATE_TTL_MS;
       return cached;
@@ -92,9 +96,10 @@ export function canonicalService(state, {loadSeason, loadDetail, now = Date.now}
     if (cached && now() < until) return cached;
     const missing = ids.filter(id => !(now() < teamCache.get(id)?.until) && !teamPending.has(id));
     if (missing.length) {
-      const job = recentMatches(state.teams.filter(t => missing.includes(t.id))).then(matches => {
-        const expires = now() + CATALOGUE_STATE_TTL_MS;
-        for (const id of missing) teamCache.set(id, {value:arrangement(id, matches), until:expires});
+      const job = recentMatches(state.teams.filter(t => missing.includes(t.id))).then(({matches, failed}) => {
+        // After a failed lookup the fallback arrangement is kept for 60 s only, then retried.
+        const expires = now() + (failed ? 60e3 : CATALOGUE_STATE_TTL_MS);
+        for (const id of missing) teamCache.set(id, {value:arrangement(id, matches), until:expires, failed});
       }).finally(() => missing.forEach(id => teamPending.delete(id)));
       missing.forEach(id => teamPending.set(id, job));
     }
@@ -106,6 +111,7 @@ export function canonicalService(state, {loadSeason, loadDetail, now = Date.now}
     const ids = ['home', 'away'].map(side => resolver.team(match[side].providerId, 'bsd'));
     if (!ids.every(id => state.teams.some(t => t.id === id))) return {...match, canonicalModel:null, canonicalError:'provider_mapping_unresolved'};
     const arrangements = await teamDefaults(ids), model = {matchId:match.id}, goals = matchGoals(match);
+    let failed = false;
     for (const side of ['home', 'away']) {
       const id = resolver.team(match[side].providerId, 'bsd'), team = state.teams.find(t => t.id === id);
       if (!team) return {...match, canonicalModel:null, canonicalError:'provider_mapping_unresolved'};
@@ -117,7 +123,10 @@ export function canonicalService(state, {loadSeason, loadDetail, now = Date.now}
         const placed = squadFallback(squad.filter(p => resolved.slice(0, 11).includes(p.id)), source.formation || '4-3-3');
         arrangement = {...placed, bench:resolved.slice(11)}; lineupKind = 'confirmed';
         [...source.starters, ...source.substitutes].forEach((p, i) => goalIds.set(resolved[i], p.id));
-      } else if (arrangement.kind === 'recent-confirmed') lineupKind = 'probable-recent-match';
+      } else {
+        if (arrangement.kind === 'recent-confirmed') lineupKind = 'probable-recent-match';
+        if (arrangement === teamCache.get(id)?.value && teamCache.get(id).failed) failed = true;
+      }
       const convert = pid => {const p = squad.find(p => p.id === pid); return {id:p.id, name:p.display_name, number:p.shirt_number, position:({G:'goalkeeper', D:'defender', M:'midfielder', F:'forward'})[p.position_group]};};
       const line = {formation:arrangement.formation, lineupKind, starters:arrangement.starters.map(p => convert(p.playerId)), substitutes:arrangement.bench.map(convert)};
       model[side] = layoutTeam({teamId:id, name:team.display_name, color:team.color_primary, color2:team.color_secondary}, line, side, 'internal', pid => goals.count(side, goalIds.get(pid)));
@@ -126,8 +135,9 @@ export function canonicalService(state, {loadSeason, loadDetail, now = Date.now}
     const person = p => p ? {...p, playerId:resolver.player(p.id, 'bsd')} : p;
     const lineups = lines => lines ? {...lines, ...Object.fromEntries(['home', 'away'].map(side => [side, lines[side] ? {...lines[side], starters:lines[side].starters.map(person), substitutes:lines[side].substitutes.map(person)} : null]))} : lines;
     const events = rows => rows.map(e => ({...e, player:person(e.player), incoming:person(e.incoming), outgoing:person(e.outgoing)}));
-    return {...match, lineups:lineups(match.lineups), ...(match.studioLineups ? {studioLineups:lineups(match.studioLineups)} : {}),
+    const result = {...match, lineups:lineups(match.lineups), ...(match.studioLineups ? {studioLineups:lineups(match.studioLineups)} : {}),
       incidents:events(match.incidents), substitutions:events(match.substitutions), canonicalModel:model};
+    return failed ? Object.defineProperty(result, LOOKUP_FAILED, {value:true}) : result;
   }
   const teamResolver = providerId => {
     const id = resolver.team(String(providerId), 'bsd'), team = state.teams.find(t => t.id === id && t.catalogue_active);

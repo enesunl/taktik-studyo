@@ -61,12 +61,27 @@ test('fixtures and details carry canonical team slugs and internal player UUIDs 
   }finally{await db.close();}
 });
 
+test('a failed default-XI lookup (overload, provider error) is temporary: short browser cache, recent-match XI after 60 s',async()=>{
+  const {db,client}=await imported(),p=provider();let time=Date.parse('2026-10-15T12:00:00Z'),fails=2;
+  try{
+    const h=createMatchesHandler({token:'t',now:()=>time,authenticate:async()=>user,load:p.load,
+      loadDetail:async args=>{// Both lookups of the first request fail (probable XI, then default XI); overload sets no cooldown.
+      if(args.id==='300001'&&fails){fails--;throw Object.assign(Error('PROVIDER_UNAVAILABLE'),{overloaded:true});}return p.loadDetail(args);},
+      canonical:loaders=>createCanonicalMatches({loadState:()=>readCatalogueState(client),now:()=>time,...loaders})});
+    const first=await h(req('?id=300002'));assert.ok(Number(first.headers.get('cache-control').split('=')[1])<=60);
+    assert.equal((await first.json()).canonicalModel.away.lineupKind,'probable-local');
+    time+=61e3;const again=await h(req('?id=300002'));
+    assert.equal((await again.json()).canonicalModel.away.lineupKind,'probable-recent-match','recovered after the failure');
+  }finally{await db.close();}
+});
+
 test('catalogue unavailable or empty: explicit unavailable model, provider data otherwise unchanged',async()=>{
   const p=provider();
   const h=createMatchesHandler({token:'t',now:()=>Date.parse('2026-10-15T12:00:00Z'),authenticate:async()=>user,load:p.load,loadDetail:p.loadDetail,
     canonical:loaders=>createCanonicalMatches({loadState:async()=>{throw Error('catalogue_unavailable');},...loaders})});
   const detail=await h(req('?id=300002'));assert.equal(detail.status,200);
   const body=await detail.json();assert.equal(body.canonicalModel,null);assert.equal(body.canonicalError,'catalogue_unavailable');
+  assert.ok(Number(detail.headers.get('cache-control').split('=')[1])<=60,'a temporary state is not kept for the match TTL');
   assert.equal((await h(req(''))).status,200,'fixture list still available');
   const db=new PGlite();
   try{

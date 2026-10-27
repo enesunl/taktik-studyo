@@ -57,6 +57,27 @@ function limitedError(message,response) {
 const accessError = message => Object.assign(Error(message),{accessDenied:true});
 const ACCESS_STATUSES = new Set([401,402,403]);
 
+// Pacing of BSD requests. BSD allows 25 requests/second (burst 110) per client address, and a paid
+// plan does not lift it. This token bucket sends at most burst + rate * t requests in any t seconds
+// (90 at once, 100 in the first second), so it stays 20 below the provider bucket even if the
+// sustained rate were only 10/s. A request waits for a token for at most maxWaitMs; beyond that it
+// fails as an explicit overload instead of being sent into a provider 429. Honours the caller's abort.
+export function pacedFetch({fetchImpl = fetch,rate = 10,burst = 90,maxWaitMs = 3000,now = Date.now} = {}) {
+  let tokens = burst, at = now();
+  return async (url,init = {}) => {
+    const t = now(); tokens = Math.min(burst,tokens + (t - at) / 1000 * rate); at = t;
+    const wait = tokens >= 1 ? 0 : Math.ceil((1 - tokens) / rate * 1000);
+    if (wait > maxWaitMs) throw Object.assign(Error('provider_overloaded'),{overloaded:true});
+    tokens -= 1;
+    if (wait) await new Promise((resolve,reject) => {
+      const signal = init.signal, timer = setTimeout(() => {signal?.removeEventListener('abort',abort); resolve();},wait);
+      function abort() {clearTimeout(timer); tokens += 1; reject(signal.reason ?? Error('aborted'));}
+      if (signal?.aborted) abort(); else signal?.addEventListener('abort',abort,{once:true});
+    });
+    return fetchImpl(url,init);
+  };
+}
+
 // Only constants construct upstream URLs. Even a provider-supplied next URL is
 // validated, then reconstructed; neither browser input nor redirects are followed.
 export async function fetchSeason({token,fetchImpl = fetch,timeoutMs = 12000,teamResolver=mapTeam}) {
@@ -132,6 +153,8 @@ export async function fetchDetail({id,token,fetchImpl = fetch,timeoutMs = 18000,
     return detail;
   } catch (error) {
     if (error?.limited || error?.accessDenied) throw error;
+    // Local pacing overload: nothing reached the provider, so the handler starts no failure cooldown.
+    if (error?.overloaded) throw Object.assign(Error('PROVIDER_UNAVAILABLE'),{overloaded:true});
     throw Error(error?.message === 'MATCH_NOT_FOUND' ? 'MATCH_NOT_FOUND' : 'PROVIDER_UNAVAILABLE');
   } finally {clearTimeout(timer);}
 }

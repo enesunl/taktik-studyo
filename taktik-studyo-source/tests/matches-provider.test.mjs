@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {normalizeEvent,fetchSeason} from '../supabase/functions/matches/provider.js';
+import {normalizeEvent,fetchSeason,fetchDetail,pacedFetch} from '../supabase/functions/matches/provider.js';
 import {teamMapping} from '../supabase/functions/matches/teams.js';
 import {event} from './helpers/matches-fixture.mjs';
 
@@ -67,4 +67,43 @@ test('provider timeout aborts pending fetch and page bound rejects runaway pagin
   let count = 0;
   await assert.rejects(fetchSeason({token:'test-only',fetchImpl:async() => {count++;return response({count:800,results:Array.from({length:200},(_,i) => event({id:count*200+i})),next:next.replace('offset=200','offset='+count*200)});}}),/matches_unavailable/);
   assert.equal(count,4);
+});
+
+// BSD burst limit (25/s, burst 110 per client address, not lifted by a paid plan): isolate-local pacing.
+test('BSD pacing: burst passes at once, excess waits, overload fails without a request, abort refunds',async() => {
+  let calls = 0;const ok = async() => {calls++;return 'ok';};
+  const f = pacedFetch({fetchImpl:ok,rate:50,burst:2,maxWaitMs:50,now:() => 0});
+  assert.deepEqual(await Promise.all([f('u'),f('u')]),['ok','ok']);
+  let done = false;const third = f('u').then(value => {done = true;return value;});
+  await Promise.resolve();await Promise.resolve();assert.equal(done,false,'third request waits for a token');assert.equal(await third,'ok');
+  const queued = f('u');await assert.rejects(f('u'),/provider_overloaded/);assert.equal(await queued,'ok');
+  assert.equal(calls,4,'an overloaded request never reaches the provider');
+  // Fixed clock: after a refund the next wait is 20 ms (allowed); without it, 40 ms would exceed maxWaitMs.
+  const g = pacedFetch({fetchImpl:ok,rate:50,burst:1,maxWaitMs:30,now:() => 0});await g('u');
+  const abort = new AbortController(),waiting = g('u',{signal:abort.signal});abort.abort();
+  await assert.rejects(waiting);const before = calls;
+  assert.equal(await g('u'),'ok','an aborted wait gives its slot back');assert.equal(calls,before + 1);
+});
+
+test('BSD pacing overload marks optional detail resources as errors, never as complete; Edge paces every request',async() => {
+  let calls = 0;const raw = event({status:'finished'});
+  const fetchImpl = pacedFetch({fetchImpl:async() => {calls++;return {status:200,ok:true,headers:{get:() => null},text:async() => JSON.stringify(raw)};},rate:1,burst:1,maxWaitMs:0,now:() => 0});
+  const detail = await fetchDetail({id:String(raw.id),token:'t',fetchImpl});
+  assert.equal(calls,1,'only the base event reached the provider');
+  assert.deepEqual(Object.values(detail.availability),['error','error','error']);
+  const entry = readFileSync(new URL('../supabase/functions/matches/index.ts',import.meta.url),'utf8');
+  assert.match(entry,/const bsdFetch = pacedFetch\(\);/);assert.equal(entry.match(/fetchImpl:bsdFetch/g).length,2);
+});
+
+test('BSD pacing defaults stay below the provider bucket at 10/s; a pacing overload is no provider failure',async() => {
+  // 90 at once, then 10 per second: at most 90 + 10 t requests in t seconds (provider: 110 + 10 t).
+  let time = 0,calls = 0;const f = pacedFetch({fetchImpl:async() => {calls++;return 'ok';},now:() => time});
+  await Promise.all(Array.from({length:90},() => f('u')));assert.equal(calls,90);
+  const abort = new AbortController(),queued = Array.from({length:30},() => f('u',{signal:abort.signal}));
+  const overload = await f('u').catch(error => error);
+  assert.equal(overload.message,'provider_overloaded');assert.equal(overload.overloaded,true,'the 31st waiter (3.1 s) is refused');
+  abort.abort();await Promise.allSettled(queued);assert.equal(calls,90);
+  const raw = event({status:'finished'});
+  const detail = fetchDetail({id:String(raw.id),token:'t',fetchImpl:pacedFetch({fetchImpl:async() => 'never',burst:0,maxWaitMs:0,now:() => 0})});
+  await assert.rejects(detail,error => error.message === 'PROVIDER_UNAVAILABLE' && error.overloaded === true);
 });
