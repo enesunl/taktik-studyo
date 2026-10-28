@@ -8,6 +8,8 @@ export function createStudioProjects({client,validatedUser,current}){
   const owner=validatedUser?.id,active=()=>!!owner&&current();
   const blocked=()=>!active()?fail('state_changed'):!client?fail('projects_unavailable'):null;
   const own=()=>client.from('studio_projects');
+  // SEC3: one record per call; the server takes the owner from the session. No row = revision conflict.
+  const save=(id,revision,title,snapshot)=>client.rpc('save_studio_project',{id,revision,title,snapshot}).select(PROJECT_COLUMNS).maybeSingle();
   function metadata(row){
     if(!row||row.user_id!==owner||!projectIdValid(row.id)||!revisionValid(row.revision)||!projectTitle(row.title))return null;
     return Object.fromEntries(PROJECT_COLUMNS.split(',').filter(k=>k!=='user_id').map(k=>[k,row[k]]));
@@ -47,7 +49,7 @@ export function createStudioProjects({client,validatedUser,current}){
     const b=blocked();if(b)return b;title=projectTitle(title);snapshot=normalizeStudioProjectSnapshot(snapshot);
     if(!projectIdValid(id)||!title||!snapshot)return fail('invalid_form');
     try{
-      const r=await own().insert({id,user_id:owner,title,snapshot_version:1,snapshot}).select(PROJECT_COLUMNS).maybeSingle();
+      const r=await save(id,null,title,snapshot);
       if(!active())return fail('state_changed');
       if(r.error?.code==='23505'){
         // Retry of an ambiguously acknowledged INSERT uses the SAME UUID, never upsert.
@@ -60,8 +62,8 @@ export function createStudioProjects({client,validatedUser,current}){
   async function update({id,revision,title,snapshot},rename=false){
     const b=blocked();if(b)return b;title=projectTitle(title);
     if(!projectIdValid(id)||!revisionValid(revision)||!title)return fail('invalid_form');
-    const values={title};if(!rename){const value=normalizeStudioProjectSnapshot(snapshot);if(!value)return fail('invalid_snapshot');Object.assign(values,{snapshot:value,snapshot_version:1});}
-    try{return result(await own().update(values).eq('user_id',owner).eq('id',id).eq('revision',revision).select(PROJECT_COLUMNS).maybeSingle(),{empty:'conflict'});}
+    let value=null;if(!rename){value=normalizeStudioProjectSnapshot(snapshot);if(!value)return fail('invalid_snapshot');}
+    try{return result(await save(id,revision,title,value),{empty:'conflict'});}
     catch{return fail(active()?'project_request_failed':'state_changed');}
   }
   async function duplicateProject(id,newId){

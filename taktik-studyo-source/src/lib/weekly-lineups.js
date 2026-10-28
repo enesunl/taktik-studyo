@@ -39,10 +39,9 @@ export function createWeeklyLineups({client,validatedUser,current}){
  async function save({id,revision=null,title,season=null,week=null,snapshot}){
   const b=blocked();if(b)return b;title=projectTitle(title);snapshot=canonicalWeeklySnapshot(snapshot);
   if(!projectIdValid(id)||!title||!snapshot||!(season===null||typeof season==='string'&&/^\d{4}\/\d{2,4}$/.test(season))||!(week===null||Number.isInteger(week)&&week>=1&&week<=60)||!(revision===null||Number.isSafeInteger(revision)&&revision>0))return fail('invalid_form');
-  const values={title,season,week,formation:snapshot.formation,snapshot};
   try{
-   const q=revision===null?table().insert({id,user_id:owner,...values}):table().update(values).eq('user_id',owner).eq('id',id).eq('revision',revision);
-   const r=await q.select(WEEKLY_COLUMNS).maybeSingle();if(!active())return fail('state_changed');
+   // SEC3: one record per call; the server takes the owner from the session and the formation from the snapshot.
+   const r=await client.rpc('save_weekly_lineup',{id,revision,title,season,week,snapshot}).select(WEEKLY_COLUMNS).maybeSingle();if(!active())return fail('state_changed');
    if(revision===null&&r.error?.code==='23505'){
     const old=await get(id);return old.ok&&old.record.title===title&&old.record.week===week&&old.record.season===season&&JSON.stringify(old.record.snapshot)===JSON.stringify(snapshot)?old:fail('conflict');
    }

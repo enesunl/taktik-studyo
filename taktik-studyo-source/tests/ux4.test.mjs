@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {PGlite} from '@electric-sql/pglite';
-import {createWeeklyLineups,canonicalWeeklySnapshot,weeklyGroup,weeklySeason} from '../src/lib/weekly-lineups.js';
+import {createWeeklyLineups,canonicalWeeklySnapshot,weeklyGroup,weeklySeason,WEEKLY_COLUMNS} from '../src/lib/weekly-lineups.js';
 import {mountWeeklyCollection} from '../src/lib/weekly-lineups-ui.js';
 import {emptyWeeklyXI,pickWeeklyPlayer,createWeeklyStore} from '../src/lib/weekly-xi.js';
 import {mountWeeklyXI} from '../src/lib/weekly-xi-ui.js';
@@ -26,8 +26,11 @@ test('Weekly repository confirms server create/update, pins owner, validates can
  assert.equal((await api.save({id,title:'My XI',season:'2026/27',week:8,snapshot:snapshot()})).ok,true);
  assert.equal((await api.save({id,revision:1,title:'Edit',snapshot:snapshot()})).record.revision,2);
  assert.deepEqual((await api.get(id)).record.snapshot,snapshot());assert.equal((await api.list()).records.length,2);
- assert.equal(q.calls[0].find(c=>c[0]==='insert')[1].user_id,owner);assert(q.calls[1].some(c=>c[0]==='eq'&&c[1]==='revision'&&c[2]===1));
- for(const call of q.calls.slice(1))assert(call.some(c=>c[0]==='eq'&&c[1]==='user_id'&&c[2]===owner));
+ // SEC3: saves are one RPC call each; the owner comes from the session, reads stay pinned to the owner.
+ assert.deepEqual(q.calls[0][0],['rpc','save_weekly_lineup',{id,revision:null,title:'My XI',season:'2026/27',week:8,snapshot:snapshot()}]);
+ assert.deepEqual(q.calls[1][0],['rpc','save_weekly_lineup',{id,revision:1,title:'Edit',season:null,week:null,snapshot:snapshot()}]);
+ for(const call of q.calls.slice(0,2))assert.deepEqual(call.slice(1),[['select',WEEKLY_COLUMNS],['maybeSingle']]);
+ for(const call of q.calls.slice(2))assert(call.some(c=>c[0]==='eq'&&c[1]==='user_id'&&c[2]===owner));
  assert.equal(canonicalWeeklySnapshot(pickWeeklyPlayer(emptyWeeklyXI(),1,{...player,id:'fotmob-player'})),null);
  current=false;assert.equal((await api.save({id,title:'stale',snapshot:snapshot()})).error.code,'state_changed');assert.equal(q.calls.length,4);
  const foreign=createWeeklyLineups({client:queryMock([{data:record({user_id:other})}]).client,validatedUser:{id:owner},current:()=>true});assert.equal((await foreign.get(id)).ok,false);

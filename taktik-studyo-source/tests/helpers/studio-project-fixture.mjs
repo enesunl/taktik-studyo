@@ -14,8 +14,9 @@ export function snapshot(mode='match'){
 }
 export const row=(extra={})=>({id,user_id:owner,title:'Taktik çalışma',studio_mode:'match',match_id:'215997',match_week:6,snapshot_version:1,revision:1,created_at:'2026-09-23T12:00:00Z',updated_at:'2026-09-23T12:00:00Z',snapshot:snapshot(),...extra});
 export function queryMock(responses){
- const calls=[];const client={from(table){const steps=[['from',table]];calls.push(steps);const q={};
+ const calls=[];const query=steps=>{calls.push(steps);const q={};
   for(const name of ['select','eq','order','range','insert','update','delete','maybeSingle'])q[name]=(...args)=>{steps.push([name,...args]);return q;};
   q.then=(resolve,reject)=>Promise.resolve(responses.shift()).then(resolve,reject);return q;
- }};return{client,calls};
+ };
+ const client={from:table=>query([['from',table]]),rpc:(name,args)=>query([['rpc',name,args]])};return{client,calls};
 }

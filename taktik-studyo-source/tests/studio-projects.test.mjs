@@ -36,10 +36,13 @@ test('private project list uses owner-only metadata query, stable updated DESC a
 test('create pins owner, trims title, never supplies metadata; update and rename use revision CAS',async()=>{
  const f=setup([{data:row()},{data:row({revision:2})},{data:row({revision:3})}]);
  assert.equal((await f.api.createProject({id,title:'  Plan  ',snapshot:snapshot()})).ok,true);
- const payload=f.calls[0].find(c=>c[0]==='insert')[1];assert.deepEqual(Object.keys(payload),['id','user_id','title','snapshot_version','snapshot']);assert.equal(payload.user_id,owner);assert.equal(payload.title,'Plan');
+ // SEC3: one record per RPC call; the owner comes from the session, never from the payload.
+ const rpc=i=>f.calls[i][0];assert.deepEqual(rpc(0),['rpc','save_studio_project',{id,revision:null,title:'Plan',snapshot:snapshot()}]);
+ assert.deepEqual(f.calls[0].slice(1),[['select',PROJECT_COLUMNS],['maybeSingle']]);
  assert.equal((await f.api.updateProject({id,revision:1,title:'Plan',snapshot:snapshot()})).project.revision,2);
- assert.ok(f.calls[1].some(c=>c[0]==='eq'&&c[1]==='revision'&&c[2]===1));
- await f.api.renameProject({id,revision:2,title:'Renamed'});assert.deepEqual(f.calls[2].find(c=>c[0]==='update')[1],{title:'Renamed'});
+ assert.deepEqual(rpc(1),['rpc','save_studio_project',{id,revision:1,title:'Plan',snapshot:snapshot()}]);
+ await f.api.renameProject({id,revision:2,title:'Renamed'});assert.deepEqual(rpc(2),['rpc','save_studio_project',{id,revision:2,title:'Renamed',snapshot:null}]);
+ assert(!JSON.stringify(f.calls).includes(owner),'no client-supplied owner on writes');
 });
 test('zero-row CAS conflicts and other-owner/missing project are indistinguishable',async()=>{
  const f=setup([{data:null},{data:null},{data:null},{data:null}]);
@@ -49,12 +52,12 @@ test('zero-row CAS conflicts and other-owner/missing project are indistinguishab
 });
 test('duplicate fetches owned snapshot, creates new UUID; deletes pinned ID/revision only',async()=>{
  const f=setup([{data:row()},{data:row({id:copyId})},{data:{id}}]);await f.api.duplicateProject(id,copyId);
- const p=f.calls[1].find(c=>c[0]==='insert')[1];assert.equal(p.id,copyId);assert.equal(p.title,'Taktik çalışma - Kopya');assert.deepEqual(p.snapshot,snapshot());
+ const p=f.calls[1][0][2];assert.equal(p.id,copyId);assert.equal(p.revision,null);assert.equal(p.title,'Taktik çalışma - Kopya');assert.deepEqual(p.snapshot,snapshot());
  assert.equal((await f.api.deleteProject({id,revision:1})).ok,true);assert.ok(f.calls[2].some(c=>c[0]==='eq'&&c[1]==='user_id'&&c[2]===owner));
 });
 test('ambiguous INSERT retry reuses UUID and accepts only identical stored contents',async()=>{
  const f=setup([{error:{code:'23505'}},{data:row()}]);assert.equal((await f.api.createProject({id,title:'Taktik çalışma',snapshot:snapshot()})).ok,true);
- assert.equal(f.calls.filter(q=>q.some(c=>c[0]==='insert')).length,1);
+ assert.equal(f.calls.filter(q=>q[0][0]==='rpc').length,1);
  const g=setup([{error:{code:'23505'}},{data:row({title:'Other'})}]);assert.equal((await g.api.createProject({id,title:'Plan',snapshot:snapshot()})).error.code,'conflict');
 });
 test('account/generation change ignores stale result and prevents follow-up copy or query',async()=>{

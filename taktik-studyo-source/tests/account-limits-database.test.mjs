@@ -6,12 +6,14 @@ import {snapshot as studioSnapshot} from './helpers/studio-project-fixture.mjs';
 import {emptyWeeklyXI} from '../src/lib/weekly-xi.js';
 import {toShare} from '../src/lib/validation.js';
 import {TERMS_VERSION} from '../src/lib/auth-validation.js';
+import {normalizeStudioProjectSnapshot} from '../src/lib/studio-project-snapshot.js';
+import {randomBytes} from 'node:crypto';
 
 // SEC2.2: the proposed account-limits migration on top of every earlier migration, in-memory only.
 const dir=new URL('../supabase/migrations/',import.meta.url),LIMITS='20261015190000_account_limits.sql';
 const sql=name=>readFileSync(new URL(name,dir),'utf8');
 const [A,B,C]=['11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222','33333333-3333-4333-8333-333333333333'];
-const TERMS='20261015200000_terms_acceptance.sql';
+const TERMS='20261015200000_terms_acceptance.sql',STORAGE='20261028120000_studio_storage_cap.sql';
 const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
 const quota=e=>e.code==='P0001'&&e.message==='quota_exceeded',rate=e=>e.code==='P0001'&&e.message==='rate_limited';
 
@@ -28,7 +30,7 @@ async function database({terms=false}={}){
   await db.exec('grant all on all tables in schema public to service_role');
   const shape=async()=>({policies:(await db.query('select schemaname,tablename,policyname,cmd,roles::text,qual,with_check from pg_policies order by 1,2,3')).rows,
     acls:(await db.query("select n.nspname,c.relname,c.relacl::text from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('public','tactics_private') and c.relkind='r' and c.relname<>'write_budget' order by 1,2")).rows});
-  const before=await shape();await db.exec(sql(LIMITS));if(terms)await db.exec(sql(TERMS));
+  const before=await shape();await db.exec(sql(LIMITS));if(terms)await db.exec(sql(TERMS));await db.exec(sql(STORAGE));
   return {db,before,shape};
 }
 const fresh=db=>db.query('delete from tactics_private.write_budget');
@@ -37,6 +39,8 @@ const project=(db,id,uid=A,s=studioSnapshot())=>db.query('insert into public.stu
 const weekly=(db,id,uid=A)=>db.query("insert into public.weekly_lineups(id,user_id,title,formation,snapshot) values ($1,$2,'XI','4-3-3',$3)",[id,uid,JSON.stringify(emptyWeeklyXI())]);
 const override=(db,key,uid=A)=>db.query("insert into public.player_overrides(user_id,player_key,name,role) values ($1,$2,'X','MO')",[uid,key]);
 const budget=async(db,uid)=>(await db.query('select coalesce(sum(writes),0)::int writes from tactics_private.write_budget where user_id=$1',[uid])).rows[0].writes;
+// Random base64 does not compress: it is stored at full size, like an attacker's padding would be.
+const noise=n=>({...studioSnapshot(),pad:randomBytes(n*3/4).toString('base64')});
 
 test('SEC2.2 row caps: 10 projects, 40 Weekly XI, 500 overrides; retries and other accounts stay correct; RLS/grants unchanged',async()=>{
   const {db,before,shape}=await database();
@@ -97,6 +101,60 @@ test('SEC2.2 write budget: 400 writes and 50 MB per 10 minutes; rejected writes 
     const big={...studioSnapshot(),pad:'x'.repeat(4000000)};let bigWrites=0;
     await as(db,A,async()=>{for(let i=0;i<20;i++){try{await db.query('update public.studio_projects set snapshot=$1 where id=$2',[JSON.stringify(big),uuid(1)]);bigWrites++;}catch(e){assert.ok(rate(e));break;}}});
     assert.equal(bigWrites,13);
+  }finally{await db.close();}
+});
+
+test('SEC3 stored Studio snapshots: 16 MiB per account; largest app snapshots fit; renames and shrinking stay possible above the cap',async()=>{
+  const {db}=await database();
+  const save=(id,s)=>db.query('update public.studio_projects set snapshot=$1 where id=$2',[JSON.stringify(s),id]);
+  const stored=async uid=>(await db.query('select sum(pg_column_size(snapshot))::int n from public.studio_projects where user_id=$1',[uid])).rows[0].n;
+  try{
+    await as(db,A,async()=>{
+      for(let i=1;i<=4;i++)await project(db,uuid(i),A,noise(3500000));
+      await assert.rejects(project(db,uuid(5),A,noise(3500000)),quota);
+      await project(db,uuid(5));
+      await save(uuid(1),noise(4100000));
+      await assert.rejects(save(uuid(5),noise(2500000)),quota);
+    });
+    assert.ok(await stored(A)<=16777216);
+    // Above the cap (rows written by server code): renames and smaller snapshots pass, growth does not.
+    await as(db,'',async()=>{await project(db,uuid(6),A,noise(4000000));},'service_role');
+    await fresh(db);
+    await as(db,A,async()=>{
+      await db.query("update public.studio_projects set title='Yeni' where id=$1",[uuid(6)]);
+      await assert.rejects(save(uuid(2),noise(3600000)),quota);
+      await save(uuid(1),studioSnapshot());
+    });
+    // Another account has its own total; the largest snapshots the app can save fit 10 times.
+    await as(db,B,async()=>{await project(db,uuid(20),B,noise(3500000));await db.query('delete from public.studio_projects where id=$1',[uuid(20)]);});
+    const point=()=>({x:Math.random(),y:Math.random()});
+    const largest=()=>normalizeStudioProjectSnapshot({...studioSnapshot(),drawings:Array.from({length:200},(_,i)=>({id:'d'+i,type:'freehand',color:'yellow',width:'medium',geometry:{points:Array.from({length:256},point)}}))});
+    await fresh(db);
+    await as(db,B,async()=>{for(let i=21;i<=30;i++)await project(db,uuid(i),B,largest());await save(uuid(21),largest());});
+    assert.ok(await stored(B)<16777216*.8,'room left above the largest real usage');
+  }finally{await db.close();}
+});
+
+test('SEC3 failed writes leave no uncounted data: a reused id writes nothing; one Studio/Weekly XI row per transaction',async()=>{
+  const {db}=await database();
+  const size=async()=>(await db.query("select pg_total_relation_size('public.studio_projects')::int n")).rows[0].n;
+  const two="insert into public.studio_projects(id,user_id,title,snapshot_version,snapshot) values ($1,$3,'P',1,$4),($2,$3,'P',1,$4)";
+  try{
+    await as(db,A,async()=>{
+      await project(db,uuid(1),A,noise(3000000));
+      const before=await size();
+      for(let i=0;i<3;i++)await assert.rejects(project(db,uuid(1),A,noise(3000000)),e=>e.code==='23505');
+      assert.equal(await size(),before,'a reused id is refused before its snapshot is written');
+      await weekly(db,uuid(2));await assert.rejects(weekly(db,uuid(2)),e=>e.code==='23505');
+      // A later row's rejection would roll back the earlier row's charge, not its written data.
+      await assert.rejects(db.query(two,[uuid(3),uuid(4),A,JSON.stringify(studioSnapshot())]),rate);
+      await project(db,uuid(3));
+      await assert.rejects(db.query("update public.studio_projects set title='T' where user_id=$1",[A]),rate);
+      await assert.rejects(db.transaction(async tx=>{await tx.query("update public.studio_projects set title='T' where id=$1",[uuid(1)]);await weekly(tx,uuid(5));}),rate);
+    });
+    assert.deepEqual((await db.query('select id,title from public.studio_projects order by id')).rows,[{id:uuid(1),title:'P'},{id:uuid(3),title:'P'}]);
+    assert.equal((await db.query('select count(*)::int n from public.weekly_lineups')).rows[0].n,1);
+    assert.equal(await budget(db,A),3,'only the three accepted writes are counted');
   }finally{await db.close();}
 });
 

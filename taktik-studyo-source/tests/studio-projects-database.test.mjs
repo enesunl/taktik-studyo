@@ -12,7 +12,13 @@ import {allNodes} from './helpers/matches-fixture.mjs';
 function sqlClient(db,calls){
  const columns=new Set([...PROJECT_COLUMNS.split(','),'snapshot']);
  const column=name=>{assert.ok(columns.has(name));return '"'+name+'"';};
- return {from(table){
+ return {rpc(name,args){
+  // SEC3 saves: the request body is the function's one jsonb argument, as PostgREST passes it.
+  assert.equal(name,'save_studio_project');calls.push(structuredClone(args));let selected='*',single=false;
+  const q={select(v){selected=v.split(',').map(column).join(',');return q;},maybeSingle(){single=true;return q;},
+   async then(resolve,reject){try{const rows=(await db.query(`select ${selected} from public.save_studio_project($1::jsonb)`,[JSON.stringify(args)])).rows;resolve({data:single?rows[0]??null:rows,error:null});}catch(e){reject(e);}}};
+  return q;
+ },from(table){
   assert.equal(table,'studio_projects');let action='select',values,selected='*',head=false,single=false,range;const filters=[],orders=[];
   const q={insert(v){action='insert';values=v;calls.push(structuredClone(v));return q;},update(v){action='update';values=v;return q;},delete(){action='delete';return q;},
    select(v,options){selected=v.split(',').map(column).join(',');head=options?.head===true;return q;},eq(k,v){filters.push([k,v]);return q;},maybeSingle(){single=true;return q;},
@@ -37,7 +43,7 @@ test('M5 private project migration: real SQL ownership, grants, CAS and constrai
  const db=new PGlite(),s=snapshot();
  const as=async(uid,fn,role='authenticated')=>{await db.query("select set_config('request.jwt.claim.sub',$1,false)",[uid||'']);await db.exec('set role '+role);try{return await fn();}finally{await db.exec('reset role');}};
  const insert=(uid=owner,pid=id,value=s,title='Plan')=>db.query('insert into public.studio_projects (id,user_id,title,snapshot_version,snapshot) values ($1,$2,$3,1,$4) returning *',[pid,uid,title,JSON.stringify(value)]);
- const unchanged=async()=>({policies:(await db.query("select * from pg_policies where tablename <> 'studio_projects' order by schemaname,tablename,policyname")).rows,
+ const unchanged=async()=>({policies:(await db.query("select * from pg_policies where tablename not in ('studio_projects','weekly_lineups') order by schemaname,tablename,policyname")).rows,
    acls:(await db.query("select relname,relacl from pg_class where relnamespace='public'::regnamespace and relname in ('teams','players','profiles','shared_lineups') order by relname")).rows});
  try{
   await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key);
@@ -47,6 +53,8 @@ test('M5 private project migration: real SQL ownership, grants, CAS and constrai
   await db.query('insert into auth.users values ($1),($2)',[owner,other]);const before=await unchanged();
   await db.exec('alter default privileges in schema public grant all on tables to public,anon,authenticated');
   await db.exec(migration('20260923135716_studio_projects.sql'));
+  // SEC3: the module saves through save_studio_project (its migration also returns Weekly XI rows).
+  for(const n of ['20261013165455_weekly_lineups.sql','20261028130000_studio_weekly_write_rpc.sql'])await db.exec(migration(n));
   await t.test('service creates free/match rows which profile summary sees; empty and foreign-owner summaries stay empty',async()=>{
    const calls=[],api=createStudioProjects({client:sqlClient(db,calls),validatedUser:{id:owner},current:()=>true});
    await as(owner,async()=>{
@@ -118,7 +126,7 @@ test('M5 private project migration: real SQL ownership, grants, CAS and constrai
    await as(owner,async()=>{
     for(const mode of ['free','match']){
      const value=snapshot(mode),created=await api.createProject({id:copyId,title:'  Contract  ',snapshot:value});
-     assert.equal(created.ok,true);assert.deepEqual(calls.at(-1),{id:copyId,user_id:owner,title:'Contract',snapshot_version:1,snapshot:value});
+     assert.equal(created.ok,true);assert.deepEqual(calls.at(-1),{id:copyId,revision:null,title:'Contract',snapshot:value});
      assert.equal(created.project.studio_mode,mode);assert.equal(created.project.match_id,mode==='match'?'215997':null);assert.equal(created.project.match_week,mode==='match'?6:null);
      assert.equal(created.project.revision,1);assert.ok(created.project.created_at);assert.ok(created.project.updated_at);
      const read=await api.getProject(copyId);assert.equal(read.ok,true);assert.deepEqual(read.project.snapshot,value);

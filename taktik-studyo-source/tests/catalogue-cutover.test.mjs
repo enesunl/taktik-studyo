@@ -138,10 +138,20 @@ test('D4 clean room: no old catalogue, aliases or roster script; actual SQL and 
    const f=matchBoardDocument(),rt=make(f.window);await rt.load();const local=createLocalCatalogue(f.window),home=createFreeTeam(local.teams[0],'home',local),away=createFreeTeam(local.teams[1],'away',local);
    const snapshot=serializeStudioProject({source:{mode:'free',matchId:null,week:null},model:{home,away},working:[...home.players,...away.players].map(p=>({slotKey:p.key,personKey:p.key,x:p.initialX,y:p.initialY})),drawings:[],pitch:{color:'#285b3b',width:1200,height:650}});
    assert(snapshot);assert(snapshot.teams.home.players.every(p=>internalPlayerId(p.playerId)));
-   const api=createStudioProjects({client:rt.dataClient,validatedUser:{id:owner},current:()=>true}),id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+   // SEC3: Studio saves go through save_studio_project. The loopback transport has no RPC (and the app saves
+   // projects through the Supabase client), so saves run the real function in the same local database as the
+   // signed-in account; reads and deletes stay on the transport and its RLS.
+   for(const n of ['20261013165455_weekly_lineups','20261028130000_studio_weekly_write_rpc'])await service.db.exec(readFileSync(new URL('../supabase/migrations/'+n+'.sql',import.meta.url),'utf8'));
+   const rpc=(name,args)=>{let columns='*',single=false;const q={select(v){columns=v;return q;},maybeSingle(){single=true;return q;},then(resolve,reject){return service.db.transaction(async tx=>{
+    await tx.query("select set_config('request.jwt.claim.sub',$1,true)",[token==='other'?other:owner]);await tx.exec('set local role authenticated');
+    const {rows}=await tx.query(`select ${columns} from public.${name}($1::jsonb)`,[JSON.stringify(args)]);return {data:single?rows[0]??null:rows,error:null};
+   }).then(resolve,reject);}};return q;};
+   const studioClient={from:table=>rt.dataClient.from(table),rpc};
+   const api=createStudioProjects({client:studioClient,validatedUser:{id:owner},current:()=>true}),id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
    const created=await api.createProject({id,title:'D3 local',snapshot});assert(created.ok,JSON.stringify(created));const reopened=await api.getProject(id);assert(reopened.ok);assert.deepEqual(reopened.project.snapshot,snapshot);assert(projectBoardState(snapshot));
    assert.equal((await api.listProjects()).projects.length,1);const renamed=await api.renameProject({id,revision:1,title:'Renamed'});assert(renamed.ok);
-   token='other';const b=createStudioProjects({client:rt.dataClient,validatedUser:{id:other},current:()=>true});assert(!(await b.getProject(id)).ok);token='owner';
+   token='other';const b=createStudioProjects({client:studioClient,validatedUser:{id:other},current:()=>true});assert(!(await b.getProject(id)).ok);
+   assert.equal((await b.renameProject({id,revision:renamed.project.revision,title:'Foreign'})).error.code,'conflict');token='owner';
    assert((await api.deleteProject({id,revision:renamed.project.revision})).ok);
   });
   await t.test('private mapping reads, foreign owner writes and nonlocal origins denied; static fallback safe',async()=>{
