@@ -6,21 +6,23 @@ import {PGlite} from '@electric-sql/pglite';
 import {snapshot as studioSnapshot} from './helpers/studio-project-fixture.mjs';
 import {emptyWeeklyXI} from '../src/lib/weekly-xi.js';
 
-// SEC3: Studio/Weekly XI writes through save_studio_project / save_weekly_lineup, then the pending revoke of
+// SEC3: Studio/Weekly XI writes through save_studio_project / save_weekly_lineup, then the Stage C revoke of
 // direct INSERT/UPDATE. Every migration in order, in-memory only.
 const dir=new URL('../supabase/migrations/',import.meta.url);
-const REVOKE=readFileSync(new URL('../supabase/pending/studio_weekly_direct_write_revoke.sql',import.meta.url),'utf8');
+const REVOKE_NAME='20261028180000_studio_weekly_direct_write_revoke.sql';
+const REVOKE=readFileSync(new URL(REVOKE_NAME,dir),'utf8');
+const REGRANT=readFileSync(new URL('../supabase/pending/studio_weekly_direct_write_regrant.sql',import.meta.url),'utf8');
 const [A,B,C]=['11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222','33333333-3333-4333-8333-333333333333'];
 const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
 const quota=e=>e.code==='P0001'&&e.message==='quota_exceeded',dup=e=>e.code==='23505'&&e.message==='duplicate_id',denied=e=>e.code==='42501';
 const noise=n=>({...studioSnapshot(),pad:randomBytes(n*3/4).toString('base64')});
 
-async function database(){
+async function database({withRevoke=true}={}){
   const db=new PGlite();
   await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key);
     create function auth.uid() returns uuid language sql stable set search_path='' as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
     grant usage on schema auth to anon,authenticated;grant execute on function auth.uid() to anon,authenticated;grant usage on schema public to anon,authenticated,service_role;`);
-  for(const name of readdirSync(dir).filter(f=>f.endsWith('.sql')).sort())await db.exec(readFileSync(new URL(name,dir),'utf8'));
+  for(const name of readdirSync(dir).filter(f=>f.endsWith('.sql')&&(withRevoke||f!==REVOKE_NAME)).sort())await db.exec(readFileSync(new URL(name,dir),'utf8'));
   await db.query('insert into auth.users values ($1),($2),($3)',[A,B,C]);
   await db.query("insert into public.profiles(id,username) values ($1,'owner_a'),($2,'owner_b')",[A,B]);
   // Supabase gives service_role full table access; mirror it so server-side writes can be tested.
@@ -86,31 +88,46 @@ test('SEC3 write RPC: one record per call, owner from the session, revision CAS,
   }finally{await db.close();}
 });
 
-test('SEC3 pending revoke: no direct INSERT/UPDATE (table or column grant); RPC, SELECT, DELETE, service_role and overrides unchanged; documented reversal restores it',async()=>{
-  const db=await database();
+test('SEC3 revoke migration: no direct INSERT/UPDATE (table or column grant); RPC, SELECT, DELETE, RLS, records, service_role and overrides unchanged; pending regrant restores it',async()=>{
+  const db=await database({withRevoke:false}),full=await database();
   try{
-    const grants=async()=>(await db.query(`select table_name,privilege_type,count(*)::int n from information_schema.column_privileges
+    const grants=async d=>(await d.query(`select table_name,privilege_type,count(*)::int n from information_schema.column_privileges
       where grantee='authenticated' and table_name in ('studio_projects','weekly_lineups') group by 1,2 order by 1,2`)).rows.map(r=>r.table_name+':'+r.privilege_type);
-    assert.deepEqual(await grants(),['studio_projects:INSERT','studio_projects:SELECT','studio_projects:UPDATE','weekly_lineups:INSERT','weekly_lineups:SELECT','weekly_lineups:UPDATE']);
+    const columns=async d=>(await d.query(`select table_name,privilege_type,column_name,is_grantable from information_schema.column_privileges
+      where grantee='authenticated' and table_name in ('studio_projects','weekly_lineups') order by 1,2,3`)).rows;
+    const rls=async d=>(await d.query(`select relname,relrowsecurity,relforcerowsecurity,(select json_agg(p order by p.policyname) from pg_policies p where p.tablename=c.relname) policies
+      from pg_class c where oid in ('public.studio_projects'::regclass,'public.weekly_lineups'::regclass) order by 1`)).rows;
+    const rows=async d=>(await d.query('select id,user_id,title,revision from public.studio_projects union all select id,user_id,title,revision from public.weekly_lineups order by 1')).rows;
+    assert.deepEqual(await grants(db),['studio_projects:INSERT','studio_projects:SELECT','studio_projects:UPDATE','weekly_lineups:INSERT','weekly_lineups:SELECT','weekly_lineups:UPDATE']);
+    // Records saved before the cutover, by the old direct path and by the functions.
+    await as(db,A,async()=>{await direct(db,uuid(8));await save(db,uuid(9),null,'Plan',studioSnapshot());await saveXI(db,uuid(10),null,'XI');});
+    const [columnsBefore,rlsBefore,rowsBefore]=[await columns(db),await rls(db),await rows(db)];
     await db.exec(REVOKE);
-    assert.deepEqual(await grants(),['studio_projects:SELECT','weekly_lineups:SELECT'],'column-level INSERT/UPDATE grants are gone too');
+    assert.deepEqual(await grants(db),['studio_projects:SELECT','weekly_lineups:SELECT'],'column-level INSERT/UPDATE grants are gone too');
+    assert.deepEqual(await columns(full),await columns(db),'the full migration sequence ends with the same grants');
+    assert.deepEqual(await rls(db),rlsBefore,'RLS and ownership policies unchanged');
+    assert.deepEqual(await rows(db),rowsBefore,'existing records unchanged');
     for(const t of ['studio_projects','weekly_lineups'])for(const [p,v] of [['INSERT',false],['UPDATE',false],['SELECT',true],['DELETE',true]])
       assert.equal((await db.query('select has_table_privilege($1,$2,$3) v',['authenticated','public.'+t,p])).rows[0].v,v,t+' '+p);
     await as(db,A,async()=>{
       await assert.rejects(direct(db,uuid(1)),denied);
       await assert.rejects(db.query("insert into public.weekly_lineups(id,user_id,title,formation,snapshot) values ($1,$2,'XI','4-3-3',$3)",[uuid(2),A,JSON.stringify(emptyWeeklyXI())]),denied);
       await save(db,uuid(3),null,'Plan',studioSnapshot());await saveXI(db,uuid(4),null,'XI');
+      assert.equal((await save(db,uuid(8),1,'Renamed',null))[0].revision,2,'records from the direct path stay editable');
       await assert.rejects(db.query("update public.studio_projects set title='X'"),denied);
       await assert.rejects(db.query("update public.weekly_lineups set title='X'"),denied);
-      assert.equal((await db.query('select count(*)::int n from public.studio_projects')).rows[0].n,1);
+      assert.equal((await db.query('select count(*)::int n from public.studio_projects')).rows[0].n,3);
       assert.equal((await db.query("insert into public.player_overrides(user_id,player_key,name,role) values ($1,'local:1','X','MO'),($1,'local:2','Y','MO') returning 1",[A])).rows.length,2,'overrides keep direct bulk writes');
+      assert.equal((await db.query("update public.player_overrides set name='Z' where player_key='local:1' returning 1")).rows.length,1);
       assert.equal((await db.query('delete from public.weekly_lineups where id=$1 returning id',[uuid(4)])).rows.length,1);
+      assert.equal((await db.query('delete from public.studio_projects where id=$1 returning id',[uuid(3)])).rows.length,1);
     });
-    await as(db,'',async()=>{await direct(db,uuid(5));await direct(db,uuid(6));},'service_role');
-    assert.equal((await db.query('select count(*)::int n from public.studio_projects')).rows[0].n,3);
-    // Reversal text in the file header is exact.
-    for(const line of REVOKE.split('\n').filter(l=>/^--\s+grant /.test(l)))await db.exec(line.replace(/^--\s+/,''));
-    assert.deepEqual(await grants(),['studio_projects:INSERT','studio_projects:SELECT','studio_projects:UPDATE','weekly_lineups:INSERT','weekly_lineups:SELECT','weekly_lineups:UPDATE']);
+    await as(db,'',async()=>{await direct(db,uuid(5));await direct(db,uuid(6));await db.query("update public.studio_projects set title='Server' where id=$1",[uuid(5)]);},'service_role');
+    assert.equal((await db.query('select count(*)::int n from public.studio_projects')).rows[0].n,4);
+    // The rollback is pending SQL, never a migration: db push cannot apply it with the revoke.
+    assert.ok(!readdirSync(dir).some(f=>/regrant/.test(f)));
+    await db.exec(REGRANT);
+    assert.deepEqual(await columns(db),columnsBefore,'the regrant restores exactly the previous grants');
     await as(db,A,async()=>{await direct(db,uuid(7));});
-  }finally{await db.close();}
+  }finally{await db.close();await full.close();}
 });

@@ -112,10 +112,13 @@ test('pending revoke: no direct catalogue or legacy reads when signed in; app pa
     await as(db,'authenticated',async()=>{
       for(const table of ['catalogue_teams','catalogue_players','teams','players','team_provider_ids','player_provider_ids'])await denied(()=>db.query('select 1 from public.'+table+' limit 1'));
       assert.equal((await app(db)).teams.length,18,'the app catalogue still loads');
-      // Saved data does not read the catalogue: projects, overrides and Weekly XI still save.
+      // Saved data does not read the catalogue: projects, overrides and Weekly XI still save (projects and
+      // Weekly XI through their SEC3 save functions, the only write path for signed-in users).
       await db.query("insert into public.player_overrides(user_id,player_key,name,role) values ($1,'internal:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','X','MO')",[user]);
-      await db.query("insert into public.weekly_lineups(id,user_id,title,formation,snapshot) values (gen_random_uuid(),$1,'XI','4-3-3',$2)",[user,JSON.stringify(emptyWeeklyXI())]);
-      await db.query("insert into public.studio_projects(user_id,title,snapshot_version,snapshot) values ($1,'P',1,$2)",[user,JSON.stringify(studioSnapshot())]);
+      await db.query('select public.save_weekly_lineup($1::jsonb)',[JSON.stringify({id:'cccccccc-cccc-4ccc-8ccc-cccccccccccc',revision:null,title:'XI',season:'2026/27',week:1,snapshot:emptyWeeklyXI()})]);
+      await db.query('select public.save_studio_project($1::jsonb)',[JSON.stringify({id:'dddddddd-dddd-4ddd-8ddd-dddddddddddd',revision:null,title:'P',snapshot:studioSnapshot()})]);
+      assert.equal(await count(db,'public.weekly_lineups')+await count(db,'public.studio_projects'),2);
+      await denied(()=>db.query("insert into public.studio_projects(user_id,title,snapshot_version,snapshot) values ($1,'P',1,$2)",[user,JSON.stringify(studioSnapshot())]));
     });
     await as(db,'anon',async()=>{for(const table of ['catalogue_teams','catalogue_players','teams','players'])await denied(()=>db.query('select 1 from public.'+table+' limit 1'));});
     await db.exec('set role service_role');assert.equal(await count(db,'public.catalogue_players'),2,'service-role tooling (import, matches) unaffected');await db.exec('reset role');
