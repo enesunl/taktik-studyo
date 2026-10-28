@@ -17,7 +17,7 @@ export function mountStudioProjects({document,window,api,current}){
     for(const p of rows){
       const card=node('article',undefined,'studio-project-card'),title=node('h2',p.title),kind=node('p',p.studio_mode==='match'?'Maç Stüdyosu':'Serbest Stüdyo'),time=node('p','Son düzenleme: '+new Date(p.updated_at).toLocaleString('tr-TR'));
       const actions=node('div',undefined,'project-actions'),open=node('a','Aç');open.href='/mac-studyosu?project='+p.id;actions.append(open);
-      for(const [action,label]of [['rename','Yeniden Adlandır'],['duplicate','Kopyala'],['delete','Sil']]){
+      for(const [action,label]of [['rename','Yeniden Adlandır'],['duplicate','Projeyi Çoğalt'],['delete','Sil']]){
         const b=node('button',label);b.type='button';b.setAttribute('aria-label',p.title+' · '+label);
         const click=async()=>{
           if(!active()||busy)return;busy=true;b.disabled=true;let r;
@@ -31,7 +31,7 @@ export function mountStudioProjects({document,window,api,current}){
           }else r=await api.duplicateProject(p.id,window.crypto.randomUUID());
           if(!active())return;busy=false;b.disabled=false;
           if(!r.ok){const code=r.error?.code;status.textContent=code==='conflict'?'Bu çalışma başka bir sekmede değişti. Listeyi yenileyip tekrar dene.'
-            :code==='quota_exceeded'?`Çalışma sınırına ulaştın (${ACCOUNT_LIMITS.projects}). Kopyalamak için önce bir çalışmayı sil.`
+            :code==='quota_exceeded'?`Çalışma sınırına ulaştın (${ACCOUNT_LIMITS.projects}). Çoğaltmak için önce bir çalışmayı sil.`
             :code==='rate_limited'?'Çok sık işlem yapıldı. Birkaç dakika sonra tekrar dene.':'İşlem tamamlanamadı. Tekrar dene.';retry.hidden=['quota_exceeded','rate_limited'].includes(code);return;}
           await load(true);
         };

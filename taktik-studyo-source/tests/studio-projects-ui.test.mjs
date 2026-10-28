@@ -84,7 +84,7 @@ test('Çalışmalarım UI empty state, pagination, open, branded rename/delete a
  assert.match(textOf(root),/Henüz kaydedilmiş/);assert.equal(allNodes(root).find(n=>n.textContent==='İlk Çalışmanı Oluştur').href,'/mac-studyosu');page.dispose();
  api.data.set(id,row());const p=mountStudioProjects({document:f.document,window:f.window,api,current:()=>true});await p.ready;assert.equal(allNodes(root).find(n=>n.textContent==='Aç').href,'/mac-studyosu?project='+id);
  fire(button(root,'Yeniden Adlandır'),'click');let dialog=node(root,'studio-project-dialog');assert.equal(dialog.open,true);const input=allNodes(dialog).find(n=>n.tagName==='input');assert.equal(input.focused,true);input.value='Yeni Plan';fire(allNodes(dialog).find(n=>n.tagName==='form'),'submit');await tick();assert.match(textOf(root),/Yeni Plan/);
- fire(button(root,'Kopyala'),'click');await tick();assert.equal(api.data.size,2);
+ fire(button(root,'Projeyi Çoğalt'),'click');await tick();assert.equal(api.data.size,2);
  const cards=allNodes(root).filter(n=>n.className==='studio-project-card');fire(button(cards[1],'Sil'),'click');dialog=node(root,'studio-project-dialog');assert.match(textOf(dialog),/kalıcı olarak silinecek/);fire(button(dialog,'İptal'),'click');await tick();assert.equal(api.data.size,2);
  fire(button(cards[1],'Sil'),'click');dialog=node(root,'studio-project-dialog');fire(allNodes(dialog).find(n=>n.tagName==='form'),'submit');await tick();assert.equal(api.data.size,1);assert.ok(api.data.has(id));p.dispose();
 });

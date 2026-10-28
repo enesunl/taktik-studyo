@@ -85,6 +85,6 @@ test('Çalışmalarım: usage against the limit and a clear message when copying
   const page=mountStudioProjects({...f,window:{crypto:{randomUUID:()=>other}},current:()=>true,api});await page.ready;
   const text=()=>allNodes(f.nodes.studioProjectsContent).map(n=>n.textContent).join(' ');
   assert.match(text(),/2 \/ 10 çalışma kullanılıyor/);
-  await allNodes(f.nodes.studioProjectsContent).find(n=>n.tagName==='button'&&n.textContent==='Kopyala').emit('click');
+  await allNodes(f.nodes.studioProjectsContent).find(n=>n.tagName==='button'&&n.textContent==='Projeyi Çoğalt').emit('click');
   assert.match(text(),/Çalışma sınırına ulaştın \(10\)/);page.dispose();
 });
